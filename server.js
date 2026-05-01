@@ -23,6 +23,7 @@ const APPWRITE_DATABASE_ID = process.env.APPWRITE_DATABASE_ID || 'louvor_avida';
 const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY || '';
 const APPWRITE_APP_STATE_COLLECTION_ID = process.env.APPWRITE_APP_STATE_COLLECTION_ID || 'app_state';
 const APPWRITE_USER_STATE_COLLECTION_ID = process.env.APPWRITE_USER_STATE_COLLECTION_ID || 'user_state';
+const APPWRITE_ADMIN_EMAILS = (process.env.APPWRITE_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 
 function appwriteReady() {
   return Boolean(APPWRITE_ENDPOINT && APPWRITE_PROJECT_ID && APPWRITE_DATABASE_ID && APPWRITE_API_KEY);
@@ -63,7 +64,63 @@ async function upsertState(collectionId, matcher, data) {
   return appwriteRequest('POST', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents`, { documentId: 'unique()', data });
 }
 app.get('/api/appwrite/config', (req, res) => {
-  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady() });
+  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: APPWRITE_ADMIN_EMAILS.length > 0 });
+});
+
+async function verifyAppwriteJWT(req) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) throw new Error('JWT do Appwrite não informado.');
+  if (!APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID) throw new Error('Appwrite Auth não configurado.');
+  const response = await fetch(`${APPWRITE_ENDPOINT}/account`, {
+    headers: {
+      'X-Appwrite-Project': APPWRITE_PROJECT_ID,
+      'X-Appwrite-JWT': token
+    }
+  });
+  const text = await response.text();
+  let user = null;
+  try { user = text ? JSON.parse(text) : null; } catch { user = null; }
+  if (!response.ok) {
+    const message = user?.message || text || 'Não foi possível validar usuário Appwrite.';
+    throw new Error(message);
+  }
+  return user;
+}
+async function requireAdminUser(req, res) {
+  try {
+    const user = await verifyAppwriteJWT(req);
+    const email = String(user?.email || '').toLowerCase();
+    if (!APPWRITE_ADMIN_EMAILS.length) {
+      res.status(403).json({ error: 'Nenhum administrador configurado. Defina APPWRITE_ADMIN_EMAILS no Render.' });
+      return null;
+    }
+    if (!APPWRITE_ADMIN_EMAILS.includes(email)) {
+      res.status(403).json({ error: 'Usuário sem permissão para editar a escala.' });
+      return null;
+    }
+    return user;
+  } catch (error) {
+    res.status(401).json({ error: error.message });
+    return null;
+  }
+}
+app.put('/api/appwrite/admin/state/:key', async (req, res) => {
+  try {
+    const admin = await requireAdminUser(req, res);
+    if (!admin) return;
+    const updatedAt = new Date().toISOString();
+    const doc = await upsertState(APPWRITE_APP_STATE_COLLECTION_ID, d => d.key === req.params.key, {
+      key: req.params.key,
+      value: JSON.stringify(req.body.value ?? null),
+      updatedAt,
+      updatedBy: admin.name || admin.email || 'Administrador'
+    });
+    res.json({ ok: true, id: doc.$id, updatedAt, updatedBy: admin.name || admin.email });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
 });
 app.get('/api/appwrite/state/:key', async (req, res) => {
   try {

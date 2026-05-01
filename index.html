@@ -151,6 +151,7 @@
           <div class="schedule-actions">
             <button id="schedulePrintBtn" class="btn btn-secondary btn-compact" type="button">Imprimir</button>
             <button id="scheduleClearBtn" class="btn btn-secondary btn-compact" type="button">Limpar filtros</button>
+            <button id="scheduleSaveBtn" class="btn btn-primary btn-compact hidden" type="button">Salvar escala</button>
           </div>
         </div>
 
@@ -158,7 +159,10 @@
           <label><span>Buscar pessoa</span><input id="scheduleSearch" type="search" placeholder="Digite um nome da escala..." /></label>
           <label><span>Dia</span><select id="scheduleDayFilter"><option value="">Todos os dias</option></select></label>
           <label><span>Função</span><select id="scheduleRoleFilter"><option value="">Todas as funções</option></select></label>
+          <label id="scheduleMemberFilterWrap"><span>Membros</span><select id="scheduleMemberFilter"><option value="">Todos os membros</option></select></label>
         </div>
+
+        <div id="scheduleEditStatus" class="schedule-edit-status"></div>
 
         <div class="schedule-summary" id="scheduleSummary"></div>
 

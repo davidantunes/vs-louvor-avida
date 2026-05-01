@@ -313,3 +313,18 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - Dados da escala de maio adicionados a partir do arquivo enviado.
 - Guia Escala atualizada com os nomes, datas, funções e observações exatamente no padrão da planilha.
 - Filtros e impressão preservados.
+
+
+## Novidades da V30
+
+- Escala de Maio 2026 preenchida com as pessoas exatamente nas datas e funções do arquivo Excel enviado.
+- Mantidos filtros de pessoa, dia e função na guia Escala.
+- Mantidas observações e horários de ensaio do arquivo original.
+
+
+## V31 — Escala editável com membros no Appwrite
+
+- Lista de membros criada a partir da escala de maio, sem repetir nomes.
+- A escala agora pode ser editada com listas suspensas.
+- Somente usuários com e-mail cadastrado em `APPWRITE_ADMIN_EMAILS` no Render podem editar.
+- Os dados são salvos no Appwrite em `app_state/members` e `app_state/monthlySchedule`.

@@ -38,7 +38,7 @@ const LOAD_MORE_SIZE = {
   details: 18
 };
 
-const SCHEDULE_ROWS = [
+const DEFAULT_scheduleRows = [
   { day:'Domingo', date:'03/05', minister:'Rayssa', back1:'Ana Caroline', back2:'Edimar', back3:'Caroline', bass:'Pr Douglas', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Edvanio' },
   { day:'Quinta', date:'07/05', minister:'Thelma', back1:'Marcia', back2:'Luis', back3:'Letícia', bass:'Pr Douglas', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Antônio' },
   { day:'Domingo', date:'10/05', minister:'Laryssa', back1:'Dafnis', back2:'Thiagão', back3:'Ludmilla', bass:'Marcinho', drums:'', guitar:'Alessandro', keyboard:'Thiago Matos', sound:'Edvanio' },
@@ -49,6 +49,12 @@ const SCHEDULE_ROWS = [
   { day:'Quinta', date:'28/05', minister:'Márcia', back1:'Thelma', back2:'Thiagão', back3:'Daniele', bass:'Pr Douglas', drums:'Mayra', guitar:'Alessandro', keyboard:'Douglas', sound:'Edmilson' },
   { day:'Domingo', date:'31/05', minister:'Dafnis', back1:'Izabel', back2:'Edimar', back3:'Tales', bass:'Pr Douglas', drums:'Daniel', guitar:'Fábio', keyboard:'Thiago Matos', sound:'Edvanio' }
 ];
+const DEFAULT_MEMBERS = ["Alessandro", "Ana Caroline", "Antônio", "Caroline", "Dafnis", "Daniel", "Daniele", "Douglas", "Edimar", "Edmilson", "Edvanio", "Fábio", "Izabel", "Laryssa", "Leandro", "Letícia", "Ludmilla", "Luis", "Márcia", "Marcinho", "Mariah", "Mayra", "Pr Douglas", "Rayssa", "Tales", "Thelma", "Thiagão", "Thiago Matos"];
+let scheduleRows = DEFAULT_scheduleRows.map(row => ({...row}));
+let members = [...DEFAULT_MEMBERS];
+let cloudAdminEmails = [];
+let cloudAdminConfigured = false;
+let scheduleDirty = false;
 const SCHEDULE_ROLE_LABELS = {
   minister: 'Ministro', back1: 'Back', back2: 'Back', back3: 'Back', bass: 'Baixo', drums: 'Bateria', guitar: 'Guitarra', keyboard: 'Teclado', sound: 'Tec. Som'
 };
@@ -181,8 +187,11 @@ const el = {
   scheduleSearch: document.getElementById('scheduleSearch'),
   scheduleDayFilter: document.getElementById('scheduleDayFilter'),
   scheduleRoleFilter: document.getElementById('scheduleRoleFilter'),
+  scheduleMemberFilter: document.getElementById('scheduleMemberFilter'),
   scheduleClearBtn: document.getElementById('scheduleClearBtn'),
   schedulePrintBtn: document.getElementById('schedulePrintBtn'),
+  scheduleSaveBtn: document.getElementById('scheduleSaveBtn'),
+  scheduleEditStatus: document.getElementById('scheduleEditStatus'),
   scheduleSummary: document.getElementById('scheduleSummary'),
   scheduleTableBody: document.getElementById('scheduleTableBody')
 };
@@ -190,7 +199,7 @@ const el = {
 document.title = cfg.APP_TITLE;
 
 initAppwriteClient();
-initSessionUI();
+loadAppwriteServerConfig().finally(initSessionUI);
 bindEvents();
 initSchedule();
 applyTheme(loadJSON('vs_theme_v1', 'dark'));
@@ -319,6 +328,9 @@ function bindEvents(){
   if (el.scheduleSearch) el.scheduleSearch.addEventListener('input', renderSchedule);
   if (el.scheduleDayFilter) el.scheduleDayFilter.addEventListener('change', renderSchedule);
   if (el.scheduleRoleFilter) el.scheduleRoleFilter.addEventListener('change', renderSchedule);
+  if (el.scheduleMemberFilter) el.scheduleMemberFilter.addEventListener('change', renderSchedule);
+  if (el.scheduleTableBody) el.scheduleTableBody.addEventListener('change', onScheduleSelectChange);
+  if (el.scheduleSaveBtn) el.scheduleSaveBtn.addEventListener('click', () => saveScheduleState(true));
   if (el.scheduleClearBtn) el.scheduleClearBtn.addEventListener('click', clearScheduleFilters);
   if (el.schedulePrintBtn) el.schedulePrintBtn.addEventListener('click', () => window.print());
 
@@ -392,6 +404,17 @@ function initAppwriteClient(){
   } catch (error) {
     console.warn('Appwrite Auth não inicializado:', error);
     cloudReady = false;
+  }
+}
+async function loadAppwriteServerConfig(){
+  try {
+    const res = await fetch('/api/appwrite/config');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data.adminEmails)) cloudAdminEmails = data.adminEmails.map(e => String(e).toLowerCase());
+    cloudAdminConfigured = Boolean(data.adminConfigured);
+  } catch (error) {
+    console.warn('Configuração Appwrite do servidor não carregada:', error);
   }
 }
 async function initSessionUI(){
@@ -491,17 +514,30 @@ async function logoutSession(){
   }
   el.logoutBtn?.classList.add('hidden');
   showLogin();
+  renderSchedule();
 }
 async function loadCloudState(){
   if (!authUser) return;
   try {
-    const [shared, userState] = await Promise.all([getSharedState('setlists'), getUserState('favorites')]);
+    const [shared, userState, cloudMembers, cloudSchedule] = await Promise.all([
+      getSharedState('setlists'),
+      getUserState('favorites'),
+      getSharedState('members'),
+      getSharedState('monthlySchedule')
+    ]);
     if (Array.isArray(shared)) setlists = shared;
     if (Array.isArray(userState)) favorites = userState;
+    if (Array.isArray(cloudMembers) && cloudMembers.length) members = normalizeMembers(cloudMembers);
+    if (Array.isArray(cloudSchedule) && cloudSchedule.length) scheduleRows = normalizeScheduleRows(cloudSchedule);
     saveJSON('vs_setlists_v1', setlists);
     saveJSON('vs_favorites_v1', favorites);
+    saveJSON('vs_members_v1', members);
+    saveJSON('vs_schedule_rows_v1', scheduleRows);
+    await seedScheduleDataIfNeeded(cloudMembers, cloudSchedule);
     updateStats();
     updateFavoriteCount();
+    populateScheduleFilters();
+    renderSchedule();
     renderSetlists();
     render();
   } catch (error) {
@@ -524,6 +560,89 @@ async function setSharedState(key, value){
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+async function getAuthJwt(){
+  if (!appwriteAccount) throw new Error('Appwrite Auth não inicializado.');
+  const data = await appwriteAccount.createJWT();
+  return data.jwt;
+}
+function isScheduleAdmin(){
+  const email = String(authUser?.email || '').toLowerCase();
+  return Boolean(email && cloudAdminEmails.includes(email));
+}
+async function setAdminSharedState(key, value){
+  if (!authUser) throw new Error('Faça login para salvar.');
+  const jwt = await getAuthJwt();
+  const res = await fetch(`/api/appwrite/admin/state/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
+    body: JSON.stringify({ value })
+  });
+  if (!res.ok) {
+    let message = await res.text();
+    try { message = JSON.parse(message).error || message; } catch {}
+    throw new Error(message);
+  }
+  return res.json();
+}
+function normalizeMembers(list){
+  const map = new Map();
+  [...DEFAULT_MEMBERS, ...(list || [])].forEach(name => {
+    const text = String(name || '').trim();
+    if (!text) return;
+    const key = normalize(text);
+    if (!map.has(key) || /[áéíóúãõâêôç]/i.test(text)) map.set(key, text);
+  });
+  return [...map.values()].sort((a,b) => normalize(a).localeCompare(normalize(b), 'pt-BR'));
+}
+function normalizeScheduleRows(rows){
+  if (!Array.isArray(rows)) return DEFAULT_scheduleRows.map(row => ({...row}));
+  return rows.map(row => ({
+    day: row.day || '', date: row.date || '',
+    minister: row.minister || '', back1: row.back1 || '', back2: row.back2 || '', back3: row.back3 || '',
+    bass: row.bass || '', drums: row.drums || '', guitar: row.guitar || '', keyboard: row.keyboard || '', sound: row.sound || ''
+  }));
+}
+async function seedScheduleDataIfNeeded(cloudMembers, cloudSchedule){
+  if (!isScheduleAdmin()) return;
+  const tasks = [];
+  if (!Array.isArray(cloudMembers) || !cloudMembers.length) tasks.push(setAdminSharedState('members', members));
+  if (!Array.isArray(cloudSchedule) || !cloudSchedule.length) tasks.push(setAdminSharedState('monthlySchedule', scheduleRows));
+  if (!tasks.length) return;
+  try {
+    await Promise.all(tasks);
+    toast('Membros e escala inicial sincronizados no Appwrite.');
+  } catch (error) {
+    console.warn('Dados iniciais da escala não sincronizados:', error);
+  }
+}
+async function saveScheduleState(showToast = false){
+  if (!isScheduleAdmin()) {
+    toast('Você não tem permissão para editar a escala.');
+    return;
+  }
+  try {
+    setScheduleEditStatus('Salvando escala no Appwrite...', 'saving');
+    await Promise.all([
+      setAdminSharedState('members', members),
+      setAdminSharedState('monthlySchedule', scheduleRows)
+    ]);
+    scheduleDirty = false;
+    saveJSON('vs_members_v1', members);
+    saveJSON('vs_schedule_rows_v1', scheduleRows);
+    setScheduleEditStatus('Escala salva no banco de dados Appwrite.', 'admin');
+    if (showToast) toast('Escala salva com sucesso.');
+  } catch (error) {
+    console.error(error);
+    setScheduleEditStatus(`Erro ao salvar: ${error.message}`, 'error');
+    toast('Não foi possível salvar a escala no Appwrite.');
+  }
+}
+function setScheduleEditStatus(message, mode = ''){
+  if (!el.scheduleEditStatus) return;
+  el.scheduleEditStatus.textContent = message;
+  el.scheduleEditStatus.classList.toggle('is-admin', mode === 'admin');
+  el.scheduleEditStatus.classList.toggle('is-saving', mode === 'saving');
 }
 async function getUserState(key){
   if (!authUser) return null;
@@ -673,22 +792,40 @@ function finishGuidedTour(){
 }
 
 function initSchedule(){
+  const localMembers = loadJSON('vs_members_v1', null);
+  const localSchedule = loadJSON('vs_schedule_rows_v1', null);
+  if (Array.isArray(localMembers)) members = normalizeMembers(localMembers);
+  if (Array.isArray(localSchedule)) scheduleRows = normalizeScheduleRows(localSchedule);
   populateScheduleFilters();
   renderSchedule();
 }
 function populateScheduleFilters(){
   if (!el.scheduleDayFilter || !el.scheduleRoleFilter) return;
-  const days = [...new Set(SCHEDULE_ROWS.map(row => row.day))];
+  const currentDay = el.scheduleDayFilter.value;
+  const currentRole = el.scheduleRoleFilter.value;
+  const currentMember = el.scheduleMemberFilter?.value || '';
+  const days = [...new Set(scheduleRows.map(row => row.day))];
   el.scheduleDayFilter.innerHTML = '<option value="">Todos os dias</option>' + days.map(day => `<option value="${esc(day)}">${esc(day)}</option>`).join('');
   const roles = Object.entries(SCHEDULE_ROLE_LABELS).map(([key,label]) => ({key,label}));
   el.scheduleRoleFilter.innerHTML = '<option value="">Todas as funções</option>' + roles.map(role => `<option value="${role.key}">${esc(role.label)}</option>`).join('');
+  if (el.scheduleMemberFilter) {
+    el.scheduleMemberFilter.innerHTML = '<option value="">Todos os membros</option>' + members.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
+    if (members.includes(currentMember)) el.scheduleMemberFilter.value = currentMember;
+  }
+  if (days.includes(currentDay)) el.scheduleDayFilter.value = currentDay;
+  if (roles.some(r => r.key === currentRole)) el.scheduleRoleFilter.value = currentRole;
 }
 function getFilteredScheduleRows(){
   const q = normalize(el.scheduleSearch?.value || '');
   const day = el.scheduleDayFilter?.value || '';
   const role = el.scheduleRoleFilter?.value || '';
-  return SCHEDULE_ROWS.filter(row => {
+  const member = el.scheduleMemberFilter?.value || '';
+  return scheduleRows.filter(row => {
     if (day && row.day !== day) return false;
+    if (member) {
+      const values = Object.keys(SCHEDULE_ROLE_LABELS).map(field => row[field] || '');
+      if (!values.some(value => normalize(value) === normalize(member))) return false;
+    }
     if (role) {
       const value = normalize(row[role] || '');
       if (q && !value.includes(q)) return false;
@@ -699,8 +836,17 @@ function getFilteredScheduleRows(){
     return blob.includes(q);
   });
 }
+function updateScheduleEditUI(){
+  const admin = isScheduleAdmin();
+  el.scheduleSaveBtn?.classList.toggle('hidden', !admin);
+  if (!authUser) setScheduleEditStatus('Faça login para visualizar a escala. A edição é restrita aos administradores.', '');
+  else if (admin) setScheduleEditStatus(scheduleDirty ? 'Alteração pendente. Clique em “Salvar escala” para gravar no banco de dados.' : 'Modo edição liberado. Use as listas suspensas para alterar os escalados.', 'admin');
+  else if (!cloudAdminConfigured) setScheduleEditStatus('Escala em modo leitura. Configure APPWRITE_ADMIN_EMAILS no Render para liberar administradores.', '');
+  else setScheduleEditStatus('Escala em modo leitura. Somente usuários autorizados podem alterar os escalados.', '');
+}
 function renderSchedule(){
   if (!el.scheduleTableBody) return;
+  updateScheduleEditUI();
   const rows = getFilteredScheduleRows();
   const q = normalize(el.scheduleSearch?.value || '');
   if (!rows.length) {
@@ -713,10 +859,37 @@ function renderSchedule(){
 function renderScheduleRow(row, q){
   const fields = ['minister','back1','back2','back3','bass','drums','guitar','keyboard','sound'];
   const nextClass = isNextSchedule(row) ? ' schedule-row-next' : '';
-  return `<tr class="${row.day === 'Quinta' ? 'schedule-row-alt' : ''}${nextClass}">
+  const rowIndex = scheduleRows.findIndex(item => item.day === row.day && item.date === row.date);
+  return `<tr class="${row.day === 'Quinta' ? 'schedule-row-alt' : ''}${nextClass}" data-row-index="${rowIndex}">
     <td class="schedule-date"><b>${esc(row.day)}</b><strong>${esc(row.date)}</strong></td>
-    ${fields.map(field => `<td>${highlightScheduleMatch(row[field] || '', q)}</td>`).join('')}
+    ${fields.map(field => `<td>${renderScheduleCell(row, rowIndex, field, q)}</td>`).join('')}
   </tr>`;
+}
+function renderScheduleCell(row, rowIndex, field, q){
+  const value = row[field] || '';
+  if (isScheduleAdmin() && rowIndex >= 0) {
+    const options = [''].concat(members).map(name => `<option value="${esc(name)}" ${name === value ? 'selected' : ''}>${esc(name || '—')}</option>`).join('');
+    return `<select class="schedule-member-select" data-row-index="${rowIndex}" data-field="${esc(field)}" aria-label="${esc(SCHEDULE_ROLE_LABELS[field])}">${options}</select>`;
+  }
+  return `<span class="schedule-cell-readonly">${highlightScheduleMatch(value, q)}</span>`;
+}
+function onScheduleSelectChange(event){
+  const select = event.target.closest('.schedule-member-select');
+  if (!select) return;
+  if (!isScheduleAdmin()) {
+    toast('Você não tem permissão para editar a escala.');
+    renderSchedule();
+    return;
+  }
+  const rowIndex = Number(select.dataset.rowIndex);
+  const field = select.dataset.field;
+  if (!Number.isInteger(rowIndex) || !scheduleRows[rowIndex] || !SCHEDULE_ROLE_LABELS[field]) return;
+  scheduleRows[rowIndex][field] = select.value;
+  select.classList.add('changed', 'schedule-save-pulse');
+  scheduleDirty = true;
+  saveJSON('vs_schedule_rows_v1', scheduleRows);
+  renderScheduleSummary(getFilteredScheduleRows());
+  setScheduleEditStatus('Alteração pendente. Clique em “Salvar escala” para gravar no banco de dados.', 'admin');
 }
 function highlightScheduleMatch(value, q){
   const text = esc(value || '');
@@ -746,6 +919,7 @@ function clearScheduleFilters(){
   if (el.scheduleSearch) el.scheduleSearch.value = '';
   if (el.scheduleDayFilter) el.scheduleDayFilter.value = '';
   if (el.scheduleRoleFilter) el.scheduleRoleFilter.value = '';
+  if (el.scheduleMemberFilter) el.scheduleMemberFilter.value = '';
   renderSchedule();
 }
 function isNextSchedule(row){
@@ -753,7 +927,7 @@ function isNextSchedule(row){
   const now = new Date();
   const target = new Date(2026, month - 1, day, 23, 59, 59);
   if (now.getFullYear() !== 2026 || now.getMonth() !== 4) return false;
-  const futureRows = SCHEDULE_ROWS.map(r => ({ row: r, date: new Date(2026, Number(r.date.split('/')[1]) - 1, Number(r.date.split('/')[0]), 23, 59, 59) })).filter(item => item.date >= new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  const futureRows = scheduleRows.map(r => ({ row: r, date: new Date(2026, Number(r.date.split('/')[1]) - 1, Number(r.date.split('/')[0]), 23, 59, 59) })).filter(item => item.date >= new Date(now.getFullYear(), now.getMonth(), now.getDate()));
   futureRows.sort((a,b) => a.date - b.date);
   return futureRows.length && futureRows[0].row.date === row.date && futureRows[0].row.day === row.day;
 }

@@ -78,3 +78,34 @@ APPWRITE_USER_STATE_COLLECTION_ID=user_state
 - Favoritos por usuário em user_state/favorites
 
 A biblioteca de músicas continua vindo do Google Drive.
+
+
+## V31 — Escala editável e membros
+
+A V31 usa a collection `app_state` para salvar dois estados compartilhados:
+
+```text
+members
+monthlySchedule
+```
+
+Não é necessário criar novas collections para esta versão.
+
+### Permissão de edição da escala
+
+No Render, adicione a variável:
+
+```text
+APPWRITE_ADMIN_EMAILS=email1@dominio.com,email2@dominio.com
+```
+
+Somente usuários logados com e-mail presente nessa lista verão as listas suspensas e poderão salvar a escala no banco.
+
+### Uso
+
+1. Faça login no sistema com um e-mail autorizado em `APPWRITE_ADMIN_EMAILS`.
+2. Abra a guia **Escala**.
+3. Selecione os membros nas listas suspensas.
+4. Clique em **Salvar escala**.
+
+A lista inicial de membros foi extraída da escala de maio, sem nomes repetidos.

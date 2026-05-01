@@ -1617,3 +1617,42 @@ button,input,select,textarea{
 @media print{
   .schedule-row-alt td{background:#c7daee!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 }
+
+
+/* V31 — escala editável com membros do Appwrite */
+.schedule-edit-status{
+  margin:12px 0 14px;
+  padding:12px 14px;
+  border:1px solid var(--line-soft);
+  background:rgba(255,255,255,.035);
+  border-radius:16px;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.5;
+}
+.schedule-edit-status.is-admin{
+  color:var(--text);
+  border-color:var(--line);
+  background:rgba(41,217,208,.07);
+}
+.schedule-edit-status.is-saving{opacity:.85}
+.schedule-member-select{
+  width:100%;
+  min-width:130px;
+  height:38px;
+  border-radius:12px;
+  border:1px solid var(--line-soft);
+  background:rgba(255,255,255,.045);
+  color:var(--text);
+  padding:0 10px;
+  font-weight:800;
+  outline:none;
+}
+.schedule-member-select:focus{border-color:var(--line); box-shadow:0 0 0 3px rgba(41,217,208,.10)}
+.schedule-member-select.changed{border-color:var(--teal); background:rgba(41,217,208,.10)}
+.schedule-cell-readonly{display:inline-flex;min-height:38px;align-items:center}
+.schedule-save-pulse{animation:schedulePulse .8s ease both}
+@keyframes schedulePulse{0%{box-shadow:0 0 0 0 rgba(41,217,208,.24)}100%{box-shadow:0 0 0 10px rgba(41,217,208,0)}}
+@media (max-width:900px){
+  .schedule-member-select{min-width:150px}
+}
