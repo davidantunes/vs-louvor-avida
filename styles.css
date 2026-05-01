@@ -1917,3 +1917,118 @@ body.auth-register-mode .register-only{display:block!important}
 .profile-info-card strong{display:block;font-size:18px;color:var(--text)}
 .profile-actions{justify-content:flex-end}
 @media (max-width:760px){.login-options-row{align-items:flex-start}.profile-head{align-items:flex-start}.profile-grid{grid-template-columns:1fr}.user-badge-text{max-width:100%}}
+
+
+/* V36 — correção definitiva dos inputs de autenticação */
+#loginScreen .login-card .auth-grid{
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:16px 14px !important;
+  align-items:start !important;
+}
+#loginScreen .login-card .auth-grid label{
+  display:block !important;
+  width:100% !important;
+  min-width:0 !important;
+}
+#loginScreen .login-card .auth-grid label > span{
+  display:block !important;
+  color:var(--muted) !important;
+  font-size:12px !important;
+  font-weight:900 !important;
+  margin:0 0 8px 4px !important;
+  letter-spacing:.01em !important;
+}
+#loginScreen .login-card .auth-grid .input-wrap{
+  position:relative !important;
+  display:block !important;
+  width:100% !important;
+  min-width:0 !important;
+}
+#loginScreen .login-card .auth-grid input[type="text"],
+#loginScreen .login-card .auth-grid input[type="email"],
+#loginScreen .login-card .auth-grid input[type="password"]{
+  display:block !important;
+  width:100% !important;
+  max-width:none !important;
+  min-width:0 !important;
+  height:56px !important;
+  min-height:56px !important;
+  box-sizing:border-box !important;
+  border-radius:16px !important;
+  border:1px solid var(--line) !important;
+  background:var(--panel) !important;
+  color:var(--text) !important;
+  padding:0 16px !important;
+  font-family:inherit !important;
+  font-size:15px !important;
+  font-weight:800 !important;
+  line-height:56px !important;
+  outline:0 !important;
+  box-shadow:none !important;
+  appearance:none !important;
+  -webkit-appearance:none !important;
+}
+#loginScreen .login-card .auth-grid .password-wrap input[type="password"],
+#loginScreen .login-card .auth-grid .password-wrap input[type="text"]{
+  padding-right:104px !important;
+}
+#loginScreen .login-card .auth-grid input::placeholder{
+  color:var(--muted) !important;
+  opacity:.85 !important;
+}
+#loginScreen .login-card .auth-grid input:focus{
+  border-color:rgba(41,217,208,.55) !important;
+  box-shadow:0 0 0 4px rgba(41,217,208,.10) !important;
+}
+#loginScreen .login-card .auth-grid label.is-valid input{
+  border-color:rgba(41,217,208,.48) !important;
+  box-shadow:0 0 0 4px rgba(41,217,208,.08) !important;
+}
+#loginScreen .login-card .auth-grid label.is-invalid input{
+  border-color:rgba(255,120,120,.46) !important;
+  box-shadow:0 0 0 4px rgba(255,120,120,.08) !important;
+}
+#loginScreen .login-card .auth-grid .field-toggle{
+  position:absolute !important;
+  right:10px !important;
+  top:50% !important;
+  transform:translateY(-50%) !important;
+  height:38px !important;
+  min-height:38px !important;
+  padding:0 12px !important;
+  border-radius:12px !important;
+  border:1px solid var(--line-soft) !important;
+  background:rgba(255,255,255,.055) !important;
+  color:var(--text) !important;
+  font-family:inherit !important;
+  font-size:12px !important;
+  font-weight:900 !important;
+  line-height:1 !important;
+  cursor:pointer !important;
+}
+#loginScreen .login-card .auth-grid .field-hint{
+  display:block !important;
+  margin:8px 4px 0 !important;
+  color:var(--muted) !important;
+  font-size:12px !important;
+  line-height:1.4 !important;
+  min-height:17px !important;
+}
+#loginScreen .login-card .auth-grid input:-webkit-autofill,
+#loginScreen .login-card .auth-grid input:-webkit-autofill:hover,
+#loginScreen .login-card .auth-grid input:-webkit-autofill:focus{
+  -webkit-text-fill-color:var(--text) !important;
+  caret-color:var(--text) !important;
+  -webkit-box-shadow:0 0 0 1000px var(--panel) inset !important;
+  border:1px solid var(--line) !important;
+}
+@media (max-width:760px){
+  #loginScreen .login-card .auth-grid{
+    grid-template-columns:1fr !important;
+  }
+  #loginScreen .login-card .auth-grid .password-wrap input[type="password"],
+  #loginScreen .login-card .auth-grid .password-wrap input[type="text"]{
+    padding-right:94px !important;
+  }
+}
