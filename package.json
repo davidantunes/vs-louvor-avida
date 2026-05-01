@@ -1,17 +1,18 @@
 {
   "name": "vs-louvor-avida",
-  "version": "2.11.0",
-  "description": "Sistema Biblioteca de Louvor Igreja Amor e Vida com Google Drive, player premium, repertórios e transposição via FFmpeg.",
-  "main": "server.js",
+  "version": "3.1.0",
+  "private": true,
+  "description": "Biblioteca de Louvor Igreja Amor e Vida com Google Drive, player premium, escala e repertórios.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
-    "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "express": "^4.19.2",
-    "node-fetch": "^2.7.0",
-    "ffmpeg-static": "^5.2.0"
+    "express": "^4.18.3",
+    "ffmpeg-static": "^5.2.0",
+    "node-fetch": "^2.7.0"
   },
+  "main": "server.js",
   "engines": {
     "node": "20.x"
   }

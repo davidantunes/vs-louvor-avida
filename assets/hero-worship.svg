@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 620" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="g1" cx="72%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#1bded5" stop-opacity=".55"/>
+      <stop offset="45%" stop-color="#083b3a" stop-opacity=".65"/>
+      <stop offset="100%" stop-color="#020404" stop-opacity="1"/>
+    </radialGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#000" stop-opacity=".92"/>
+      <stop offset="45%" stop-color="#020606" stop-opacity=".62"/>
+      <stop offset="100%" stop-color="#000" stop-opacity=".88"/>
+    </linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="5"/></filter>
+  </defs>
+  <rect width="1600" height="620" fill="#030505"/>
+  <rect width="1600" height="620" fill="url(#g1)"/>
+  <g opacity=".18">
+    <path d="M0 0h1600v620H0z" fill="none"/>
+    <g stroke="#1bded5" stroke-width="1">
+      <path d="M200-80 0 700M310-80 110 700M420-80 220 700M530-80 330 700M640-80 440 700M750-80 550 700M860-80 660 700M970-80 770 700M1080-80 880 700M1190-80 990 700M1300-80 1100 700M1410-80 1210 700M1520-80 1320 700"/>
+    </g>
+  </g>
+  <g opacity=".72" filter="url(#blur)">
+    <circle cx="1140" cy="190" r="75" fill="#bffdfa"/>
+    <rect x="1129" y="78" width="22" height="235" rx="11" fill="#d8fffd"/>
+    <rect x="1032" y="181" width="215" height="20" rx="10" fill="#d8fffd"/>
+  </g>
+  <g fill="#000" opacity=".75">
+    <path d="M0 500c130-80 230-72 350-28 110 40 210 34 330-18 160-70 290-62 450-12 150 48 280 44 470-45v223H0z"/>
+    <circle cx="1040" cy="436" r="58"/>
+    <circle cx="1190" cy="446" r="50"/>
+    <circle cx="1320" cy="430" r="58"/>
+    <circle cx="770" cy="452" r="48"/>
+    <circle cx="580" cy="446" r="52"/>
+    <path d="M870 458c16-110 28-170 47-250 5-18 30-12 27 8l-16 116 42-100c9-20 35-10 27 10l-39 112 63-72c13-16 37 4 24 20l-68 87c-15 20-30 46-34 76z"/>
+    <path d="M720 470c-20-95-38-148-70-216-8-18-33-7-26 11l36 99-63-78c-14-17-36 4-23 21l71 94c18 24 31 48 38 77z"/>
+  </g>
+  <rect width="1600" height="620" fill="url(#g2)"/>
+</svg>

@@ -1,428 +1,295 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Biblioteca de Louvor — Igreja Amor e Vida</title>
-  <link rel="icon" href="assets/logo-avida.jpg" />
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body data-theme="dark">
-  <div class="bg-blur bg-blur-a"></div>
-  <div class="bg-blur bg-blur-b"></div>
-  <div class="bg-blur bg-blur-c"></div>
+# VS Louvor — Igreja Amor e Vida — V19 Tom alterado visível + textos padronizados
 
-  <div id="loadingScreen" class="loading-screen">
-    <div class="loading-card glass">
-      <img src="assets/logo-avida.jpg" alt="Igreja Amor e Vida">
-      <div class="loading-copy">
-        <span class="kicker">Preparando a plataforma</span>
-        <strong>Biblioteca de Louvor</strong>
-        <p id="loadingMessage">Carregando biblioteca e organizando o ambiente...</p>
-      </div>
-      <div class="loading-bar"><i></i></div>
-    </div>
-  </div>
+## O que entra na V10
 
-  <div id="loginScreen" class="login-screen hidden" aria-hidden="true">
-    <div class="login-backdrop"></div>
-    <div class="login-card glass">
-      <div class="login-brand">
-        <img src="assets/logo-avida.jpg" alt="Igreja Amor e Vida">
-        <div>
-          <span class="kicker">Acesso institucional</span>
-          <h1>Biblioteca de Louvor</h1>
-          <p>Igreja Amor e Vida</p>
-        </div>
-      </div>
-      <div class="login-verse">"Tudo quanto tem fôlego louve ao Senhor. Louvai ao Senhor!" <strong>Salmos 150:6</strong></div>
-      <div class="login-grid">
-        <label><span>Seu nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /></label>
-        <label><span>Equipe / escala</span><input id="loginRole" type="text" placeholder="Ex.: Louvor Domingo Noite" /></label>
-      </div>
-      <div class="login-actions">
-        <button id="enterSystemBtn" class="btn btn-primary" type="button">Entrar na plataforma</button>
-      </div>
-      <small class="login-note">Seu acesso fica salvo neste dispositivo para uma entrada mais rápida.</small>
-    </div>
-  </div>
+### 1) Drag and drop nos repertórios
+- abra um repertório
+- arraste as músicas para reordenar
+- remova faixas individualmente
+- toque o repertório inteiro
 
-  <div class="layout">
-    <aside class="sidebar">
-      <div class="brand">
-        <img src="assets/logo-avida.jpg" alt="Igreja Amor e Vida">
-        <div>
-          <small>IGREJA</small>
-          <strong>AMOR E VIDA</strong>
-        </div>
-      </div>
+### 2) Ordenação manual do repertório
+- a ordem salva no navegador do usuário
+- útil para montar culto e ensaio na sequência correta
 
-      <nav class="sidebar-nav">
-        <a class="is-active" href="#inicio"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span><span>Início</span></a>
-        <a href="#biblioteca"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a2.75 2.75 0 1 1-2.75-2.75A2.75 2.75 0 0 1 9 18Zm0 0V6l10-2v10"/><path d="M19 14a2.75 2.75 0 1 1-2.75 2.75A2.75 2.75 0 0 1 19 14Z"/></svg></span><span>Biblioteca</span></a>
-        <a href="#escalaMensal"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v3"/><path d="M17 2v3"/><path d="M4 8h16"/><path d="M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/></svg></span><span>Escala</span></a>
-        <a href="#repertorios"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><span>Repertórios</span></a>
-        <a href="#tutorialPage"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><span>Tutorial</span></a>
-      </nav>
+### 3) Mini tela individual da música
+- detalhes da música
+- tags inteligentes
+- ações rápidas: tocar, favoritar, alterar tom e compartilhar
 
-      <div class="sidebar-card">
-        <strong>Ministério organizado</strong>
-        <p>"Louvai ao Senhor, porque ele é bom; cantai louvores ao seu nome, porque é agradável." <strong>Salmos 135:3</strong></p>
-      </div>
+### 4) Tema claro / escuro
+- alternância por botão no topo
+- preferência salva em localStorage
 
-      <div class="sidebar-tour glass">
-        <button id="tutorialStartBtn" class="btn btn-primary btn-compact" type="button">Iniciar Tour</button>
-      </div>
+### 5) Deploy pronto no Render
+- incluído `render.yaml`
+- `npm start` já configurado
+- backend Node + Express + FFmpeg pronto
 
-      <div class="sidebar-status">
-        <div>
-          <span>Status</span>
-          <strong>Biblioteca online</strong>
-        </div>
-        <i></i>
-      </div>
-    </aside>
+---
 
-    <main class="content">
-      <header class="topbar reveal" id="inicio" data-tour="search">
-        <div class="searchbox">
-          <span>⌕</span>
-          <input id="searchInput" type="search" placeholder="Buscar por música, pasta, cantor, tom, tag ou arquivo...">
-        </div>
-        <div class="topbar-actions">
-          <div id="userBadge" class="user-badge hidden"></div>
-          <button id="themeToggle" class="icon-btn" title="Alternar tema"><span class="icon-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5"/><path d="M12 19.5V22"/><path d="M4.93 4.93l1.77 1.77"/><path d="M17.3 17.3l1.77 1.77"/><path d="M2 12h2.5"/><path d="M19.5 12H22"/><path d="M4.93 19.07l1.77-1.77"/><path d="M17.3 6.7l1.77-1.77"/></svg></span></button>
-          <button id="refreshBtn" class="icon-btn" title="Atualizar biblioteca"><span class="icon-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0 2 5.3"/><path d="M20 4v7h-7"/></svg></span></button>
-          <button id="logoutBtn" class="btn btn-secondary btn-compact hidden" type="button">Sair</button>
-        </div>
-      </header>
+## Como rodar localmente
 
-      <section class="hero reveal" data-tour="hero">
-        <div class="hero-overlay"></div>
-        <div class="hero-radial"></div>
-        <div class="hero-particles"></div>
-        <div class="hero-content">
-          <div class="hero-badges">
-            <span class="pill live">Louvor</span>
-            <span class="pill">Plataforma do Louvor</span>
-            <span class="pill">Igreja Amor e Vida</span>
-          </div>
-          <div class="hero-eyebrow">IGREJA AMOR E VIDA</div>
-          <h1>Adore. <span class="nowrap">Conecte-se.</span><br><span class="accent">Viva o propósito.</span></h1>
-          <p>Um ambiente pensado para o ministério de louvor acessar músicas com rapidez e organização, em uma plataforma que visa o servir com excelência.</p>
-          <div class="hero-actions">
-            <button id="randomBtn" class="btn btn-primary">▶ Reproduzir aleatório</button>
-            <button id="copyLinkBtn" class="btn btn-secondary">Copiar link do sistema</button>
-          </div>
-          <div class="hero-metrics">
-            <div><strong id="heroTotal">0</strong><span>Músicas</span></div>
-            <div><strong id="heroSetlists">0</strong><span>Repertórios</span></div>
-            <div><strong id="heroFavs">0</strong><span>Favoritas</span></div>
-            <div><strong id="heroKeys">0</strong><span>Tons</span></div>
-          </div>
-        </div>
-        <div class="hero-side glass">
-          <span>Biblioteca ativa</span>
-          <strong id="heroTotalPanel">0</strong>
-          <small>áudios disponíveis</small>
-          <div class="hero-side-grid">
-            <div><span>Tags</span><strong id="heroCategories">0</strong></div>
-            <div><span>Pastas</span><strong id="totalSingersInline">0</strong></div>
-          </div>
-        </div>
-      </section>
+```bash
+npm install
+npm start
+```
 
-      <section class="stats reveal">
-        <article class="stat glass"><b id="totalTracks">0</b><span>Músicas</span></article>
-        <article class="stat glass"><b id="totalSingers">0</b><span>Cantores/Pastas</span></article>
-        <article class="stat glass"><b id="totalKeys">0</b><span>Tons detectados</span></article>
-        <article class="stat glass"><b id="totalFavorites">0</b><span>Favoritas</span></article>
-      </section>
-      <section class="section glass reveal schedule-section" id="escalaMensal" data-tour="schedule">
-        <div class="section-head schedule-head">
-          <div>
-            <span class="kicker">Escala mensal</span>
-            <h2>Escala Louvor Ávida — Maio 2026</h2>
-          </div>
-          <div class="schedule-actions">
-            <button id="schedulePrintBtn" class="btn btn-secondary btn-compact" type="button">Imprimir</button>
-            <button id="scheduleClearBtn" class="btn btn-secondary btn-compact" type="button">Limpar filtros</button>
-          </div>
-        </div>
+Abra:
 
-        <div class="schedule-toolbar">
-          <label><span>Buscar pessoa</span><input id="scheduleSearch" type="search" placeholder="Digite um nome da escala..." /></label>
-          <label><span>Dia</span><select id="scheduleDayFilter"><option value="">Todos os dias</option></select></label>
-          <label><span>Função</span><select id="scheduleRoleFilter"><option value="">Todas as funções</option></select></label>
-        </div>
+```text
+http://localhost:3000
+```
 
-        <div class="schedule-summary" id="scheduleSummary"></div>
+---
 
-        <div class="schedule-table-wrap">
-          <table class="schedule-table">
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Ministro</th>
-                <th>Back 1</th>
-                <th>Back 2</th>
-                <th>Back 3</th>
-                <th>Baixo</th>
-                <th>Bateria</th>
-                <th>Guitarra</th>
-                <th>Teclado</th>
-                <th>Tec. Som</th>
-              </tr>
-            </thead>
-            <tbody id="scheduleTableBody"></tbody>
-          </table>
-        </div>
+## Deploy no Render
 
-        <div class="schedule-notes">
-          <strong>Observações</strong>
-          <ol>
-            <li>As canções devem ser definidas pelo ministro com antecedência mínima de 7 dias.</li>
-            <li>O repertório de quinta deve ser definido até a quinta da semana anterior.</li>
-            <li>O repertório de domingo deve ser definido até o domingo da semana anterior.</li>
-          </ol>
-          <strong>Horários dos ensaios</strong>
-          <ul>
-            <li>Domingos às 16:00h</li>
-            <li>Quintas-feiras às 18:45h</li>
-          </ul>
-        </div>
-      </section>
+### Opção rápida
+1. envie esta pasta para um repositório no GitHub
+2. no Render, clique em **New +** → **Web Service**
+3. conecte o repositório
+4. o Render deve ler automaticamente o `render.yaml`
+5. adicione a variável de ambiente:
 
-      <section class="section glass reveal" id="repertorios" data-tour="setlists">
-        <div class="section-head">
-          <div>
-            <span class="kicker">Cultos</span>
-            <h2>Repertórios por culto</h2>
-          </div>
-          <button id="newSetlistBtn" class="btn btn-secondary btn-compact">+ Novo repertório</button>
-        </div>
-        <div id="setlistsGrid" class="setlist-grid"></div>
-      </section>
+- `GOOGLE_DRIVE_API_KEY` = sua chave da API do Google Drive
 
-      <section class="section glass reveal" id="filters" data-tour="filters">
-        <div class="section-head">
-          <div>
-            <span class="kicker">Refinamento</span>
-            <h2>Filtros inteligentes</h2>
-          </div>
-          <span id="status">Carregando...</span>
-        </div>
-        <div class="filters-grid">
-          <label><span>Música</span><select id="musicFilter"><option value="">Todas as músicas</option></select></label>
-          <label><span>Tom</span><select id="keyFilter"><option value="">Todos os tons</option></select></label>
-          <label><span>Tag</span><select id="tagFilter"><option value="">Todas as tags</option></select></label>
-          <label><span>Arquivo</span><select id="typeFilter"><option value="">Todos os arquivos</option></select></label>
-          <button id="favoritesOnly" class="btn btn-secondary btn-filter" type="button">♡ Favoritas</button>
-          <button id="clearFilters" class="btn btn-secondary btn-filter" type="button">Limpar</button>
-        </div>
-      </section>
+### Configuração manual
+- **Environment**: Node
+- **Build Command**: `npm install`
+- **Start Command**: `npm start`
 
-      <section class="section glass reveal tutorial-page" id="tutorialPage" data-tour="tutorial">
-        <div class="section-head">
-          <div>
-            <span class="kicker">Guia de uso</span>
-            <h2>Tutorial da plataforma</h2>
-          </div>
-          <button id="tutorialPageStartBtn" class="btn btn-primary btn-compact" type="button">Iniciar Tour</button>
-        </div>
-        <div class="guide-modal-intro">Um resumo prático para a equipe acessar músicas com velocidade, organização e segurança durante o culto.</div>
-        <div class="guide-modal-grid tutorial-page-grid">
-          <details class="tutorial-item" open>
-            <summary><span>1. Encontrar a música certa</span><i>⌕</i></summary>
-            <div class="tutorial-body"><p>Use a busca do topo e os filtros para localizar a música por nome, tom, tag, tipo de arquivo ou texto do nome original.</p></div>
-          </details>
-          <details class="tutorial-item">
-            <summary><span>2. Escolher o melhor modo de visualização</span><i>▦</i></summary>
-            <div class="tutorial-body"><p>Alterne entre Miniaturas e Detalhes. O sistema carrega mais músicas automaticamente conforme você rola a tela.</p></div>
-          </details>
-          <details class="tutorial-item">
-            <summary><span>3. Tocar, favoritar e alterar tom</span><i>♬</i></summary>
-            <div class="tutorial-body"><p>Toque a música, favorite para acesso rápido e abra a transposição para ouvir ou baixar em outro tom.</p></div>
-          </details>
-          <details class="tutorial-item">
-            <summary><span>4. Montar repertórios por culto</span><i>☷</i></summary>
-            <div class="tutorial-body"><p>Adicione músicas aos repertórios e, se a música estiver transposta, o repertório salva essa versão sem alterar o original da base.</p></div>
-          </details>
-          <details class="tutorial-item">
-            <summary><span>5. Usar o player premium</span><i>▶</i></summary>
-            <div class="tutorial-body"><p>Controle fila, progresso, volume e navegação no player inferior com foco em uso rápido no ensaio e no culto.</p></div>
-          </details>
-        </div>
-      </section>
+---
 
-      <section class="section reveal" id="biblioteca" data-tour="library">
-        <div class="section-head library-head">
-          <div>
-            <span class="kicker">Biblioteca</span>
-            <h2>Músicas</h2>
-          </div>
+## Observações
+- os favoritos, repertórios e tema ficam salvos em `localStorage`
+- a biblioteca é lida do Google Drive configurado em `config.js`
+- o backend usa FFmpeg para gerar o áudio transposto no tom escolhido
 
-          <div class="library-toolbar">
-            <span id="resultCount">0 resultado(s)</span>
-            <div class="view-toggle" aria-label="Alternar visualização">
-              <button id="viewThumbBtn" class="view-btn is-active" type="button">▦ Miniaturas</button>
-              <button id="viewDetailBtn" class="view-btn" type="button">☷ Detalhes</button>
-            </div>
-          </div>
-        </div>
 
-        <div id="trackList" class="track-grid view-thumbnails"></div>
-        <div id="loadSentinel" class="load-sentinel">
-          <span id="loadStatus">Role para carregar mais músicas</span>
-        </div>
-      </section>
-    </main>
-  </div>
+## Novidades da V10
 
-  <footer id="playerArea" class="player glass reveal player-hidden" data-tour="player">
-    <div class="player-main-row">
-      <div class="now-playing">
-        <img id="nowCover" src="assets/logo-avida.jpg" alt="Capa atual">
-        <div class="now-meta">
-          <strong id="nowTitle">Selecione uma música</strong>
-          <span id="nowSinger">Igreja Amor e Vida</span>
-        </div>
-      </div>
-      <div class="player-center">
-        <div class="player-controls" id="playerControls">
-          <button id="shuffleBtn" title="Aleatório">⤨</button>
-          <button id="prevBtn" title="Anterior">⏮</button>
-          <button id="playPauseBtn" class="play-main" title="Play/Pause" aria-label="Tocar">
-            <span class="player-icon player-icon-play" aria-hidden="true"></span>
-          </button>
-          <button id="nextBtn" title="Próxima">⏭</button>
-          <button id="repeatBtn" title="Reiniciar música">↻</button>
-        </div>
-        <div class="player-progress-row">
-          <span id="currentTime">0:00</span>
-          <div class="progress-shell">
-            <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
-            <input id="progressBar" type="range" min="0" max="100" value="0" step="0.1">
-          </div>
-          <span id="durationTime">0:00</span>
-        </div>
-      </div>
-      <div class="player-side">
-        <div class="volume-card">
-          <span>🔊</span>
-          <input id="volumeBar" type="range" min="0" max="100" value="100">
-        </div>
-        <div class="player-caption">Modo Louvor Premium</div>
-      </div>
-    </div>
-    <audio id="audioPlayer" preload="none"></audio>
-  </footer>
+### Visualização por miniatura ou detalhes
+- botão **Miniaturas**
+- botão **Detalhes**
+- a preferência fica salva no navegador
 
-  <nav class="mobile-dock">
-    <a href="#inicio"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span><small>Início</small></a>
-    <a href="#biblioteca"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a2.75 2.75 0 1 1-2.75-2.75A2.75 2.75 0 0 1 9 18Zm0 0V6l10-2v10"/><path d="M19 14a2.75 2.75 0 1 1-2.75 2.75A2.75 2.75 0 0 1 19 14Z"/></svg></span><small>Músicas</small></a>
-    <a href="#escalaMensal"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v3"/><path d="M17 2v3"/><path d="M4 8h16"/><path d="M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/></svg></span><small>Escala</small></a>
-    <a href="#repertorios"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><small>Listas</small></a>
-    <a href="#tutorialPage"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><small>Tutorial</small></a>
-  </nav>
+### Carregamento progressivo
+- no modo Miniaturas, carrega menos músicas por vez para manter o visual leve
+- no modo Detalhes, carrega mais músicas por vez
+- conforme o usuário rola a página, novas músicas são carregadas automaticamente
 
-  <div id="toneModal" class="modal hidden">
-    <div class="modal-card glass">
-      <button id="closeTone" class="modal-close">×</button>
-      <span class="kicker">Transposição</span>
-      <h3>Alterar tom</h3>
-      <p id="toneTrackName">Selecione o tom desejado.</p>
-      <div class="tone-info-grid">
-        <div class="info-strip">Tom original: <strong id="toneCurrent">—</strong></div>
-        <div class="info-strip">Tom alterado: <strong id="toneSelected">—</strong></div>
-      </div>
-      <div id="toneButtons" class="tone-buttons tone-key-buttons"></div>
-      <div class="modal-actions">
-        <button id="playToneBtn" class="btn btn-primary">▶ Ouvir neste tom</button>
-        <a id="downloadToneBtn" class="btn btn-secondary" href="#" download>Baixar neste tom</a>
-        <button id="addToneToSetlistBtn" class="btn btn-secondary" type="button">+ Adicionar ao repertório neste tom</button>
-      </div>
-      <small class="note">O download transposto usa o backend Node + FFmpeg incluso neste projeto.</small>
-    </div>
-  </div>
+### Benefícios
+- melhor performance com bibliotecas grandes
+- visual mais limpo
+- navegação mais fluida no celular e no computador
 
-  <div id="setlistModal" class="modal hidden">
-    <div class="modal-card glass">
-      <button id="closeSetlist" class="modal-close">×</button>
-      <span class="kicker">Repertórios</span>
-      <h3>Adicionar ao repertório</h3>
-      <p id="setlistTrackName">Escolha um repertório abaixo.</p>
-      <div class="create-inline">
-        <input id="newSetlistName" type="text" placeholder="Ex.: Culto Domingo Noite">
-        <button id="createSetlistBtn" class="btn btn-primary">Criar</button>
-      </div>
-      <div id="setlistOptions" class="stack-list"></div>
-    </div>
-  </div>
 
-  <div id="setlistDetailModal" class="modal hidden">
-    <div class="modal-card glass modal-wide">
-      <button id="closeSetlistDetail" class="modal-close">×</button>
-      <span class="kicker">Acabamento V9</span>
-      <h3 id="setlistDetailTitle">Repertório</h3>
-      <p>Arraste para reordenar as músicas, remova faixas ou toque o repertório inteiro.</p>
-      <div class="modal-actions modal-actions-top">
-        <button id="playSetlistDetail" class="btn btn-primary">▶ Tocar repertório</button>
-        <button id="shareSetlistDetail" class="btn btn-secondary">Compartilhar</button>
-      </div>
-      <div id="setlistDetailTracks" class="reorder-list"></div>
-    </div>
-  </div>
+## Novidades da V11
 
-  <div id="songModal" class="modal hidden">
-    <div class="modal-card glass modal-wide song-modal">
-      <button id="closeSongModal" class="modal-close">×</button>
-      <div class="song-modal-grid">
-        <div class="song-cover-panel">
-          <img id="songModalCover" src="assets/logo-avida.jpg" alt="Capa da música">
-        </div>
-        <div class="song-modal-body">
-          <span class="kicker">Detalhes da música</span>
-          <h3 id="songModalTitle">Música</h3>
-          <p id="songModalSubtitle">Cantor/Pasta</p>
-          <div id="songModalMeta" class="song-meta"></div>
-          <div id="songModalTags" class="tag-cluster"></div>
-          <div class="modal-actions">
-            <button id="songModalPlay" class="btn btn-primary">▶ Tocar agora</button>
-            <button id="songModalFavorite" class="btn btn-secondary">♡ Favoritar</button>
-            <button id="songModalTone" class="btn btn-secondary">Alterar tom</button>
-            <button id="songModalShare" class="btn btn-secondary">Compartilhar</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+### Seleção de tom por escala musical
+Agora o modal de alteração de tom mostra a escala:
 
-  <script src="config.js"></script>
+```text
+C C# D D# E F F# G G# A A# B
+```
 
-  <div id="tourOverlay" class="tour-overlay hidden" aria-hidden="true">
-    <div class="tour-backdrop"></div>
-    <div id="tourSpotlight" class="tour-spotlight"></div>
-    <button id="tourPrevArrow" class="tour-nav-arrow tour-nav-left" type="button" aria-label="Anterior">←</button>
-    <button id="tourNextArrow" class="tour-nav-arrow tour-nav-right" type="button" aria-label="Próximo">→</button>
-    <div id="tourCard" class="tour-card glass">
-      <div class="tour-step">Passo <span id="tourStepCurrent">1</span>/<span id="tourStepTotal">7</span></div>
-      <div id="tourProgress" class="tour-progress" aria-label="Progresso do tour"></div>
-      <h3 id="tourTitle">Bem-vindo</h3>
-      <p id="tourDescription">Conheça os principais recursos do sistema.</p>
-      <label class="tour-checkbox">
-        <input id="tourDontShowAgain" type="checkbox">
-        <span>Não mostrar novamente</span>
-      </label>
-      <div class="tour-actions">
-        <button id="tourSkipBtn" class="btn btn-secondary btn-compact" type="button">Pular</button>
-        <div class="tour-actions-right">
-          <button id="tourPrevBtn" class="btn btn-secondary btn-compact" type="button">Anterior</button>
-          <button id="tourNextBtn" class="btn btn-primary btn-compact" type="button">Próximo</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  <script src="app.js"></script>
-</body>
-</html>
+Em vez de escolher `+1`, `-2`, etc., o usuário escolhe diretamente o **novo tom desejado**.
+
+### Tom original e novo tom
+A janela mostra:
+
+- **Tom original**
+- **Novo tom escolhido**
+
+Exemplo:
+
+```text
+Tom original: D
+Novo tom: F
+```
+
+O sistema calcula automaticamente a transposição necessária.
+
+### Observação
+Para o sistema detectar corretamente o tom original, o ideal é que o arquivo tenha o tom no nome, por exemplo:
+
+```text
+A Ele a Glória - D.mp3
+Bondade de Deus - C#.mp3
+Aclame ao Senhor - G.mp3
+```
+
+
+## Novidades da V12
+
+### Tom alterado salvo somente no repertório
+Se o usuário alterar o tom da música e adicionar ao repertório, o repertório salva aquela música com o tom escolhido.
+
+Isso **não altera o tom original da música na biblioteca**.
+
+Exemplo:
+
+- Biblioteca: `A Ele a Glória - D`
+- Repertório Domingo: `A Ele a Glória - F`
+- Repertório Jovens: `A Ele a Glória - E`
+
+A mesma música pode existir em vários repertórios com tons diferentes.
+
+### Como usar
+1. Clique em **Tom** na música
+2. Escolha o novo tom na escala
+3. Clique em **+ Repertório neste tom**
+4. Escolha ou crie o repertório
+
+Ao tocar o repertório, o sistema usa o tom salvo naquele repertório.
+
+
+## Novidades da V13
+
+- capas das músicas padronizadas com a **logo da Igreja Amor e Vida**
+- remoção das letras no centro das miniaturas
+- hero/banner com fundo mais emocional e refinado
+- citação bíblica sobre louvor no card lateral
+- nova guia **Tutorial** com passo a passo de uso do sistema
+
+
+## Novidades da V14
+
+- hero/banner mais cinematográfico
+- cards de música mais sofisticados
+- tutorial em acordeão
+- tour guiado automático na primeira abertura
+- botão para reiniciar o tour
+- menu mobile ajustado para 5 abas
+
+
+### Ajuste extra
+- setas visíveis de **próximo** e **anterior** no tour guiado
+
+
+## Novidades da V15
+
+- remoção do título **VS Louvor Premium** do card lateral
+- nova frase institucional no hero
+- **bolinhas de progresso** no tour
+- **spotlight/highlight** escurecendo o restante da tela
+- **card do tour reposicionado dinamicamente** conforme o elemento destacado
+- opção **Não mostrar novamente** no tour
+
+
+## Novidades da V16
+
+- nome final do sistema: **Biblioteca de Louvor — Igreja Amor e Vida**
+- **tela de login institucional** com nome e equipe/escala
+- **loading screen profissional**
+- **ícones premium** na navegação e ações principais
+- **microanimações** e acabamentos visuais refinados
+- favicon e estrutura prontos para publicação no Render
+
+### Observação
+
+A tela de login da V16 é uma camada de experiência/local no navegador. Para autenticação real por usuário, o próximo passo ideal é integrar Supabase Auth ou Firebase Auth.
+
+
+## Novidades da V17
+
+- **tour corrigido** para ficar acima de toda a interface
+- setas do tour agora ficam clicáveis, sem serem cobertas por outros elementos
+- **guia rápido movido para a sidebar** para um visual mais limpo
+- **guia completo em modal**, acessível pela sidebar e pelo mobile
+- ajustes de layout da sidebar para acomodar o novo guia
+
+
+## Novidades da V19
+
+- o modal de alteração de tom agora mostra **Tom original** e **Tom alterado**
+- ao escolher um novo tom, o campo **Tom alterado** é atualizado imediatamente
+- a janela de detalhes da música mostra **Tom original** e **Tom alterado**
+- repertórios preservam o tom alterado somente dentro da lista, sem alterar a música original
+- textos de botões, mensagens e rótulos foram padronizados para uma linguagem mais institucional
+
+
+## Novidades da V19
+
+- nova guia **Escala** no menu lateral
+- seção **Escala Louvor Ávida — Maio 2026**
+- tabela interativa com filtros por pessoa, dia e função
+- botão para imprimir a escala
+- observações e horários de ensaio integrados ao sistema
+- visual no mesmo padrão premium do restante da plataforma
+
+
+## Ajuste V20 — comportamento do player
+
+- ao terminar uma música, o player **para**
+- o sistema **não avança automaticamente** para a próxima música
+- o sistema **não repete automaticamente** a música
+- o botão de repetição agora funciona como **reiniciar música atual**
+
+
+## Novidades da V22
+
+- Navegação lateral transformada em **páginas internas**.
+- Ao clicar em **Escala**, aparece somente a escala.
+- Ao clicar em **Repertórios**, aparecem somente os repertórios.
+- Ao clicar em **Biblioteca**, aparecem somente filtros e músicas.
+- Ao clicar em **Início**, aparecem somente banner e indicadores principais.
+- Player mantém uma página própria e o controle inferior continua disponível.
+
+
+## Novidades da V22
+
+- guia **Player** removida da sidebar e do menu mobile
+- player inferior fica oculto ao abrir o sistema
+- player aparece somente depois que o usuário clicar para tocar uma música
+- botões de controle do player foram centralizados visualmente
+- ao terminar uma música, o sistema permanece parado, sem avançar automaticamente
+
+
+## Novidades da V23
+
+- conteúdo do guia de uso movido para a página **Tutorial**
+- sidebar agora mantém apenas o botão **Iniciar Tour**
+- a guia Tutorial passa a funcionar como página interna, igual Biblioteca, Escala e Repertórios
+- removido o botão **Abrir guia** da sidebar
+
+
+## Correção V24
+
+- tour agora muda automaticamente para a página correta ao clicar em **Anterior** ou **Próximo**
+- o destaque rola até a área correta antes de posicionar o card
+- setas do tour centralizadas corretamente dentro dos círculos
+- tour permanece acima de toda a interface
+
+
+## Correção V26
+
+- botão principal de Play/Pause redesenhado com ícones CSS centralizados
+- removidos caracteres de texto desalinhados no botão circular
+- alinhamento preservado em desktop e mobile
+
+
+## Novidades da V26 — Responsividade
+
+- revisão de layout para desktop, notebook, tablet e celular
+- sidebar otimizada em notebooks e substituída por dock mobile em telas menores
+- player inferior ajustado para mobile e tablets
+- tabelas da escala com rolagem horizontal segura
+- modais adaptados para telas pequenas
+- cards, filtros, botões e tutorial ajustados para toque
+- correções para celulares muito pequenos e modo paisagem
+
+
+## V27 Render corrigido
+
+Esta versão corrige o problema em que o navegador exibia o conteúdo do `app.js` como texto.
+
+Arquivos que precisam estar corretos na raiz do GitHub:
+
+- `index.html` deve começar com `<!doctype html>`
+- `app.js` deve começar com `const cfg = window.VS_LOUVOR_CONFIG;`
+- `package.json` deve ser JSON válido
+- `server.js` deve ser código JavaScript Node/Express
+
+No Render, configure a variável `GOOGLE_DRIVE_API_KEY`.

@@ -1,15 +1,11 @@
-{
-  "name": "vs-louvor-avida-completo",
-  "version": "3.0.0",
-  "private": true,
-  "description": "Sistema VS Louvor Igreja Amor e Vida V9 com Google Drive, player premium, repertórios e transposição via FFmpeg.",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.3",
-    "ffmpeg-static": "^5.2.0",
-    "node-fetch": "^2.7.0"
-  }
-}
+services:
+  - type: web
+    name: vs-louvor-avida
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: GOOGLE_DRIVE_API_KEY
+        sync: false
