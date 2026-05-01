@@ -1,6 +1,17 @@
-window.VS_LOUVOR_CONFIG = {
-  APP_TITLE: "Biblioteca de Louvor — Igreja Amor e Vida",
-  ROOT_FOLDER_ID: "1Tcua5y0O9Bv5LRNmtIYnDCderiaN8xB8",
-  API_KEY: "AIzaSyCgsEuXu2n5SOU8mlACBMlDeF2V3tOjvMQ",
-  USE_BACKEND: true
-};
+{
+  "name": "vs-louvor-avida",
+  "version": "2.11.0",
+  "description": "Sistema Biblioteca de Louvor Igreja Amor e Vida com Google Drive, player premium, repertórios e transposição via FFmpeg.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0"
+  },
+  "engines": {
+    "node": "20.x"
+  }
+}
