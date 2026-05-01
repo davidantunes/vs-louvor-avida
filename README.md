@@ -322,9 +322,19 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - Mantidas observações e horários de ensaio do arquivo original.
 
 
-## V31 — Escala editável com membros no Appwrite
+## V32 — Escala editável com membros no Appwrite
 
 - Lista de membros criada a partir da escala de maio, sem repetir nomes.
 - A escala agora pode ser editada com listas suspensas.
 - Somente usuários com e-mail cadastrado em `APPWRITE_ADMIN_EMAILS` no Render podem editar.
 - Os dados são salvos no Appwrite em `app_state/members` e `app_state/monthlySchedule`.
+
+
+## Novidades da V32
+
+- layout da tabela da escala atualizado e mais alinhado ao padrão visual atual
+- página inicial de autenticação reforçada
+- criação de cadastro com e-mail/senha no Appwrite Auth sem entrar automaticamente
+- após cadastrar, o usuário volta para o fluxo de login para acessar sua conta
+- usuários comuns continuam em modo leitura e não podem alterar a escala
+- apenas e-mails listados em APPWRITE_ADMIN_EMAILS podem editar a escala

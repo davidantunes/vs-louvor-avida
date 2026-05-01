@@ -483,25 +483,19 @@ async function enterSystem(){
 }
 async function createAccount(){
   const name = (el.loginName?.value || '').trim();
-  const role = (el.loginRole?.value || '').trim();
   const email = (el.loginEmail?.value || '').trim();
   const password = (el.loginPassword?.value || '').trim();
-  if (!name || !email || !password) return setAuthStatus('Informe nome, e-mail e senha para criar a conta.', true);
+  if (!name || !email || !password) return setAuthStatus('Informe nome, e-mail e senha para criar o cadastro.', true);
   if (!appwriteAccount || !window.Appwrite?.ID) return setAuthStatus('Appwrite não inicializado.', true);
   try {
-    setAuthStatus('Criando conta...', false);
+    setAuthStatus('Criando cadastro no banco de dados...', false);
     await appwriteAccount.create(window.Appwrite.ID.unique(), email, password, name);
-    await appwriteAccount.createEmailPasswordSession(email, password);
-    if (role) {
-      try { await appwriteAccount.updatePrefs({ role }); } catch (e) { console.warn('Prefs não atualizadas:', e); }
-    }
-    const user = await appwriteAccount.get();
-    await applyAuthUser(user);
-    setAuthStatus('', false);
-    toast('Conta criada com sucesso.');
-    if (libraryLoaded) maybeLaunchTour();
+    if (el.loginPassword) el.loginPassword.value = '';
+    setAuthStatus('Cadastro criado com sucesso. Agora informe sua senha e clique em “Entrar na conta”.', false);
+    toast('Cadastro criado. Faça login para acessar sua conta.');
+    setTimeout(() => el.loginPassword?.focus(), 80);
   } catch (error) {
-    setAuthStatus(error?.message || 'Não foi possível criar a conta.', true);
+    setAuthStatus(error?.message || 'Não foi possível criar o cadastro.', true);
   }
 }
 async function logoutSession(){
@@ -842,7 +836,7 @@ function updateScheduleEditUI(){
   if (!authUser) setScheduleEditStatus('Faça login para visualizar a escala. A edição é restrita aos administradores.', '');
   else if (admin) setScheduleEditStatus(scheduleDirty ? 'Alteração pendente. Clique em “Salvar escala” para gravar no banco de dados.' : 'Modo edição liberado. Use as listas suspensas para alterar os escalados.', 'admin');
   else if (!cloudAdminConfigured) setScheduleEditStatus('Escala em modo leitura. Configure APPWRITE_ADMIN_EMAILS no Render para liberar administradores.', '');
-  else setScheduleEditStatus('Escala em modo leitura. Somente usuários autorizados podem alterar os escalados.', '');
+  else setScheduleEditStatus('Escala em modo leitura. Sua conta é de usuário comum e não pode alterar os escalados.', '');
 }
 function renderSchedule(){
   if (!el.scheduleTableBody) return;
@@ -861,8 +855,8 @@ function renderScheduleRow(row, q){
   const nextClass = isNextSchedule(row) ? ' schedule-row-next' : '';
   const rowIndex = scheduleRows.findIndex(item => item.day === row.day && item.date === row.date);
   return `<tr class="${row.day === 'Quinta' ? 'schedule-row-alt' : ''}${nextClass}" data-row-index="${rowIndex}">
-    <td class="schedule-date"><b>${esc(row.day)}</b><strong>${esc(row.date)}</strong></td>
-    ${fields.map(field => `<td>${renderScheduleCell(row, rowIndex, field, q)}</td>`).join('')}
+    <td class="schedule-date"><span class="schedule-day-name">${esc(row.day)}</span><strong>${esc(row.date)}</strong></td>
+    ${fields.map(field => `<td data-label="${esc(SCHEDULE_ROLE_LABELS[field])}">${renderScheduleCell(row, rowIndex, field, q)}</td>`).join('')}
   </tr>`;
 }
 function renderScheduleCell(row, rowIndex, field, q){

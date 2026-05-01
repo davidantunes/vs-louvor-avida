@@ -1656,3 +1656,171 @@ button,input,select,textarea{
 @media (max-width:900px){
   .schedule-member-select{min-width:150px}
 }
+
+
+/* V32 — login real e escala polida */
+.login-screen{
+  background:
+    radial-gradient(circle at 18% 18%, rgba(41,217,208,.16), transparent 24rem),
+    radial-gradient(circle at 88% 8%, rgba(31,78,121,.30), transparent 28rem),
+    rgba(0,0,0,.78);
+}
+.login-card{
+  overflow:hidden;
+}
+.login-card::before{
+  content:"";
+  position:absolute;
+  inset:0 0 auto 0;
+  height:4px;
+  background:linear-gradient(90deg, transparent, var(--teal), #ffffff, var(--teal), transparent);
+  opacity:.8;
+}
+.auth-status.is-ok{
+  border:1px solid rgba(41,217,208,.25);
+  background:rgba(41,217,208,.08);
+  padding:10px 12px;
+  border-radius:14px;
+}
+.auth-status.is-error{
+  border:1px solid rgba(255,120,120,.28);
+  background:rgba(255,120,120,.08);
+  padding:10px 12px;
+  border-radius:14px;
+}
+.schedule-section{
+  overflow:visible;
+}
+.schedule-table-wrap{
+  border-radius:26px;
+  border:1px solid rgba(41,217,208,.30);
+  background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.018));
+  box-shadow:0 24px 70px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.04);
+  overflow:auto;
+}
+.schedule-table{
+  border-collapse:separate;
+  border-spacing:0;
+  table-layout:fixed;
+  min-width:1220px;
+  width:100%;
+  font-size:14px;
+}
+.schedule-table thead th{
+  position:sticky;
+  top:0;
+  z-index:4;
+  background:linear-gradient(180deg, #245783, #1d466c) !important;
+  color:#fff;
+  text-align:center;
+  padding:16px 12px;
+  border:0;
+  border-right:1px solid rgba(255,255,255,.14);
+  border-bottom:1px solid rgba(41,217,208,.35);
+  font-weight:950;
+  letter-spacing:.01em;
+}
+.schedule-table thead th:first-child{
+  border-top-left-radius:24px;
+  width:190px;
+}
+.schedule-table thead th:last-child{
+  border-top-right-radius:24px;
+  border-right:0;
+}
+.schedule-table td{
+  height:64px;
+  padding:10px 12px;
+  text-align:center;
+  vertical-align:middle;
+  border-right:1px solid rgba(255,255,255,.045);
+  border-bottom:1px solid rgba(255,255,255,.065);
+  background:rgba(10,15,15,.70);
+  font-weight:850;
+  line-height:1.25;
+}
+.schedule-table tr:nth-child(even) td,
+.schedule-table tr.schedule-row-alt td{
+  background:rgba(46,76,104,.72) !important;
+}
+.schedule-table tr:hover td{
+  background:rgba(41,217,208,.16) !important;
+}
+.schedule-table tr:last-child td{
+  border-bottom:0;
+}
+.schedule-table tr:last-child td:first-child{
+  border-bottom-left-radius:24px;
+}
+.schedule-table tr:last-child td:last-child{
+  border-bottom-right-radius:24px;
+}
+.schedule-date{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  min-width:180px;
+  text-align:left !important;
+}
+.schedule-day-name{
+  display:inline-flex;
+  color:var(--teal);
+  font-weight:950;
+  min-width:72px;
+  justify-content:flex-start;
+}
+.schedule-date strong{
+  color:#fff;
+  font-size:15px;
+  letter-spacing:.02em;
+}
+.schedule-cell-readonly{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:40px;
+  width:100%;
+  color:#f5fbfb;
+}
+.schedule-member-select{
+  height:42px;
+  text-align:center;
+  border-radius:14px;
+  background:rgba(3,7,7,.70);
+  border:1px solid rgba(41,217,208,.20);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+.schedule-member-select:disabled{
+  opacity:.7;
+}
+.schedule-summary{
+  margin-top:4px;
+}
+.schedule-edit-status{
+  font-weight:750;
+}
+body[data-theme="light"] .schedule-table td{
+  background:#ffffff;
+  color:#122;
+  border-color:rgba(0,0,0,.08);
+}
+body[data-theme="light"] .schedule-cell-readonly,
+body[data-theme="light"] .schedule-date strong{color:#122}
+body[data-theme="light"] .schedule-table tr:nth-child(even) td,
+body[data-theme="light"] .schedule-table tr.schedule-row-alt td{background:#d8e8f7!important}
+@media (max-width:760px){
+  .schedule-table-wrap{
+    border-radius:22px;
+  }
+  .schedule-table{
+    min-width:980px;
+    font-size:13px;
+  }
+  .schedule-table td{
+    height:58px;
+    padding:8px 10px;
+  }
+  .schedule-table thead th:first-child{width:170px}
+  .schedule-day-name{min-width:66px}
+}
