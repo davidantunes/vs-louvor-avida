@@ -1,0 +1,281 @@
+# VS Louvor — Igreja Amor e Vida — V19 Tom alterado visível + textos padronizados
+
+## O que entra na V10
+
+### 1) Drag and drop nos repertórios
+- abra um repertório
+- arraste as músicas para reordenar
+- remova faixas individualmente
+- toque o repertório inteiro
+
+### 2) Ordenação manual do repertório
+- a ordem salva no navegador do usuário
+- útil para montar culto e ensaio na sequência correta
+
+### 3) Mini tela individual da música
+- detalhes da música
+- tags inteligentes
+- ações rápidas: tocar, favoritar, alterar tom e compartilhar
+
+### 4) Tema claro / escuro
+- alternância por botão no topo
+- preferência salva em localStorage
+
+### 5) Deploy pronto no Render
+- incluído `render.yaml`
+- `npm start` já configurado
+- backend Node + Express + FFmpeg pronto
+
+---
+
+## Como rodar localmente
+
+```bash
+npm install
+npm start
+```
+
+Abra:
+
+```text
+http://localhost:3000
+```
+
+---
+
+## Deploy no Render
+
+### Opção rápida
+1. envie esta pasta para um repositório no GitHub
+2. no Render, clique em **New +** → **Web Service**
+3. conecte o repositório
+4. o Render deve ler automaticamente o `render.yaml`
+5. adicione a variável de ambiente:
+
+- `GOOGLE_DRIVE_API_KEY` = sua chave da API do Google Drive
+
+### Configuração manual
+- **Environment**: Node
+- **Build Command**: `npm install`
+- **Start Command**: `npm start`
+
+---
+
+## Observações
+- os favoritos, repertórios e tema ficam salvos em `localStorage`
+- a biblioteca é lida do Google Drive configurado em `config.js`
+- o backend usa FFmpeg para gerar o áudio transposto no tom escolhido
+
+
+## Novidades da V10
+
+### Visualização por miniatura ou detalhes
+- botão **Miniaturas**
+- botão **Detalhes**
+- a preferência fica salva no navegador
+
+### Carregamento progressivo
+- no modo Miniaturas, carrega menos músicas por vez para manter o visual leve
+- no modo Detalhes, carrega mais músicas por vez
+- conforme o usuário rola a página, novas músicas são carregadas automaticamente
+
+### Benefícios
+- melhor performance com bibliotecas grandes
+- visual mais limpo
+- navegação mais fluida no celular e no computador
+
+
+## Novidades da V11
+
+### Seleção de tom por escala musical
+Agora o modal de alteração de tom mostra a escala:
+
+```text
+C C# D D# E F F# G G# A A# B
+```
+
+Em vez de escolher `+1`, `-2`, etc., o usuário escolhe diretamente o **novo tom desejado**.
+
+### Tom original e novo tom
+A janela mostra:
+
+- **Tom original**
+- **Novo tom escolhido**
+
+Exemplo:
+
+```text
+Tom original: D
+Novo tom: F
+```
+
+O sistema calcula automaticamente a transposição necessária.
+
+### Observação
+Para o sistema detectar corretamente o tom original, o ideal é que o arquivo tenha o tom no nome, por exemplo:
+
+```text
+A Ele a Glória - D.mp3
+Bondade de Deus - C#.mp3
+Aclame ao Senhor - G.mp3
+```
+
+
+## Novidades da V12
+
+### Tom alterado salvo somente no repertório
+Se o usuário alterar o tom da música e adicionar ao repertório, o repertório salva aquela música com o tom escolhido.
+
+Isso **não altera o tom original da música na biblioteca**.
+
+Exemplo:
+
+- Biblioteca: `A Ele a Glória - D`
+- Repertório Domingo: `A Ele a Glória - F`
+- Repertório Jovens: `A Ele a Glória - E`
+
+A mesma música pode existir em vários repertórios com tons diferentes.
+
+### Como usar
+1. Clique em **Tom** na música
+2. Escolha o novo tom na escala
+3. Clique em **+ Repertório neste tom**
+4. Escolha ou crie o repertório
+
+Ao tocar o repertório, o sistema usa o tom salvo naquele repertório.
+
+
+## Novidades da V13
+
+- capas das músicas padronizadas com a **logo da Igreja Amor e Vida**
+- remoção das letras no centro das miniaturas
+- hero/banner com fundo mais emocional e refinado
+- citação bíblica sobre louvor no card lateral
+- nova guia **Tutorial** com passo a passo de uso do sistema
+
+
+## Novidades da V14
+
+- hero/banner mais cinematográfico
+- cards de música mais sofisticados
+- tutorial em acordeão
+- tour guiado automático na primeira abertura
+- botão para reiniciar o tour
+- menu mobile ajustado para 5 abas
+
+
+### Ajuste extra
+- setas visíveis de **próximo** e **anterior** no tour guiado
+
+
+## Novidades da V15
+
+- remoção do título **VS Louvor Premium** do card lateral
+- nova frase institucional no hero
+- **bolinhas de progresso** no tour
+- **spotlight/highlight** escurecendo o restante da tela
+- **card do tour reposicionado dinamicamente** conforme o elemento destacado
+- opção **Não mostrar novamente** no tour
+
+
+## Novidades da V16
+
+- nome final do sistema: **Biblioteca de Louvor — Igreja Amor e Vida**
+- **tela de login institucional** com nome e equipe/escala
+- **loading screen profissional**
+- **ícones premium** na navegação e ações principais
+- **microanimações** e acabamentos visuais refinados
+- favicon e estrutura prontos para publicação no Render
+
+### Observação
+
+A tela de login da V16 é uma camada de experiência/local no navegador. Para autenticação real por usuário, o próximo passo ideal é integrar Supabase Auth ou Firebase Auth.
+
+
+## Novidades da V17
+
+- **tour corrigido** para ficar acima de toda a interface
+- setas do tour agora ficam clicáveis, sem serem cobertas por outros elementos
+- **guia rápido movido para a sidebar** para um visual mais limpo
+- **guia completo em modal**, acessível pela sidebar e pelo mobile
+- ajustes de layout da sidebar para acomodar o novo guia
+
+
+## Novidades da V19
+
+- o modal de alteração de tom agora mostra **Tom original** e **Tom alterado**
+- ao escolher um novo tom, o campo **Tom alterado** é atualizado imediatamente
+- a janela de detalhes da música mostra **Tom original** e **Tom alterado**
+- repertórios preservam o tom alterado somente dentro da lista, sem alterar a música original
+- textos de botões, mensagens e rótulos foram padronizados para uma linguagem mais institucional
+
+
+## Novidades da V19
+
+- nova guia **Escala** no menu lateral
+- seção **Escala Louvor Ávida — Maio 2026**
+- tabela interativa com filtros por pessoa, dia e função
+- botão para imprimir a escala
+- observações e horários de ensaio integrados ao sistema
+- visual no mesmo padrão premium do restante da plataforma
+
+
+## Ajuste V20 — comportamento do player
+
+- ao terminar uma música, o player **para**
+- o sistema **não avança automaticamente** para a próxima música
+- o sistema **não repete automaticamente** a música
+- o botão de repetição agora funciona como **reiniciar música atual**
+
+
+## Novidades da V22
+
+- Navegação lateral transformada em **páginas internas**.
+- Ao clicar em **Escala**, aparece somente a escala.
+- Ao clicar em **Repertórios**, aparecem somente os repertórios.
+- Ao clicar em **Biblioteca**, aparecem somente filtros e músicas.
+- Ao clicar em **Início**, aparecem somente banner e indicadores principais.
+- Player mantém uma página própria e o controle inferior continua disponível.
+
+
+## Novidades da V22
+
+- guia **Player** removida da sidebar e do menu mobile
+- player inferior fica oculto ao abrir o sistema
+- player aparece somente depois que o usuário clicar para tocar uma música
+- botões de controle do player foram centralizados visualmente
+- ao terminar uma música, o sistema permanece parado, sem avançar automaticamente
+
+
+## Novidades da V23
+
+- conteúdo do guia de uso movido para a página **Tutorial**
+- sidebar agora mantém apenas o botão **Iniciar Tour**
+- a guia Tutorial passa a funcionar como página interna, igual Biblioteca, Escala e Repertórios
+- removido o botão **Abrir guia** da sidebar
+
+
+## Correção V24
+
+- tour agora muda automaticamente para a página correta ao clicar em **Anterior** ou **Próximo**
+- o destaque rola até a área correta antes de posicionar o card
+- setas do tour centralizadas corretamente dentro dos círculos
+- tour permanece acima de toda a interface
+
+
+## Correção V26
+
+- botão principal de Play/Pause redesenhado com ícones CSS centralizados
+- removidos caracteres de texto desalinhados no botão circular
+- alinhamento preservado em desktop e mobile
+
+
+## Novidades da V26 — Responsividade
+
+- revisão de layout para desktop, notebook, tablet e celular
+- sidebar otimizada em notebooks e substituída por dock mobile em telas menores
+- player inferior ajustado para mobile e tablets
+- tabelas da escala com rolagem horizontal segura
+- modais adaptados para telas pequenas
+- cards, filtros, botões e tutorial ajustados para toque
+- correções para celulares muito pequenos e modo paisagem
