@@ -24,6 +24,7 @@ let setlists = loadJSON('vs_setlists_v1', []);
 let appwriteClient = null;
 let appwriteAccount = null;
 let authUser = null;
+let authMode = "login";
 let cloudReady = false;
 let isFavoritesFilter = false;
 let viewMode = loadJSON('vs_view_mode_v10', 'thumbnails');
@@ -179,11 +180,36 @@ const el = {
   loginRole: document.getElementById('loginRole'),
   loginEmail: document.getElementById('loginEmail'),
   loginPassword: document.getElementById('loginPassword'),
+  loginPasswordConfirm: document.getElementById('loginPasswordConfirm'),
+  loginNameField: document.getElementById('loginNameField'),
+  loginRoleField: document.getElementById('loginRoleField'),
+  loginEmailField: document.getElementById('loginEmailField'),
+  loginPasswordField: document.getElementById('loginPasswordField'),
+  loginPasswordConfirmField: document.getElementById('loginPasswordConfirmField'),
+  togglePasswordBtn: document.getElementById('togglePasswordBtn'),
+  togglePasswordConfirmBtn: document.getElementById('togglePasswordConfirmBtn'),
+  rememberSession: document.getElementById('rememberSession'),
+  recoverPasswordBtn: document.getElementById('recoverPasswordBtn'),
+  modeLoginBtn: document.getElementById('modeLoginBtn'),
+  modeRegisterBtn: document.getElementById('modeRegisterBtn'),
+  authModeHint: document.getElementById('authModeHint'),
+  loginNote: document.getElementById('loginNote'),
   createAccountBtn: document.getElementById('createAccountBtn'),
   authStatus: document.getElementById('authStatus'),
   enterSystemBtn: document.getElementById('enterSystemBtn'),
   userBadge: document.getElementById('userBadge'),
   logoutBtn: document.getElementById('logoutBtn'),
+  profileModal: document.getElementById('profileModal'),
+  closeProfileModal: document.getElementById('closeProfileModal'),
+  profileAvatar: document.getElementById('profileAvatar'),
+  profileName: document.getElementById('profileName'),
+  profileEmail: document.getElementById('profileEmail'),
+  profileRole: document.getElementById('profileRole'),
+  profilePermission: document.getElementById('profilePermission'),
+  profileFavorites: document.getElementById('profileFavorites'),
+  profileSetlists: document.getElementById('profileSetlists'),
+  profileStartTourBtn: document.getElementById('profileStartTourBtn'),
+  profileLogoutBtn: document.getElementById('profileLogoutBtn'),
   scheduleSearch: document.getElementById('scheduleSearch'),
   scheduleDayFilter: document.getElementById('scheduleDayFilter'),
   scheduleRoleFilter: document.getElementById('scheduleRoleFilter'),
@@ -318,10 +344,22 @@ function bindEvents(){
 
   if (el.enterSystemBtn) el.enterSystemBtn.addEventListener('click', enterSystem);
   if (el.createAccountBtn) el.createAccountBtn.addEventListener('click', createAccount);
+  if (el.modeLoginBtn) el.modeLoginBtn.addEventListener('click', () => setAuthMode('login'));
+  if (el.modeRegisterBtn) el.modeRegisterBtn.addEventListener('click', () => setAuthMode('register'));
+  if (el.togglePasswordBtn) el.togglePasswordBtn.addEventListener('click', () => togglePasswordVisibility('loginPassword', 'togglePasswordBtn'));
+  if (el.togglePasswordConfirmBtn) el.togglePasswordConfirmBtn.addEventListener('click', () => togglePasswordVisibility('loginPasswordConfirm', 'togglePasswordConfirmBtn'));
+  if (el.recoverPasswordBtn) el.recoverPasswordBtn.addEventListener('click', recoverPassword);
+  if (el.userBadge) el.userBadge.addEventListener('click', openProfileModal);
+  if (el.closeProfileModal) el.closeProfileModal.addEventListener('click', closeProfileModal);
+  if (el.profileModal) el.profileModal.addEventListener('click', e => { if (e.target === el.profileModal) closeProfileModal(); });
+  if (el.profileStartTourBtn) el.profileStartTourBtn.addEventListener('click', () => { closeProfileModal(); startGuidedTour(); });
+  if (el.profileLogoutBtn) el.profileLogoutBtn.addEventListener('click', () => { closeProfileModal(); logoutSession(); });
+  ['loginName','loginRole','loginEmail','loginPassword','loginPasswordConfirm'].forEach(key => { const node = el[key]; if (node) node.addEventListener('input', () => validateAuthField(key)); });
   if (el.loginName) el.loginName.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
   if (el.loginRole) el.loginRole.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
   if (el.loginEmail) el.loginEmail.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
-  if (el.loginPassword) el.loginPassword.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
+  if (el.loginPassword) el.loginPassword.addEventListener('keydown', e => { if (e.key === 'Enter') authMode === 'register' ? createAccount() : enterSystem(); });
+  if (el.loginPasswordConfirm) el.loginPasswordConfirm.addEventListener('keydown', e => { if (e.key === 'Enter') createAccount(); });
   if (el.logoutBtn) el.logoutBtn.addEventListener('click', logoutSession);
 
 
@@ -417,6 +455,98 @@ async function loadAppwriteServerConfig(){
     console.warn('Configuração Appwrite do servidor não carregada:', error);
   }
 }
+
+function setAuthMode(mode = 'login'){
+  authMode = mode === 'register' ? 'register' : 'login';
+  const isRegister = authMode === 'register';
+  el.modeLoginBtn?.classList.toggle('is-active', !isRegister);
+  el.modeRegisterBtn?.classList.toggle('is-active', isRegister);
+  el.modeLoginBtn?.setAttribute('aria-selected', String(!isRegister));
+  el.modeRegisterBtn?.setAttribute('aria-selected', String(isRegister));
+  el.createAccountBtn?.classList.toggle('btn-primary', isRegister);
+  el.createAccountBtn?.classList.toggle('btn-secondary', !isRegister);
+  el.enterSystemBtn?.classList.toggle('btn-primary', !isRegister);
+  el.enterSystemBtn?.classList.toggle('btn-secondary', isRegister);
+  document.body.classList.toggle('auth-register-mode', isRegister);
+  if (el.loginPassword) el.loginPassword.autocomplete = isRegister ? 'new-password' : 'current-password';
+  if (el.recoverPasswordBtn) el.recoverPasswordBtn.style.display = isRegister ? 'none' : '';
+  if (el.authModeHint) el.authModeHint.textContent = isRegister
+    ? 'Crie sua conta com nome, e-mail e senha. Depois, entre para acessar a plataforma.'
+    : 'Entre com seu e-mail e senha para acessar sua conta.';
+  if (el.loginNote) el.loginNote.textContent = isRegister
+    ? 'Após criar o cadastro, sua conta ficará disponível para login em qualquer dispositivo. Usuários comuns não têm permissão para alterar a escala.'
+    : 'Use seu e-mail e senha para entrar. Usuários comuns acessam a plataforma em modo de uso e não podem alterar a escala.';
+  setAuthStatus('', false);
+  ['loginName','loginRole','loginEmail','loginPassword','loginPasswordConfirm'].forEach(validateAuthField);
+}
+function togglePasswordVisibility(inputKey = 'loginPassword', buttonKey = 'togglePasswordBtn'){
+  const input = el[inputKey];
+  const button = el[buttonKey];
+  if (!input) return;
+  const visible = input.type === 'text';
+  input.type = visible ? 'password' : 'text';
+  if (button) {
+    button.textContent = visible ? 'Mostrar' : 'Ocultar';
+    button.setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
+  }
+}
+function setFieldState(fieldWrap, state = 'neutral', hint = ''){
+  if (!fieldWrap) return;
+  fieldWrap.classList.remove('is-valid','is-invalid');
+  if (state === 'valid') fieldWrap.classList.add('is-valid');
+  if (state === 'invalid') fieldWrap.classList.add('is-invalid');
+  const hintNode = fieldWrap.querySelector('.field-hint');
+  if (hintNode && hint) hintNode.textContent = hint;
+}
+function validateAuthField(key){
+  const value = String(el[key]?.value || '').trim();
+  if (key === 'loginName') {
+    const hint = 'Informe seu nome completo.';
+    if (authMode !== 'register') return setFieldState(el.loginNameField, 'neutral', hint), true;
+    if (!value) return setFieldState(el.loginNameField, 'invalid', 'Informe seu nome para criar a conta.'), false;
+    if (value.length < 2) return setFieldState(el.loginNameField, 'invalid', 'Digite um nome com pelo menos 2 caracteres.'), false;
+    setFieldState(el.loginNameField, 'valid', 'Nome válido.');
+    return true;
+  }
+  if (key === 'loginRole') {
+    const hint = 'Campo opcional para identificação da sua equipe.';
+    if (!value) return setFieldState(el.loginRoleField, 'neutral', hint), true;
+    setFieldState(el.loginRoleField, 'valid', 'Equipe/escala informada.');
+    return true;
+  }
+  if (key === 'loginEmail') {
+    const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    if (!value) return setFieldState(el.loginEmailField, 'invalid', 'Informe seu e-mail.'), false;
+    if (!ok) return setFieldState(el.loginEmailField, 'invalid', 'Digite um e-mail válido.'), false;
+    setFieldState(el.loginEmailField, 'valid', 'E-mail válido.');
+    return true;
+  }
+  if (key === 'loginPassword') {
+    if (!value) return setFieldState(el.loginPasswordField, 'invalid', 'Informe sua senha.'), false;
+    if (value.length < 6) return setFieldState(el.loginPasswordField, 'invalid', 'A senha deve ter pelo menos 6 caracteres.'), false;
+    setFieldState(el.loginPasswordField, 'valid', authMode === 'register' ? 'Senha válida para cadastro.' : 'Senha válida.');
+    if (authMode === 'register' && el.loginPasswordConfirm?.value) validateAuthField('loginPasswordConfirm');
+    return true;
+  }
+  if (key === 'loginPasswordConfirm') {
+    const hint = 'Repita a mesma senha do cadastro.';
+    if (authMode !== 'register') return setFieldState(el.loginPasswordConfirmField, 'neutral', hint), true;
+    if (!value) return setFieldState(el.loginPasswordConfirmField, 'invalid', 'Confirme sua senha.'), false;
+    if (value !== String(el.loginPassword?.value || '')) return setFieldState(el.loginPasswordConfirmField, 'invalid', 'As senhas não conferem.'), false;
+    setFieldState(el.loginPasswordConfirmField, 'valid', 'As senhas conferem.');
+    return true;
+  }
+  return true;
+}
+function validateAuthForm(mode = authMode){
+  const emailOk = validateAuthField('loginEmail');
+  const passwordOk = validateAuthField('loginPassword');
+  const nameOk = mode === 'register' ? validateAuthField('loginName') : true;
+  const confirmOk = mode === 'register' ? validateAuthField('loginPasswordConfirm') : true;
+  validateAuthField('loginRole');
+  return emailOk && passwordOk && nameOk && confirmOk;
+}
+
 async function initSessionUI(){
   if (!cloudReady || !appwriteAccount) {
     showLogin();
@@ -435,6 +565,7 @@ function setAuthStatus(message = '', isError = false){
   el.authStatus.textContent = message;
   el.authStatus.classList.toggle('is-error', Boolean(isError));
   el.authStatus.classList.toggle('is-ok', Boolean(message && !isError));
+  el.authStatus.classList.toggle('hidden', !message);
 }
 function showLoading(message = 'Preparando a plataforma...'){
   if (el.loadingMessage) el.loadingMessage.textContent = message;
@@ -442,6 +573,7 @@ function showLoading(message = 'Preparando a plataforma...'){
 }
 function hideLoading(){ el.loadingScreen?.classList.add('hidden'); }
 function showLogin(){
+  setAuthMode(authMode || 'login');
   el.loginScreen?.classList.remove('hidden');
   el.loginScreen?.setAttribute('aria-hidden', 'false');
   document.body.classList.add('app-locked');
@@ -458,9 +590,10 @@ async function applyAuthUser(user){
   const session = { id: user.$id, name: user.name || user.email, email: user.email, role, at: Date.now() };
   saveJSON(SESSION_KEY, session);
   if (el.userBadge) {
-    el.userBadge.textContent = role ? `${session.name} • ${role}` : session.name;
+    el.userBadge.innerHTML = `<span class="user-badge-avatar">${esc(getInitials(session.name))}</span><span class="user-badge-text">${esc(role ? `${session.name} • ${role}` : session.name)}</span>`;
     el.userBadge.classList.remove('hidden');
   }
+  updateProfileModal();
   el.logoutBtn?.classList.remove('hidden');
   hideLogin();
   await loadCloudState();
@@ -468,7 +601,7 @@ async function applyAuthUser(user){
 async function enterSystem(){
   const email = (el.loginEmail?.value || '').trim();
   const password = (el.loginPassword?.value || '').trim();
-  if (!email || !password) return setAuthStatus('Informe e-mail e senha para entrar.', true);
+  if (!validateAuthForm('login')) return setAuthStatus('Revise os campos destacados para entrar.', true);
   if (!appwriteAccount) return setAuthStatus('Appwrite não inicializado.', true);
   try {
     setAuthStatus('Entrando...', false);
@@ -485,12 +618,15 @@ async function createAccount(){
   const name = (el.loginName?.value || '').trim();
   const email = (el.loginEmail?.value || '').trim();
   const password = (el.loginPassword?.value || '').trim();
-  if (!name || !email || !password) return setAuthStatus('Informe nome, e-mail e senha para criar o cadastro.', true);
+  if (!validateAuthForm('register')) return setAuthStatus('Revise os campos destacados para concluir o cadastro.', true);
   if (!appwriteAccount || !window.Appwrite?.ID) return setAuthStatus('Appwrite não inicializado.', true);
   try {
     setAuthStatus('Criando cadastro no banco de dados...', false);
     await appwriteAccount.create(window.Appwrite.ID.unique(), email, password, name);
     if (el.loginPassword) el.loginPassword.value = '';
+    setAuthMode('login');
+    validateAuthField('loginEmail');
+    validateAuthField('loginPassword');
     setAuthStatus('Cadastro criado com sucesso. Agora informe sua senha e clique em “Entrar na conta”.', false);
     toast('Cadastro criado. Faça login para acessar sua conta.');
     setTimeout(() => el.loginPassword?.focus(), 80);
@@ -498,12 +634,55 @@ async function createAccount(){
     setAuthStatus(error?.message || 'Não foi possível criar o cadastro.', true);
   }
 }
+
+function getInitials(name = ''){
+  return String(name || 'U').trim().split(/\s+/).filter(Boolean).slice(0,2).map(p => p[0]).join('').toUpperCase() || 'U';
+}
+function openProfileModal(){
+  updateProfileModal();
+  el.profileModal?.classList.remove('hidden');
+  document.body.classList.add('app-locked');
+}
+function closeProfileModal(){
+  el.profileModal?.classList.add('hidden');
+  if (el.loginScreen?.classList.contains('hidden')) document.body.classList.remove('app-locked');
+}
+function updateProfileModal(){
+  if (!authUser) return;
+  const session = loadJSON(SESSION_KEY, {});
+  const name = authUser.name || session.name || authUser.email || 'Usuário';
+  const email = authUser.email || session.email || '';
+  const role = session.role || authUser.prefs?.role || 'Não informado';
+  if (el.profileAvatar) el.profileAvatar.textContent = getInitials(name);
+  if (el.profileName) el.profileName.textContent = name;
+  if (el.profileEmail) el.profileEmail.textContent = email;
+  if (el.profileRole) el.profileRole.textContent = role || 'Não informado';
+  if (el.profilePermission) el.profilePermission.textContent = isScheduleAdmin() ? 'Administrador' : 'Usuário';
+  if (el.profileFavorites) el.profileFavorites.textContent = String(favorites?.length || 0);
+  if (el.profileSetlists) el.profileSetlists.textContent = String(setlists?.length || 0);
+}
+async function recoverPassword(){
+  const email = (el.loginEmail?.value || '').trim();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    validateAuthField('loginEmail');
+    return setAuthStatus('Informe um e-mail válido para recuperar a senha.', true);
+  }
+  if (!appwriteAccount) return setAuthStatus('Appwrite não inicializado.', true);
+  try {
+    setAuthStatus('Enviando instruções de recuperação...', false);
+    const recoveryUrl = `${location.origin}${location.pathname}`;
+    await appwriteAccount.createRecovery(email, recoveryUrl);
+    setAuthStatus('Enviamos as instruções de recuperação para o e-mail informado.', false);
+  } catch (error) {
+    setAuthStatus(error?.message || 'Não foi possível iniciar a recuperação de senha.', true);
+  }
+}
 async function logoutSession(){
   try { await appwriteAccount?.deleteSession('current'); } catch {}
   authUser = null;
   localStorage.removeItem(SESSION_KEY);
   if (el.userBadge) {
-    el.userBadge.textContent = '';
+    el.userBadge.innerHTML = '';
     el.userBadge.classList.add('hidden');
   }
   el.logoutBtn?.classList.add('hidden');
@@ -1098,6 +1277,7 @@ function updateStats(){
   el.heroFavs.textContent = favorites.length;
   el.heroKeys.textContent = keys.length;
   el.heroCategories.textContent = tags.length;
+  updateProfileModal();
 }
 
 function clearFilters(){
@@ -1399,6 +1579,7 @@ function toggleFavorite(id){
 function updateFavoriteCount(){
   el.totalFavorites.textContent = favorites.length;
   el.heroFavs.textContent = favorites.length;
+  updateProfileModal();
 }
 
 function openSetlistModal(track, toneInfo = { semitones: 0, tone: '' }){

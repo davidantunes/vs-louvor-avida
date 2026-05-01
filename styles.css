@@ -1824,3 +1824,96 @@ body[data-theme="light"] .schedule-table tr.schedule-row-alt td{background:#d8e8
   .schedule-table thead th:first-child{width:170px}
   .schedule-day-name{min-width:66px}
 }
+
+
+/* V33 — padronização visual dos campos de login */
+.login-grid label{
+  display:block;
+}
+.login-grid label input,
+.login-grid label select,
+.login-grid input[type="text"],
+.login-grid input[type="email"],
+.login-grid input[type="password"]{
+  width:100%;
+  height:56px;
+  border-radius:16px;
+  border:1px solid var(--line);
+  background:var(--panel);
+  color:var(--text);
+  padding:0 16px;
+  font-size:15px;
+  font-weight:700;
+  outline:0;
+  box-shadow:none;
+  transition:border-color .18s ease, box-shadow .18s ease, background .18s ease;
+  appearance:none;
+  -webkit-appearance:none;
+}
+.login-grid label input::placeholder{
+  color:var(--muted);
+  opacity:.9;
+}
+.login-grid label input:focus,
+.login-grid label select:focus{
+  border-color:rgba(41,217,208,.42);
+  box-shadow:0 0 0 4px rgba(41,217,208,.10);
+}
+.login-grid input:-webkit-autofill,
+.login-grid input:-webkit-autofill:hover,
+.login-grid input:-webkit-autofill:focus{
+  -webkit-text-fill-color:var(--text);
+  -webkit-box-shadow:0 0 0px 1000px var(--panel) inset;
+  transition:background-color 5000s ease-in-out 0s;
+}
+body[data-theme="light"] .login-grid label input,
+body[data-theme="light"] .login-grid label select{
+  background:#fff;
+}
+
+
+/* V34 — refinamentos da tela de login */
+.auth-mode-switch{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0 10px}
+.auth-mode-btn{height:50px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--muted);font-weight:900;cursor:pointer;transition:.18s ease}
+.auth-mode-btn:hover{transform:translateY(-1px);color:var(--text)}
+.auth-mode-btn.is-active{background:linear-gradient(135deg, rgba(41,217,208,.18), rgba(41,217,208,.08));border-color:rgba(41,217,208,.35);color:var(--text);box-shadow:0 10px 24px rgba(41,217,208,.12)}
+.auth-mode-hint{margin:0 0 8px;color:var(--muted);font-size:13px;line-height:1.5}
+.auth-grid{gap:16px 14px}
+.login-grid label{display:block}
+.login-grid .field-hint{display:block;margin:8px 4px 0;color:var(--muted);font-size:12px;line-height:1.4;min-height:17px;transition:.18s ease}
+.login-grid label.is-valid .field-hint{color:var(--teal)}
+.login-grid label.is-invalid .field-hint{color:#ff9b9b}
+.input-wrap{position:relative}
+.password-wrap input{padding-right:96px !important}
+.field-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);height:38px;padding:0 12px;border-radius:12px;border:1px solid var(--line-soft);background:rgba(255,255,255,.04);color:var(--text);font-weight:800;cursor:pointer;transition:.18s ease}
+.field-toggle:hover{background:rgba(255,255,255,.08)}
+.login-grid label.is-valid input{border-color:rgba(41,217,208,.40);box-shadow:0 0 0 4px rgba(41,217,208,.08)}
+.login-grid label.is-invalid input{border-color:rgba(255,120,120,.38);box-shadow:0 0 0 4px rgba(255,120,120,.07)}
+.auth-status{margin-top:4px;min-height:0;transition:.18s ease}
+.auth-status.hidden{display:none}
+.auth-actions{margin-top:10px}
+@media (max-width:760px){.auth-mode-switch{grid-template-columns:1fr}.field-toggle{height:36px;padding:0 10px}.password-wrap input{padding-right:88px !important}}
+
+
+/* V35 — perfil do usuário, lembrar sessão, senha e recuperação */
+.register-only{display:none!important}
+body.auth-register-mode .register-only{display:block!important}
+.login-options-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 4px;flex-wrap:wrap}
+.remember-option{display:inline-flex!important;align-items:center;gap:9px;color:var(--muted);font-size:13px;font-weight:800;cursor:pointer}
+.remember-option input{width:16px;height:16px;accent-color:var(--teal)}
+.link-button{border:0;background:transparent;color:var(--teal);font-weight:900;cursor:pointer;padding:8px 0;text-decoration:none}
+.link-button:hover{text-decoration:underline}
+.user-badge{cursor:pointer;border:1px solid var(--line)!important;gap:10px!important;padding-left:10px!important}
+.user-badge-avatar{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--teal),var(--teal-2));color:#001312;font-size:12px;font-weight:950;flex:0 0 30px}
+.user-badge-text{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
+.profile-modal-card{width:min(680px,100%)}
+.profile-head{display:flex;align-items:center;gap:18px;margin-bottom:18px}
+.profile-avatar{display:grid;place-items:center;width:84px;height:84px;border-radius:28px;background:linear-gradient(135deg,var(--teal),#e7ffff);color:#001312;font-size:28px;font-weight:950;box-shadow:0 0 0 1px var(--line),0 18px 40px rgba(41,217,208,.16)}
+.profile-head h3{margin:2px 0 4px!important}
+.profile-head p{margin:0!important;color:var(--muted)!important}
+.profile-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px}
+.profile-info-card{padding:16px;border-radius:18px;border:1px solid var(--line-soft);background:rgba(255,255,255,.04)}
+.profile-info-card span{display:block;color:var(--muted);font-size:12px;font-weight:800;margin-bottom:6px}
+.profile-info-card strong{display:block;font-size:18px;color:var(--text)}
+.profile-actions{justify-content:flex-end}
+@media (max-width:760px){.login-options-row{align-items:flex-start}.profile-head{align-items:flex-start}.profile-grid{grid-template-columns:1fr}.user-badge-text{max-width:100%}}

@@ -338,3 +338,14 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - após cadastrar, o usuário volta para o fluxo de login para acessar sua conta
 - usuários comuns continuam em modo leitura e não podem alterar a escala
 - apenas e-mails listados em APPWRITE_ADMIN_EMAILS podem editar a escala
+
+
+## Novidades da V35
+
+- alternância refinada entre Entrar e Criar cadastro
+- confirmação de senha no cadastro
+- botão mostrar/ocultar senha para senha e confirmação
+- opção visual de lembrar sessão neste dispositivo
+- recuperação de senha por e-mail via Appwrite Auth
+- avatar com iniciais do usuário
+- painel de perfil com dados da conta, permissão, favoritos e repertórios

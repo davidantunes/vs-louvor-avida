@@ -36,18 +36,28 @@
         </div>
       </div>
       <div class="login-verse">"Tudo quanto tem fôlego louve ao Senhor. Louvai ao Senhor!" <strong>Salmos 150:6</strong></div>
+      <div class="auth-mode-switch" role="tablist" aria-label="Modo de acesso">
+        <button id="modeLoginBtn" class="auth-mode-btn is-active" type="button" role="tab" aria-selected="true">Entrar</button>
+        <button id="modeRegisterBtn" class="auth-mode-btn" type="button" role="tab" aria-selected="false">Criar cadastro</button>
+      </div>
+      <div id="authModeHint" class="auth-mode-hint">Entre com seu e-mail e senha para acessar sua conta.</div>
       <div class="login-grid auth-grid">
-        <label><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /></label>
-        <label><span>Equipe / escala</span><input id="loginRole" type="text" placeholder="Ex.: Louvor Domingo Noite" /></label>
-        <label><span>E-mail</span><input id="loginEmail" type="email" placeholder="seuemail@exemplo.com" autocomplete="email" /></label>
-        <label><span>Senha</span><input id="loginPassword" type="password" placeholder="Sua senha" autocomplete="current-password" /></label>
+        <label id="loginNameField"><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /><small class="field-hint">Informe seu nome completo.</small></label>
+        <label id="loginRoleField"><span>Equipe / escala</span><input id="loginRole" type="text" placeholder="Ex.: Louvor Domingo Noite" /><small class="field-hint">Campo opcional para identificação da sua equipe.</small></label>
+        <label id="loginEmailField"><span>E-mail</span><input id="loginEmail" type="email" placeholder="seuemail@exemplo.com" autocomplete="email" /><small class="field-hint">Use um e-mail válido para entrar.</small></label>
+        <label id="loginPasswordField"><span>Senha</span><div class="input-wrap password-wrap"><input id="loginPassword" type="password" placeholder="Sua senha" autocomplete="current-password" /><button id="togglePasswordBtn" class="field-toggle" type="button" aria-label="Mostrar senha">Mostrar</button></div><small class="field-hint">Sua senha deve ter pelo menos 6 caracteres.</small></label>
+        <label id="loginPasswordConfirmField" class="register-only"><span>Confirmar senha</span><div class="input-wrap password-wrap"><input id="loginPasswordConfirm" type="password" placeholder="Repita sua senha" autocomplete="new-password" /><button id="togglePasswordConfirmBtn" class="field-toggle" type="button" aria-label="Mostrar confirmação de senha">Mostrar</button></div><small class="field-hint">Repita a mesma senha do cadastro.</small></label>
+      </div>
+      <div class="login-options-row">
+        <label class="remember-option"><input id="rememberSession" type="checkbox" checked><span>Lembrar sessão neste dispositivo</span></label>
+        <button id="recoverPasswordBtn" class="link-button" type="button">Esqueci minha senha</button>
       </div>
       <div id="authStatus" class="auth-status"></div>
       <div class="login-actions auth-actions">
         <button id="enterSystemBtn" class="btn btn-primary" type="button">Entrar na conta</button>
         <button id="createAccountBtn" class="btn btn-secondary" type="button">Criar cadastro</button>
       </div>
-      <small class="login-note">Crie sua conta com e-mail e senha. Após o cadastro, faça login para acessar sua conta de usuário. Usuários comuns não têm permissão para alterar a escala.</small>
+      <small class="login-note" id="loginNote">Crie sua conta com e-mail e senha. Após o cadastro, faça login para acessar sua conta de usuário. Usuários comuns não têm permissão para alterar a escala.</small>
     </div>
   </div>
 
@@ -94,7 +104,7 @@
           <input id="searchInput" type="search" placeholder="Buscar por música, pasta, cantor, tom, tag ou arquivo...">
         </div>
         <div class="topbar-actions">
-          <div id="userBadge" class="user-badge hidden"></div>
+          <button id="userBadge" class="user-badge hidden" type="button" title="Abrir perfil do usuário"></button>
           <button id="themeToggle" class="icon-btn" title="Alternar tema"><span class="icon-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5"/><path d="M12 19.5V22"/><path d="M4.93 4.93l1.77 1.77"/><path d="M17.3 17.3l1.77 1.77"/><path d="M2 12h2.5"/><path d="M19.5 12H22"/><path d="M4.93 19.07l1.77-1.77"/><path d="M17.3 6.7l1.77-1.77"/></svg></span></button>
           <button id="refreshBtn" class="icon-btn" title="Atualizar biblioteca"><span class="icon-svg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0 2 5.3"/><path d="M20 4v7h-7"/></svg></span></button>
           <button id="logoutBtn" class="btn btn-secondary btn-compact hidden" type="button">Sair</button>
