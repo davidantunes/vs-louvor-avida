@@ -293,3 +293,23 @@ Arquivos que precisam estar corretos na raiz do GitHub:
 - `server.js` deve ser código JavaScript Node/Express
 
 No Render, configure a variável `GOOGLE_DRIVE_API_KEY`.
+
+
+## V28B — Appwrite Auth Real
+
+Esta versão adiciona autenticação real pelo Appwrite Auth.
+
+Também inclui integração inicial de banco online:
+
+- repertórios compartilhados no Appwrite
+- favoritos por usuário no Appwrite
+- fallback local caso o Appwrite ainda não esteja configurado
+
+Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
+
+
+## V29 — Escala de Maio 2026
+
+- Dados da escala de maio adicionados a partir do arquivo enviado.
+- Guia Escala atualizada com os nomes, datas, funções e observações exatamente no padrão da planilha.
+- Filtros e impressão preservados.

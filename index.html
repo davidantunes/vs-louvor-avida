@@ -30,20 +30,24 @@
       <div class="login-brand">
         <img src="assets/logo-avida.jpg" alt="Igreja Amor e Vida">
         <div>
-          <span class="kicker">Acesso institucional</span>
+          <span class="kicker">Acesso com Appwrite Auth</span>
           <h1>Biblioteca de Louvor</h1>
           <p>Igreja Amor e Vida</p>
         </div>
       </div>
       <div class="login-verse">"Tudo quanto tem fôlego louve ao Senhor. Louvai ao Senhor!" <strong>Salmos 150:6</strong></div>
-      <div class="login-grid">
-        <label><span>Seu nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /></label>
+      <div class="login-grid auth-grid">
+        <label><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /></label>
         <label><span>Equipe / escala</span><input id="loginRole" type="text" placeholder="Ex.: Louvor Domingo Noite" /></label>
+        <label><span>E-mail</span><input id="loginEmail" type="email" placeholder="seuemail@exemplo.com" autocomplete="email" /></label>
+        <label><span>Senha</span><input id="loginPassword" type="password" placeholder="Sua senha" autocomplete="current-password" /></label>
       </div>
-      <div class="login-actions">
-        <button id="enterSystemBtn" class="btn btn-primary" type="button">Entrar na plataforma</button>
+      <div id="authStatus" class="auth-status"></div>
+      <div class="login-actions auth-actions">
+        <button id="enterSystemBtn" class="btn btn-primary" type="button">Entrar</button>
+        <button id="createAccountBtn" class="btn btn-secondary" type="button">Criar conta</button>
       </div>
-      <small class="login-note">Seu acesso fica salvo neste dispositivo para uma entrada mais rápida.</small>
+      <small class="login-note">A autenticação agora é real via Appwrite Auth. Use o mesmo e-mail e senha em qualquer dispositivo.</small>
     </div>
   </div>
 
@@ -164,9 +168,9 @@
               <tr>
                 <th>Data</th>
                 <th>Ministro</th>
-                <th>Back 1</th>
-                <th>Back 2</th>
-                <th>Back 3</th>
+                <th>Back</th>
+                <th>Back</th>
+                <th>Back</th>
                 <th>Baixo</th>
                 <th>Bateria</th>
                 <th>Guitarra</th>
@@ -179,17 +183,21 @@
         </div>
 
         <div class="schedule-notes">
-          <strong>Observações</strong>
+          <strong>Observações:</strong>
           <ol>
-            <li>As canções devem ser definidas pelo ministro com antecedência mínima de 7 dias.</li>
-            <li>O repertório de quinta deve ser definido até a quinta da semana anterior.</li>
-            <li>O repertório de domingo deve ser definido até o domingo da semana anterior.</li>
+            <li>As canções devem ser definidas pelo ministro com antecedência mínima de 7 dias.
+              <ul>
+                <li>O repertório de quinta deve ser definido até na quinta da semana anterior.</li>
+                <li>O repertório de domingo deve ser definido até no domingo da semana anterior.</li>
+              </ul>
+            </li>
+            <li>Os horários dos ensaios serão:
+              <ul>
+                <li>Domingos às 16:00H</li>
+                <li>Quintas-feiras às 18:45h</li>
+              </ul>
+            </li>
           </ol>
-          <strong>Horários dos ensaios</strong>
-          <ul>
-            <li>Domingos às 16:00h</li>
-            <li>Quintas-feiras às 18:45h</li>
-          </ul>
         </div>
       </section>
 
@@ -398,6 +406,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/appwrite@16.1.0"></script>
   <script src="config.js"></script>
 
   <div id="tourOverlay" class="tour-overlay hidden" aria-hidden="true">

@@ -21,6 +21,10 @@ let currentSetlistDetailId = null;
 let songModalTarget = null;
 let favorites = loadJSON('vs_favorites_v1', []);
 let setlists = loadJSON('vs_setlists_v1', []);
+let appwriteClient = null;
+let appwriteAccount = null;
+let authUser = null;
+let cloudReady = false;
 let isFavoritesFilter = false;
 let viewMode = loadJSON('vs_view_mode_v10', 'thumbnails');
 let filteredTracksCache = [];
@@ -33,6 +37,22 @@ const LOAD_MORE_SIZE = {
   thumbnails: 8,
   details: 18
 };
+
+const SCHEDULE_ROWS = [
+  { day:'Domingo', date:'03/05', minister:'Rayssa', back1:'Ana Caroline', back2:'Edimar', back3:'Caroline', bass:'Pr Douglas', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Edvanio' },
+  { day:'Quinta', date:'07/05', minister:'Thelma', back1:'Marcia', back2:'Luis', back3:'Letícia', bass:'Pr Douglas', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Antônio' },
+  { day:'Domingo', date:'10/05', minister:'Laryssa', back1:'Dafnis', back2:'Thiagão', back3:'Ludmilla', bass:'Marcinho', drums:'', guitar:'Alessandro', keyboard:'Thiago Matos', sound:'Edvanio' },
+  { day:'Quinta', date:'14/05', minister:'Izabel', back1:'Márcia', back2:'Daniele', back3:'Letícia', bass:'Luis', drums:'Mayra', guitar:'Fábio', keyboard:'Douglas', sound:'Edmilson' },
+  { day:'Domingo', date:'17/05', minister:'Caroline', back1:'Mariah', back2:'Leandro', back3:'Tales', bass:'Luis', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Edvanio' },
+  { day:'Quinta', date:'21/05', minister:'Laryssa', back1:'Thelma', back2:'Edimar', back3:'Daniele', bass:'Pr Douglas', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Antônio' },
+  { day:'Domingo', date:'24/05', minister:'Luis', back1:'Rayssa', back2:'Leandro', back3:'Leticia', bass:'Fábio', drums:'Mayra', guitar:'Alessandro', keyboard:'Douglas', sound:'Edvanio' },
+  { day:'Quinta', date:'28/05', minister:'Márcia', back1:'Thelma', back2:'Thiagão', back3:'Daniele', bass:'Pr Douglas', drums:'Mayra', guitar:'Alessandro', keyboard:'Douglas', sound:'Edmilson' },
+  { day:'Domingo', date:'31/05', minister:'Dafnis', back1:'Izabel', back2:'Edimar', back3:'Tales', bass:'Pr Douglas', drums:'Daniel', guitar:'Fábio', keyboard:'Thiago Matos', sound:'Edvanio' }
+];
+const SCHEDULE_ROLE_LABELS = {
+  minister: 'Ministro', back1: 'Back', back2: 'Back', back3: 'Back', bass: 'Baixo', drums: 'Bateria', guitar: 'Guitarra', keyboard: 'Teclado', sound: 'Tec. Som'
+};
+
 let infiniteObserver = null;
 let tourStepIndex = 0;
 const TOUR_DISABLE_KEY = "vs_guided_tour_disabled_v16";
@@ -151,15 +171,28 @@ const el = {
   loginScreen: document.getElementById('loginScreen'),
   loginName: document.getElementById('loginName'),
   loginRole: document.getElementById('loginRole'),
+  loginEmail: document.getElementById('loginEmail'),
+  loginPassword: document.getElementById('loginPassword'),
+  createAccountBtn: document.getElementById('createAccountBtn'),
+  authStatus: document.getElementById('authStatus'),
   enterSystemBtn: document.getElementById('enterSystemBtn'),
   userBadge: document.getElementById('userBadge'),
-  logoutBtn: document.getElementById('logoutBtn')
+  logoutBtn: document.getElementById('logoutBtn'),
+  scheduleSearch: document.getElementById('scheduleSearch'),
+  scheduleDayFilter: document.getElementById('scheduleDayFilter'),
+  scheduleRoleFilter: document.getElementById('scheduleRoleFilter'),
+  scheduleClearBtn: document.getElementById('scheduleClearBtn'),
+  schedulePrintBtn: document.getElementById('schedulePrintBtn'),
+  scheduleSummary: document.getElementById('scheduleSummary'),
+  scheduleTableBody: document.getElementById('scheduleTableBody')
 };
 
 document.title = cfg.APP_TITLE;
 
+initAppwriteClient();
 initSessionUI();
 bindEvents();
+initSchedule();
 applyTheme(loadJSON('vs_theme_v1', 'dark'));
 showLoading('Carregando biblioteca e organizando o ambiente...');
 loadLibrary().then(() => { readDeepLinks(); routeInternalPage(); if (loadJSON(SESSION_KEY, null)?.name) maybeLaunchTour(); });
@@ -275,9 +308,19 @@ function bindEvents(){
   window.addEventListener('scroll', () => { if (!el.tourOverlay?.classList.contains('hidden')) positionTourToTarget(document.querySelector(TOUR_STEPS[tourStepIndex]?.selector)); }, { passive: true });
 
   if (el.enterSystemBtn) el.enterSystemBtn.addEventListener('click', enterSystem);
+  if (el.createAccountBtn) el.createAccountBtn.addEventListener('click', createAccount);
   if (el.loginName) el.loginName.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
   if (el.loginRole) el.loginRole.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
+  if (el.loginEmail) el.loginEmail.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
+  if (el.loginPassword) el.loginPassword.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
   if (el.logoutBtn) el.logoutBtn.addEventListener('click', logoutSession);
+
+
+  if (el.scheduleSearch) el.scheduleSearch.addEventListener('input', renderSchedule);
+  if (el.scheduleDayFilter) el.scheduleDayFilter.addEventListener('change', renderSchedule);
+  if (el.scheduleRoleFilter) el.scheduleRoleFilter.addEventListener('change', renderSchedule);
+  if (el.scheduleClearBtn) el.scheduleClearBtn.addEventListener('click', clearScheduleFilters);
+  if (el.schedulePrintBtn) el.schedulePrintBtn.addEventListener('click', () => window.print());
 
   document.querySelectorAll('.tutorial-item').forEach(item => {
     item.addEventListener('toggle', () => {
@@ -334,47 +377,113 @@ function routeInternalPage(){
   }
 }
 
-function initSessionUI(){
-  const session = loadJSON(SESSION_KEY, null);
-  if (session && session.name) applySession(session);
-  else showLogin();
+function initAppwriteClient(){
+  try {
+    const endpoint = cfg.APPWRITE_ENDPOINT;
+    const projectId = cfg.APPWRITE_PROJECT_ID;
+    if (!window.Appwrite || !endpoint || !projectId) {
+      cloudReady = false;
+      return;
+    }
+    const { Client, Account } = window.Appwrite;
+    appwriteClient = new Client().setEndpoint(endpoint).setProject(projectId);
+    appwriteAccount = new Account(appwriteClient);
+    cloudReady = true;
+  } catch (error) {
+    console.warn('Appwrite Auth não inicializado:', error);
+    cloudReady = false;
+  }
+}
+async function initSessionUI(){
+  if (!cloudReady || !appwriteAccount) {
+    showLogin();
+    setAuthStatus('Appwrite não configurado. Verifique endpoint e project ID.', true);
+    return;
+  }
+  try {
+    const user = await appwriteAccount.get();
+    await applyAuthUser(user);
+  } catch {
+    showLogin();
+  }
+}
+function setAuthStatus(message = '', isError = false){
+  if (!el.authStatus) return;
+  el.authStatus.textContent = message;
+  el.authStatus.classList.toggle('is-error', Boolean(isError));
+  el.authStatus.classList.toggle('is-ok', Boolean(message && !isError));
 }
 function showLoading(message = 'Preparando a plataforma...'){
   if (el.loadingMessage) el.loadingMessage.textContent = message;
   el.loadingScreen?.classList.remove('hidden');
 }
-function hideLoading(){
-  el.loadingScreen?.classList.add('hidden');
-}
+function hideLoading(){ el.loadingScreen?.classList.add('hidden'); }
 function showLogin(){
   el.loginScreen?.classList.remove('hidden');
   el.loginScreen?.setAttribute('aria-hidden', 'false');
   document.body.classList.add('app-locked');
-  setTimeout(() => el.loginName?.focus(), 60);
+  setTimeout(() => el.loginEmail?.focus(), 60);
 }
 function hideLogin(){
   el.loginScreen?.classList.add('hidden');
   el.loginScreen?.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('app-locked');
 }
-function applySession(session){
+async function applyAuthUser(user){
+  authUser = user;
+  const role = user.prefs?.role || '';
+  const session = { id: user.$id, name: user.name || user.email, email: user.email, role, at: Date.now() };
+  saveJSON(SESSION_KEY, session);
   if (el.userBadge) {
-    el.userBadge.textContent = session.role ? `${session.name} • ${session.role}` : session.name;
+    el.userBadge.textContent = role ? `${session.name} • ${role}` : session.name;
     el.userBadge.classList.remove('hidden');
   }
   el.logoutBtn?.classList.remove('hidden');
   hideLogin();
+  await loadCloudState();
 }
-function enterSystem(){
+async function enterSystem(){
+  const email = (el.loginEmail?.value || '').trim();
+  const password = (el.loginPassword?.value || '').trim();
+  if (!email || !password) return setAuthStatus('Informe e-mail e senha para entrar.', true);
+  if (!appwriteAccount) return setAuthStatus('Appwrite não inicializado.', true);
+  try {
+    setAuthStatus('Entrando...', false);
+    await appwriteAccount.createEmailPasswordSession(email, password);
+    const user = await appwriteAccount.get();
+    await applyAuthUser(user);
+    setAuthStatus('', false);
+    if (libraryLoaded) maybeLaunchTour();
+  } catch (error) {
+    setAuthStatus(error?.message || 'Não foi possível entrar.', true);
+  }
+}
+async function createAccount(){
   const name = (el.loginName?.value || '').trim();
   const role = (el.loginRole?.value || '').trim();
-  if (!name) return toast('Informe seu nome para entrar');
-  const session = { name, role, at: Date.now() };
-  saveJSON(SESSION_KEY, session);
-  applySession(session);
-  if (libraryLoaded) maybeLaunchTour();
+  const email = (el.loginEmail?.value || '').trim();
+  const password = (el.loginPassword?.value || '').trim();
+  if (!name || !email || !password) return setAuthStatus('Informe nome, e-mail e senha para criar a conta.', true);
+  if (!appwriteAccount || !window.Appwrite?.ID) return setAuthStatus('Appwrite não inicializado.', true);
+  try {
+    setAuthStatus('Criando conta...', false);
+    await appwriteAccount.create(window.Appwrite.ID.unique(), email, password, name);
+    await appwriteAccount.createEmailPasswordSession(email, password);
+    if (role) {
+      try { await appwriteAccount.updatePrefs({ role }); } catch (e) { console.warn('Prefs não atualizadas:', e); }
+    }
+    const user = await appwriteAccount.get();
+    await applyAuthUser(user);
+    setAuthStatus('', false);
+    toast('Conta criada com sucesso.');
+    if (libraryLoaded) maybeLaunchTour();
+  } catch (error) {
+    setAuthStatus(error?.message || 'Não foi possível criar a conta.', true);
+  }
 }
-function logoutSession(){
+async function logoutSession(){
+  try { await appwriteAccount?.deleteSession('current'); } catch {}
+  authUser = null;
   localStorage.removeItem(SESSION_KEY);
   if (el.userBadge) {
     el.userBadge.textContent = '';
@@ -382,6 +491,64 @@ function logoutSession(){
   }
   el.logoutBtn?.classList.add('hidden');
   showLogin();
+}
+async function loadCloudState(){
+  if (!authUser) return;
+  try {
+    const [shared, userState] = await Promise.all([getSharedState('setlists'), getUserState('favorites')]);
+    if (Array.isArray(shared)) setlists = shared;
+    if (Array.isArray(userState)) favorites = userState;
+    saveJSON('vs_setlists_v1', setlists);
+    saveJSON('vs_favorites_v1', favorites);
+    updateStats();
+    updateFavoriteCount();
+    renderSetlists();
+    render();
+  } catch (error) {
+    console.warn('Estado online não carregado:', error);
+    toast('Não foi possível sincronizar com Appwrite. Usando dados locais.');
+  }
+}
+async function getSharedState(key){
+  const res = await fetch(`/api/appwrite/state/${encodeURIComponent(key)}`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return data.value;
+}
+async function setSharedState(key, value){
+  if (!authUser) return;
+  const res = await fetch(`/api/appwrite/state/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value, updatedBy: authUser.name || authUser.email })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+async function getUserState(key){
+  if (!authUser) return null;
+  const res = await fetch(`/api/appwrite/user-state/${encodeURIComponent(authUser.$id)}/${encodeURIComponent(key)}`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return data.value;
+}
+async function setUserState(key, value){
+  if (!authUser) return;
+  const res = await fetch(`/api/appwrite/user-state/${encodeURIComponent(authUser.$id)}/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value, userName: authUser.name || authUser.email })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+function saveFavoritesState(){
+  saveJSON('vs_favorites_v1', favorites);
+  setUserState('favorites', favorites).catch(err => console.warn('Favoritos não sincronizados:', err));
+}
+function saveSetlistsState(){
+  saveJSON('vs_setlists_v1', setlists);
+  setSharedState('setlists', setlists).catch(err => console.warn('Repertórios não sincronizados:', err));
 }
 
 function maybeLaunchTour(){
@@ -504,6 +671,93 @@ function finishGuidedTour(){
   if (el.tourDontShowAgain?.checked) saveJSON(TOUR_DISABLE_KEY, true);
   saveJSON(TOUR_STORAGE_KEY, true);
 }
+
+function initSchedule(){
+  populateScheduleFilters();
+  renderSchedule();
+}
+function populateScheduleFilters(){
+  if (!el.scheduleDayFilter || !el.scheduleRoleFilter) return;
+  const days = [...new Set(SCHEDULE_ROWS.map(row => row.day))];
+  el.scheduleDayFilter.innerHTML = '<option value="">Todos os dias</option>' + days.map(day => `<option value="${esc(day)}">${esc(day)}</option>`).join('');
+  const roles = Object.entries(SCHEDULE_ROLE_LABELS).map(([key,label]) => ({key,label}));
+  el.scheduleRoleFilter.innerHTML = '<option value="">Todas as funções</option>' + roles.map(role => `<option value="${role.key}">${esc(role.label)}</option>`).join('');
+}
+function getFilteredScheduleRows(){
+  const q = normalize(el.scheduleSearch?.value || '');
+  const day = el.scheduleDayFilter?.value || '';
+  const role = el.scheduleRoleFilter?.value || '';
+  return SCHEDULE_ROWS.filter(row => {
+    if (day && row.day !== day) return false;
+    if (role) {
+      const value = normalize(row[role] || '');
+      if (q && !value.includes(q)) return false;
+      return true;
+    }
+    if (!q) return true;
+    const blob = normalize(Object.values(row).join(' '));
+    return blob.includes(q);
+  });
+}
+function renderSchedule(){
+  if (!el.scheduleTableBody) return;
+  const rows = getFilteredScheduleRows();
+  const q = normalize(el.scheduleSearch?.value || '');
+  if (!rows.length) {
+    el.scheduleTableBody.innerHTML = '<tr><td colspan="10" class="schedule-empty">Nenhum resultado encontrado na escala.</td></tr>';
+  } else {
+    el.scheduleTableBody.innerHTML = rows.map(row => renderScheduleRow(row, q)).join('');
+  }
+  renderScheduleSummary(rows);
+}
+function renderScheduleRow(row, q){
+  const fields = ['minister','back1','back2','back3','bass','drums','guitar','keyboard','sound'];
+  const nextClass = isNextSchedule(row) ? ' schedule-row-next' : '';
+  return `<tr class="${row.day === 'Quinta' ? 'schedule-row-alt' : ''}${nextClass}">
+    <td class="schedule-date"><b>${esc(row.day)}</b><strong>${esc(row.date)}</strong></td>
+    ${fields.map(field => `<td>${highlightScheduleMatch(row[field] || '', q)}</td>`).join('')}
+  </tr>`;
+}
+function highlightScheduleMatch(value, q){
+  const text = esc(value || '');
+  if (!q || !value) return text;
+  const normalized = normalize(value);
+  const idx = normalized.indexOf(q);
+  if (idx < 0) return text;
+  const before = value.slice(0, idx);
+  const match = value.slice(idx, idx + q.length);
+  const after = value.slice(idx + q.length);
+  return `${esc(before)}<span class="schedule-match">${esc(match)}</span>${esc(after)}`;
+}
+function renderScheduleSummary(rows){
+  if (!el.scheduleSummary) return;
+  const people = new Set();
+  rows.forEach(row => ['minister','back1','back2','back3','bass','drums','guitar','keyboard','sound'].forEach(field => { if (row[field]) people.add(row[field]); }));
+  const domingos = rows.filter(row => row.day === 'Domingo').length;
+  const quintas = rows.filter(row => row.day === 'Quinta').length;
+  el.scheduleSummary.innerHTML = `
+    <div class="schedule-pill"><span>Escalas exibidas</span><strong>${rows.length}</strong></div>
+    <div class="schedule-pill"><span>Domingos</span><strong>${domingos}</strong></div>
+    <div class="schedule-pill"><span>Quintas</span><strong>${quintas}</strong></div>
+    <div class="schedule-pill"><span>Pessoas únicas</span><strong>${people.size}</strong></div>
+  `;
+}
+function clearScheduleFilters(){
+  if (el.scheduleSearch) el.scheduleSearch.value = '';
+  if (el.scheduleDayFilter) el.scheduleDayFilter.value = '';
+  if (el.scheduleRoleFilter) el.scheduleRoleFilter.value = '';
+  renderSchedule();
+}
+function isNextSchedule(row){
+  const [day, month] = row.date.split('/').map(Number);
+  const now = new Date();
+  const target = new Date(2026, month - 1, day, 23, 59, 59);
+  if (now.getFullYear() !== 2026 || now.getMonth() !== 4) return false;
+  const futureRows = SCHEDULE_ROWS.map(r => ({ row: r, date: new Date(2026, Number(r.date.split('/')[1]) - 1, Number(r.date.split('/')[0]), 23, 59, 59) })).filter(item => item.date >= new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  futureRows.sort((a,b) => a.date - b.date);
+  return futureRows.length && futureRows[0].row.date === row.date && futureRows[0].row.day === row.day;
+}
+
 function useBackend(){ return cfg.USE_BACKEND && location.protocol !== 'file:'; }
 function directDriveMedia(id){ return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`; }
 function thumbnailUrl(id){ return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800`; }
@@ -970,7 +1224,7 @@ function closeToneModal(){ el.toneModal.classList.add('hidden'); }
 function toggleFavorite(id){
   if (favorites.includes(id)) favorites = favorites.filter(x => x !== id);
   else favorites.push(id);
-  saveJSON('vs_favorites_v1', favorites);
+  saveFavoritesState();
   updateFavoriteCount();
   render();
 }
@@ -994,7 +1248,7 @@ function createSetlistFromInput(){
   if (!name) return;
   const s = { id: String(Date.now()), name, trackIds: setlistTarget ? [makeSetlistEntry(setlistTarget, setlistTargetTone)] : [] };
   setlists.push(s);
-  saveJSON('vs_setlists_v1', setlists);
+  saveSetlistsState();
   updateStats();
   renderSetlists();
   renderSetlistOptions();
@@ -1017,7 +1271,7 @@ function renderSetlistOptions(){
     if (!setlist || !setlistTarget) return;
     const entry = makeSetlistEntry(setlistTarget, setlistTargetTone);
     if (!setlistHasEntry(setlist, entry)) setlist.trackIds.push(entry);
-    saveJSON('vs_setlists_v1', setlists);
+    saveSetlistsState();
     updateStats();
     renderSetlists();
     closeSetlistModal();
@@ -1051,7 +1305,7 @@ function renderSetlists(){
   el.setlistsGrid.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
     if (!confirm('Excluir este repertório?')) return;
     setlists = setlists.filter(s => s.id !== btn.dataset.id);
-    saveJSON('vs_setlists_v1', setlists);
+    saveSetlistsState();
     updateStats();
     renderSetlists();
   }));
@@ -1138,7 +1392,7 @@ function renderSetlistDetailTracks(){
   el.setlistDetailTracks.querySelectorAll('.remove-one').forEach(btn => btn.addEventListener('click', () => {
     const idx = Number(btn.closest('.reorder-item')?.dataset.index);
     if (Number.isInteger(idx) && idx >= 0) setlist.trackIds.splice(idx, 1);
-    saveJSON('vs_setlists_v1', setlists);
+    saveSetlistsState();
     renderSetlists();
     renderSetlistDetailTracks();
     updateStats();
@@ -1167,7 +1421,7 @@ function reorderSetlist(setlistId, from, to){
   if (from < 0 || to < 0 || from >= setlist.trackIds.length || to >= setlist.trackIds.length) return;
   const [moved] = setlist.trackIds.splice(from, 1);
   setlist.trackIds.splice(to, 0, moved);
-  saveJSON('vs_setlists_v1', setlists);
+  saveSetlistsState();
 }
 
 function openSongModal(track){

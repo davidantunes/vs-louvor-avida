@@ -1568,3 +1568,52 @@ button,input,select,textarea{
     overflow:auto;
   }
 }
+
+
+/* V28B — Appwrite Auth real */
+.auth-grid{grid-template-columns:1fr 1fr}
+.auth-actions{gap:10px;flex-wrap:wrap}
+.auth-status{min-height:22px;margin-top:12px;font-weight:800;color:var(--muted);line-height:1.4}
+.auth-status.is-error{color:#ff9a9a}
+.auth-status.is-ok{color:var(--teal)}
+@media (max-width:760px){.auth-grid{grid-template-columns:1fr}.auth-actions{display:grid;grid-template-columns:1fr}.auth-actions .btn{width:100%}}
+
+
+/* V29 — escala de maio adicionada a partir do arquivo enviado */
+.schedule-table thead th{
+  background:#1f4e79;
+  color:#ffffff;
+  text-align:center;
+}
+.schedule-table td{
+  text-align:center;
+}
+.schedule-date{
+  min-width:118px;
+  white-space:nowrap;
+}
+.schedule-date b{
+  display:inline-block;
+  margin-right:12px;
+  font-weight:900;
+}
+.schedule-date strong{
+  font-weight:900;
+  color:var(--text);
+}
+.schedule-row-alt td{
+  background:rgba(88, 145, 204, .28) !important;
+}
+.schedule-notes ol{
+  margin-top:8px;
+}
+.schedule-notes ol > li{
+  margin-bottom:8px;
+  line-height:1.55;
+}
+.schedule-notes ul{
+  margin-top:6px;
+}
+@media print{
+  .schedule-row-alt td{background:#c7daee!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+}
