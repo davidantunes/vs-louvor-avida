@@ -2032,3 +2032,50 @@ body.auth-register-mode .register-only{display:block!important}
     padding-right:94px !important;
   }
 }
+
+
+/* V37 — padronização dos campos da guia Escala */
+.schedule-toolbar label{
+  display:block;
+  min-width:0;
+}
+.schedule-toolbar input,
+.schedule-toolbar input[type="search"],
+.schedule-toolbar input[type="text"],
+.schedule-toolbar select{
+  width:100% !important;
+  height:56px !important;
+  min-height:56px !important;
+  border-radius:16px !important;
+  border:1px solid var(--line) !important;
+  background:var(--panel) !important;
+  color:var(--text) !important;
+  padding:0 16px !important;
+  font-size:15px !important;
+  font-weight:700 !important;
+  outline:0 !important;
+  box-shadow:none !important;
+  appearance:none;
+  -webkit-appearance:none;
+  transition:border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.schedule-toolbar input::placeholder{
+  color:var(--muted) !important;
+  opacity:.9;
+}
+.schedule-toolbar input:focus,
+.schedule-toolbar select:focus{
+  border-color:rgba(41,217,208,.42) !important;
+  box-shadow:0 0 0 4px rgba(41,217,208,.10) !important;
+}
+.schedule-toolbar input:-webkit-autofill,
+.schedule-toolbar input:-webkit-autofill:hover,
+.schedule-toolbar input:-webkit-autofill:focus{
+  -webkit-text-fill-color:var(--text);
+  -webkit-box-shadow:0 0 0px 1000px var(--panel) inset;
+  transition:background-color 5000s ease-in-out 0s;
+}
+body[data-theme="light"] .schedule-toolbar input,
+body[data-theme="light"] .schedule-toolbar select{
+  background:#fff !important;
+}
