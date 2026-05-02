@@ -19,6 +19,7 @@ const API_KEY = process.env.GOOGLE_DRIVE_API_KEY || '';
 const GOOGLE_API = 'https://www.googleapis.com/drive/v3/files';
 
 const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || '';
+const APPWRITE_ORIGIN = APPWRITE_ENDPOINT ? new URL(APPWRITE_ENDPOINT).origin : '';
 const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID || '';
 const APPWRITE_DATABASE_ID = process.env.APPWRITE_DATABASE_ID || 'louvor_avida';
 const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY || '';
@@ -46,7 +47,7 @@ app.use(helmet({
       "style-src": ["'self'", "'unsafe-inline'"],
       "img-src": ["'self'", "data:", "https://drive.google.com", "https://*.googleusercontent.com"],
       "media-src": ["'self'", "blob:"],
-      "connect-src": ["'self'", APPWRITE_ENDPOINT, "https://www.googleapis.com"].filter(Boolean),
+      "connect-src": ["'self'", APPWRITE_ORIGIN, APPWRITE_ENDPOINT, "https://www.googleapis.com", "https://cdn.jsdelivr.net"].filter(Boolean),
       "frame-ancestors": ["'none'"],
       "object-src": ["'none'"],
       "base-uri": ["'self'"]

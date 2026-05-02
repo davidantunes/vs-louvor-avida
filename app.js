@@ -249,20 +249,6 @@ const el = {
   changeToneResetBtn: document.getElementById('changeToneResetBtn')
 };
 
-document.title = cfg.APP_TITLE;
-
-initAppwriteClient();
-loadAppwriteServerConfig().finally(initSessionUI);
-bindEvents();
-initSchedule();
-applyTheme(loadJSON('vs_theme_v1', 'dark'));
-// Antes: mostrava tela cheia de loading bloqueando tudo até biblioteca carregar.
-// Agora: esconde a tela cheia já no boot e libera UI; só a seção da biblioteca
-// mostra estado de carregamento enquanto Drive responde.
-hideLoading();
-showLibrarySkeleton();
-loadLibrary().then(() => { readDeepLinks(); routeInternalPage(); if (loadJSON(SESSION_KEY, null)?.name) maybeLaunchTour(); });
-
 function setPlayButtonState(isPlaying){
   if (!el.playPauseBtn) return;
   el.playPauseBtn.setAttribute('aria-label', isPlaying ? 'Pausar' : 'Tocar');
@@ -2564,3 +2550,35 @@ function resetChangeTone(){
   renderSetlists();
   toast('Tom voltou ao original.');
 }
+
+function registerServiceWorker(){
+  // Service Worker — opcional, falha silenciosa
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW falhou:', err));
+    });
+  }
+}
+
+function bootstrapApp(){
+  document.title = cfg.APP_TITLE;
+
+  initAppwriteClient();
+  loadAppwriteServerConfig().finally(initSessionUI);
+  bindEvents();
+  initSchedule();
+  applyTheme(loadJSON('vs_theme_v1', 'dark'));
+  // Antes: mostrava tela cheia de loading bloqueando tudo até biblioteca carregar.
+  // Agora: esconde a tela cheia já no boot e libera UI; só a seção da biblioteca
+  // mostra estado de carregamento enquanto Drive responde.
+  hideLoading();
+  showLibrarySkeleton();
+  registerServiceWorker();
+  loadLibrary().then(() => {
+    readDeepLinks();
+    routeInternalPage();
+    if (loadJSON(SESSION_KEY, null)?.name) maybeLaunchTour();
+  });
+}
+
+bootstrapApp();
