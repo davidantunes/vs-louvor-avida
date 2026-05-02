@@ -1191,25 +1191,20 @@ function shiftScheduleMonth(delta){
   changeScheduleMonth(next);
 }
 function populateScheduleFilters(){
-  if (!el.scheduleDayFilter || !el.scheduleRoleFilter) return;
+  if (!el.scheduleDayFilter) return;
   const currentDay = el.scheduleDayFilter.value;
-  const currentRole = el.scheduleRoleFilter.value;
   const currentMember = el.scheduleMemberFilter?.value || '';
   const days = [...new Set(scheduleRows.map(row => row.day))];
   el.scheduleDayFilter.innerHTML = '<option value="">Todos os dias</option>' + days.map(day => `<option value="${esc(day)}">${esc(day)}</option>`).join('');
-  const roles = Object.entries(SCHEDULE_ROLE_LABELS).map(([key,label]) => ({key,label}));
-  el.scheduleRoleFilter.innerHTML = '<option value="">Todas as funções</option>' + roles.map(role => `<option value="${role.key}">${esc(role.label)}</option>`).join('');
   if (el.scheduleMemberFilter) {
     el.scheduleMemberFilter.innerHTML = '<option value="">Todos os membros</option>' + members.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
     if (members.includes(currentMember)) el.scheduleMemberFilter.value = currentMember;
   }
   if (days.includes(currentDay)) el.scheduleDayFilter.value = currentDay;
-  if (roles.some(r => r.key === currentRole)) el.scheduleRoleFilter.value = currentRole;
 }
 function getFilteredScheduleRows(){
   const q = normalize(el.scheduleSearch?.value || '');
   const day = el.scheduleDayFilter?.value || '';
-  const role = el.scheduleRoleFilter?.value || '';
   const member = el.scheduleMemberFilter?.value || '';
   const mineOnly = isMineOnly();
   const myName = mineOnly ? getMyName() : '';
@@ -1219,11 +1214,6 @@ function getFilteredScheduleRows(){
     if (member) {
       const values = Object.keys(SCHEDULE_ROLE_LABELS).map(field => row[field] || '');
       if (!values.some(value => normalize(value) === normalize(member))) return false;
-    }
-    if (role) {
-      const value = normalize(row[role] || '');
-      if (q && !value.includes(q)) return false;
-      return true;
     }
     if (!q) return true;
     const blob = normalize(Object.values(row).join(' '));
@@ -1312,7 +1302,6 @@ function renderScheduleSummary(rows){
 function clearScheduleFilters(){
   if (el.scheduleSearch) el.scheduleSearch.value = '';
   if (el.scheduleDayFilter) el.scheduleDayFilter.value = '';
-  if (el.scheduleRoleFilter) el.scheduleRoleFilter.value = '';
   if (el.scheduleMemberFilter) el.scheduleMemberFilter.value = '';
   if (el.scheduleMineOnly) el.scheduleMineOnly.checked = false;
   renderSchedule();
