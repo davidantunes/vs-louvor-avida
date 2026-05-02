@@ -2089,3 +2089,8 @@ body[data-theme="light"] .schedule-toolbar select{
   .auth-grid-clean{grid-template-columns:1fr}
   .auth-grid-clean #loginNameField{grid-column:auto}
 }
+
+
+/* V40 — campo Nome visível apenas em Criar cadastro */
+.hidden{display:none !important}
+.login-grid label.hidden{display:none !important}

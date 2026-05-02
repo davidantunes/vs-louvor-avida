@@ -12,6 +12,7 @@ let currentQueue = [];
 let currentIndex = -1;
 let repeatMode = false;
 let shuffleMode = false;
+let randomContinuousMode = false;
 let selectedSemitone = 0;
 let selectedToneLabel = '';
 let toneTarget = null;
@@ -235,7 +236,8 @@ function setPlayButtonState(isPlaying){
 
 function bindEvents(){
   window.addEventListener('hashchange', routeInternalPage);
-  el.search.addEventListener('input', render);
+  el.search.addEventListener('input', onGlobalSearchInput);
+  el.search.addEventListener('keydown', onGlobalSearchKeydown);
   el.viewThumbBtn.addEventListener('click', () => setViewMode('thumbnails'));
   el.viewDetailBtn.addEventListener('click', () => setViewMode('details'));
   el.musicFilter.addEventListener('change', render);
@@ -253,12 +255,17 @@ function bindEvents(){
   el.randomBtn.addEventListener('click', () => {
     const list = getFiltered();
     if (!list.length) return;
-    playTrack(list[Math.floor(Math.random() * list.length)], 0, list);
+    randomContinuousMode = true;
+    shuffleMode = true;
+    el.shuffleBtn?.classList.add('favorites-active');
+    playTrack(list[Math.floor(Math.random() * list.length)], 0, list, { randomContinuous: true });
+    toast('Reprodução aleatória contínua iniciada.');
   });
   el.copyLinkBtn.addEventListener('click', () => copyText(location.origin + location.pathname, 'Link do sistema copiado.'));
 
   el.shuffleBtn.addEventListener('click', () => {
     shuffleMode = !shuffleMode;
+    if (!shuffleMode) randomContinuousMode = false;
     el.shuffleBtn.classList.toggle('favorites-active', shuffleMode);
   });
   el.repeatBtn.addEventListener('click', () => {
@@ -275,7 +282,7 @@ function bindEvents(){
   el.audio.addEventListener('pause', () => setPlayButtonState(false));
   el.audio.addEventListener('timeupdate', syncProgressUI);
   el.audio.addEventListener('loadedmetadata', syncProgressUI);
-  el.audio.addEventListener('ended', () => { setPlayButtonState(false); });
+  el.audio.addEventListener('ended', handleAudioEnded);
 
   el.closeTone.addEventListener('click', closeToneModal);
   el.toneModal.addEventListener('click', e => { if (e.target === el.toneModal) closeToneModal(); });
@@ -357,7 +364,6 @@ function bindEvents(){
 
   if (el.scheduleSearch) el.scheduleSearch.addEventListener('input', renderSchedule);
   if (el.scheduleDayFilter) el.scheduleDayFilter.addEventListener('change', renderSchedule);
-  if (el.scheduleRoleFilter) el.scheduleRoleFilter.addEventListener('change', renderSchedule);
   if (el.scheduleMemberFilter) el.scheduleMemberFilter.addEventListener('change', renderSchedule);
   if (el.scheduleTableBody) el.scheduleTableBody.addEventListener('change', onScheduleSelectChange);
   if (el.scheduleSaveBtn) el.scheduleSaveBtn.addEventListener('click', () => saveScheduleState(true));
@@ -372,6 +378,26 @@ function bindEvents(){
   });
 }
 
+
+function onGlobalSearchInput(){
+  render();
+  const query = String(el.search?.value || '').trim();
+  if (getPageFromHash() === 'home' && query) {
+    location.hash = '#biblioteca';
+    setTimeout(() => { routeInternalPage(); render(); }, 0);
+  }
+}
+
+function onGlobalSearchKeydown(event){
+  if (event.key !== 'Enter') return;
+  const query = String(el.search?.value || '').trim();
+  if (!query) return;
+  if (getPageFromHash() !== 'library') {
+    event.preventDefault();
+    location.hash = '#biblioteca';
+    setTimeout(() => { routeInternalPage(); render(); }, 0);
+  }
+}
 
 function getPageFromHash(){
   const hash = (location.hash || '#inicio').replace('#','');
@@ -950,36 +976,26 @@ function initSchedule(){
   renderSchedule();
 }
 function populateScheduleFilters(){
-  if (!el.scheduleDayFilter || !el.scheduleRoleFilter) return;
+  if (!el.scheduleDayFilter) return;
   const currentDay = el.scheduleDayFilter.value;
-  const currentRole = el.scheduleRoleFilter.value;
   const currentMember = el.scheduleMemberFilter?.value || '';
   const days = [...new Set(scheduleRows.map(row => row.day))];
   el.scheduleDayFilter.innerHTML = '<option value="">Todos os dias</option>' + days.map(day => `<option value="${esc(day)}">${esc(day)}</option>`).join('');
-  const roles = Object.entries(SCHEDULE_ROLE_LABELS).map(([key,label]) => ({key,label}));
-  el.scheduleRoleFilter.innerHTML = '<option value="">Todas as funções</option>' + roles.map(role => `<option value="${role.key}">${esc(role.label)}</option>`).join('');
   if (el.scheduleMemberFilter) {
     el.scheduleMemberFilter.innerHTML = '<option value="">Todos os membros</option>' + members.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
     if (members.includes(currentMember)) el.scheduleMemberFilter.value = currentMember;
   }
   if (days.includes(currentDay)) el.scheduleDayFilter.value = currentDay;
-  if (roles.some(r => r.key === currentRole)) el.scheduleRoleFilter.value = currentRole;
 }
 function getFilteredScheduleRows(){
   const q = normalize(el.scheduleSearch?.value || '');
   const day = el.scheduleDayFilter?.value || '';
-  const role = el.scheduleRoleFilter?.value || '';
   const member = el.scheduleMemberFilter?.value || '';
   return scheduleRows.filter(row => {
     if (day && row.day !== day) return false;
     if (member) {
       const values = Object.keys(SCHEDULE_ROLE_LABELS).map(field => row[field] || '');
       if (!values.some(value => normalize(value) === normalize(member))) return false;
-    }
-    if (role) {
-      const value = normalize(row[role] || '');
-      if (q && !value.includes(q)) return false;
-      return true;
     }
     if (!q) return true;
     const blob = normalize(Object.values(row).join(' '));
@@ -1068,7 +1084,6 @@ function renderScheduleSummary(rows){
 function clearScheduleFilters(){
   if (el.scheduleSearch) el.scheduleSearch.value = '';
   if (el.scheduleDayFilter) el.scheduleDayFilter.value = '';
-  if (el.scheduleRoleFilter) el.scheduleRoleFilter.value = '';
   if (el.scheduleMemberFilter) el.scheduleMemberFilter.value = '';
   renderSchedule();
 }
@@ -1408,10 +1423,27 @@ function bindTrackCardEvents(container){
   });
 }
 
+function handleAudioEnded(){
+  setPlayButtonState(false);
+  if (!randomContinuousMode) return;
+
+  const queue = currentQueue.length ? currentQueue : getFiltered();
+  if (!queue.length) return;
+
+  let nextIndex = Math.floor(Math.random() * queue.length);
+  if (queue.length > 1 && nextIndex === currentIndex) {
+    nextIndex = (nextIndex + 1) % queue.length;
+  }
+
+  currentIndex = nextIndex;
+  playTrack(queue[nextIndex], null, queue, { randomContinuous: true });
+}
+
 function findTrack(id){ return allTracks.find(t => t.id === id); }
 
-function playTrack(track, semitones = null, queue = currentQueue){
+function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   if (!track) return;
+  randomContinuousMode = Boolean(options.randomContinuous);
   document.body.classList.add('player-visible');
   document.getElementById('playerArea')?.classList.remove('player-hidden');
   if (semitones === null || semitones === undefined) semitones = Number(track.repertoireSemitones || 0);
@@ -1437,13 +1469,13 @@ function playPrev(){
   const queue = currentQueue.length ? currentQueue : getFiltered();
   if (!queue.length) return;
   currentIndex = currentIndex <= 0 ? queue.length - 1 : currentIndex - 1;
-  playTrack(queue[currentIndex], null, queue);
+  playTrack(queue[currentIndex], null, queue, { randomContinuous: randomContinuousMode });
 }
 function playNext(){
   const queue = currentQueue.length ? currentQueue : getFiltered();
   if (!queue.length) return;
   currentIndex = shuffleMode ? Math.floor(Math.random() * queue.length) : (currentIndex >= queue.length - 1 ? 0 : currentIndex + 1);
-  playTrack(queue[currentIndex], null, queue);
+  playTrack(queue[currentIndex], null, queue, { randomContinuous: randomContinuousMode });
 }
 function syncProgressUI(){
   const duration = Number.isFinite(el.audio.duration) ? el.audio.duration : 0;

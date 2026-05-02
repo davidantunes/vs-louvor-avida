@@ -366,3 +366,25 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
   - app_state: `key`, `value`, `updated_at`
   - user_state: `user_id`, `key`, `value`, `updated_at`
 - removidos campos não cadastrados no Appwrite, como `updatedAt`, `updatedBy`, `userId` e `userName` no payload gravado.
+
+
+## V40
+
+- campo **Nome** oculto no modo **Entrar**
+- campo **Nome** exibido somente em **Criar cadastro**
+- correção global da classe `hidden` para evitar exibição indevida
+
+
+## V41
+
+- removido o filtro **Função** da página **Escala**
+- a busca feita na página inicial agora redireciona automaticamente para **Biblioteca**
+- quando não houver resultado, a mensagem aparece já na página **Biblioteca**
+
+
+## V42
+
+- botão **Reproduzir aleatório** agora inicia reprodução contínua aleatória
+- ao terminar uma música, outra música aleatória é iniciada automaticamente
+- esse comportamento só fica ativo quando iniciado pelo botão **Reproduzir aleatório**
+- ao escolher uma música manualmente, o player volta ao comportamento normal
