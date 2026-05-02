@@ -274,8 +274,7 @@ app.put('/api/appwrite/state/:key', async (req, res) => {
     const doc = await upsertState(APPWRITE_APP_STATE_COLLECTION_ID, d => d.key === key, {
       key,
       value: JSON.stringify(req.body.value ?? null),
-      updated_at: updatedAt,
-      updatedBy: String(user.name || user.email || 'Usuário').slice(0, 255)
+      updated_at: updatedAt
     });
     res.json({ ok: true, id: doc.$id, updatedAt });
   } catch (error) {
@@ -297,10 +296,9 @@ app.put('/api/appwrite/admin/state/:key', async (req, res) => {
     const doc = await upsertState(APPWRITE_APP_STATE_COLLECTION_ID, d => d.key === key, {
       key,
       value: JSON.stringify(req.body.value ?? null),
-      updated_at: updatedAt,
-      updatedBy: String(admin.name || admin.email || 'Administrador').slice(0, 255)
+      updated_at: updatedAt
     });
-    res.json({ ok: true, id: doc.$id, updatedAt, updatedBy: admin.name || admin.email });
+    res.json({ ok: true, id: doc.$id, updatedAt });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
