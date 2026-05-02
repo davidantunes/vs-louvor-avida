@@ -388,3 +388,10 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - ao terminar uma música, outra música aleatória é iniciada automaticamente
 - esse comportamento só fica ativo quando iniciado pelo botão **Reproduzir aleatório**
 - ao escolher uma música manualmente, o player volta ao comportamento normal
+
+
+## V43
+
+- correção definitiva do campo **Nome**: oculto no modo **Entrar** e visível somente em **Criar cadastro**
+- reforço via CSS e JavaScript para evitar cache/ordem de estilos exibindo o campo indevidamente
+- mantém o comportamento de reprodução aleatória contínua da V42

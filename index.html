@@ -24,7 +24,7 @@
     </div>
   </div>
 
-  <div id="loginScreen" class="login-screen hidden" aria-hidden="true">
+  <div id="loginScreen" class="login-screen hidden" aria-hidden="true" data-auth-mode="login">
     <div class="login-backdrop"></div>
     <div class="login-card glass">
       <div class="login-brand">
@@ -42,7 +42,7 @@
       </div>
       <div id="authModeHint" class="auth-mode-hint">Entre com seu e-mail e senha para acessar sua conta.</div>
       <div class="login-grid auth-grid auth-grid-clean">
-        <label id="loginNameField" class="hidden"><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /><small class="field-hint">Informe seu nome completo.</small></label>
+        <label id="loginNameField" class="hidden" style="display:none"><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /><small class="field-hint">Informe seu nome completo.</small></label>
         <label id="loginEmailField"><span>E-mail</span><input id="loginEmail" type="email" placeholder="seuemail@exemplo.com" autocomplete="email" /><small class="field-hint">Use um e-mail válido para entrar.</small></label>
         <label id="loginPasswordField"><span>Senha</span><div class="input-wrap password-wrap"><input id="loginPassword" type="password" placeholder="Sua senha" autocomplete="current-password" /><button id="togglePasswordBtn" class="field-toggle" type="button" aria-label="Mostrar senha">Mostrar</button></div><small class="field-hint">Sua senha deve ter pelo menos 6 caracteres.</small></label>
       </div>

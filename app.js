@@ -485,7 +485,11 @@ function setAuthMode(mode = 'login'){
   el.createAccountBtn?.classList.toggle('btn-secondary', !isRegister);
   el.enterSystemBtn?.classList.toggle('btn-primary', !isRegister);
   el.enterSystemBtn?.classList.toggle('btn-secondary', isRegister);
-  el.loginNameField?.classList.toggle('hidden', !isRegister);
+  if (el.loginScreen) el.loginScreen.dataset.authMode = authMode;
+  if (el.loginNameField) {
+    el.loginNameField.classList.toggle('hidden', !isRegister);
+    el.loginNameField.style.display = isRegister ? '' : 'none';
+  }
   el.recoverPasswordBtn?.classList.toggle('hidden', isRegister);
   if (el.authModeHint) el.authModeHint.textContent = isRegister
     ? 'Crie sua conta informando nome, e-mail e senha.'

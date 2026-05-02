@@ -2094,3 +2094,24 @@ body[data-theme="light"] .schedule-toolbar select{
 /* V40 — campo Nome visível apenas em Criar cadastro */
 .hidden{display:none !important}
 .login-grid label.hidden{display:none !important}
+
+
+/* V43 — correção definitiva: Nome só aparece em Criar cadastro */
+#loginScreen[data-auth-mode="login"] #loginNameField,
+#loginScreen[data-auth-mode="login"] .auth-grid #loginNameField,
+#loginScreen[data-auth-mode="login"] .login-card .auth-grid #loginNameField{
+  display:none !important;
+  visibility:hidden !important;
+  height:0 !important;
+  min-height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow:hidden !important;
+}
+#loginScreen[data-auth-mode="register"] #loginNameField{
+  display:block !important;
+  visibility:visible !important;
+  height:auto !important;
+  min-height:0 !important;
+  overflow:visible !important;
+}
