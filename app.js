@@ -5,6 +5,14 @@ const audioExt = ['mp3','wav','m4a','aac','ogg','flac','wma'];
 const imageExt = ['jpg','jpeg','png','webp'];
 const CHROMATIC_KEYS = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const FLAT_TO_SHARP = { DB:'C#', EB:'D#', GB:'F#', AB:'G#', BB:'A#' };
+const MONTH_NAMES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+// Senhas claramente fracas, bloqueadas no cadastro
+const WEAK_PASSWORDS = new Set([
+  '123456','12345678','123456789','1234567890','password','senha','senha123',
+  'qwerty','qwerty123','111111','123123','abc123','iloveyou','admin','admin123',
+  'louvor','louvor123','amorevida','amorevida123','igreja','igreja123'
+]);
 
 let allTracks = [];
 let current = null;
@@ -12,7 +20,6 @@ let currentQueue = [];
 let currentIndex = -1;
 let repeatMode = false;
 let shuffleMode = false;
-let randomContinuousMode = false;
 let selectedSemitone = 0;
 let selectedToneLabel = '';
 let toneTarget = null;
@@ -27,6 +34,7 @@ let appwriteAccount = null;
 let authUser = null;
 let authMode = "login";
 let cloudReady = false;
+// adminEmails não vem mais do servidor — verificação fica server-side; aqui é só hint visual
 let isFavoritesFilter = false;
 let viewMode = loadJSON('vs_view_mode_v10', 'thumbnails');
 let filteredTracksCache = [];
@@ -39,6 +47,14 @@ const LOAD_MORE_SIZE = {
   thumbnails: 8,
   details: 18
 };
+
+// Mês atualmente exibido na escala (formato YYYY-MM)
+let currentScheduleMonth = '2026-05';
+let scheduleCachedAdmin = false; // cache do último resultado admin para evitar piscar UI
+// Estado para alterar tom dentro do setlist detail
+let changeToneTargetEntryIndex = -1;
+let changeToneSelectedSemitones = 0;
+let changeToneSelectedLabel = '';
 
 const DEFAULT_scheduleRows = [
   { day:'Domingo', date:'03/05', minister:'Rayssa', back1:'Ana Caroline', back2:'Edimar', back3:'Caroline', bass:'Pr Douglas', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Edvanio' },
@@ -54,8 +70,8 @@ const DEFAULT_scheduleRows = [
 const DEFAULT_MEMBERS = ["Alessandro", "Ana Caroline", "Antônio", "Caroline", "Dafnis", "Daniel", "Daniele", "Douglas", "Edimar", "Edmilson", "Edvanio", "Fábio", "Izabel", "Laryssa", "Leandro", "Letícia", "Ludmilla", "Luis", "Márcia", "Marcinho", "Mariah", "Mayra", "Pr Douglas", "Rayssa", "Tales", "Thelma", "Thiagão", "Thiago Matos"];
 let scheduleRows = DEFAULT_scheduleRows.map(row => ({...row}));
 let members = [...DEFAULT_MEMBERS];
-let cloudAdminEmails = [];
 let cloudAdminConfigured = false;
+let cloudIsAdmin = false; // resultado do GET /api/appwrite/me
 let scheduleDirty = false;
 const SCHEDULE_ROLE_LABELS = {
   minister: 'Ministro', back1: 'Back', back2: 'Back', back3: 'Back', bass: 'Baixo', drums: 'Bateria', guitar: 'Guitarra', keyboard: 'Teclado', sound: 'Tec. Som'
@@ -122,6 +138,7 @@ const el = {
   currentTime: document.getElementById('currentTime'),
   durationTime: document.getElementById('durationTime'),
   volumeBar: document.getElementById('volumeBar'),
+  closePlayerBtn: document.getElementById('closePlayerBtn'),
 
   toneModal: document.getElementById('toneModal'),
   closeTone: document.getElementById('closeTone'),
@@ -178,12 +195,17 @@ const el = {
   loadingMessage: document.getElementById('loadingMessage'),
   loginScreen: document.getElementById('loginScreen'),
   loginName: document.getElementById('loginName'),
+  loginRole: document.getElementById('loginRole'),
   loginEmail: document.getElementById('loginEmail'),
   loginPassword: document.getElementById('loginPassword'),
+  loginPasswordConfirm: document.getElementById('loginPasswordConfirm'),
   loginNameField: document.getElementById('loginNameField'),
+  loginRoleField: document.getElementById('loginRoleField'),
   loginEmailField: document.getElementById('loginEmailField'),
   loginPasswordField: document.getElementById('loginPasswordField'),
+  loginPasswordConfirmField: document.getElementById('loginPasswordConfirmField'),
   togglePasswordBtn: document.getElementById('togglePasswordBtn'),
+  togglePasswordConfirmBtn: document.getElementById('togglePasswordConfirmBtn'),
   rememberSession: document.getElementById('rememberSession'),
   recoverPasswordBtn: document.getElementById('recoverPasswordBtn'),
   modeLoginBtn: document.getElementById('modeLoginBtn'),
@@ -210,23 +232,23 @@ const el = {
   scheduleDayFilter: document.getElementById('scheduleDayFilter'),
   scheduleRoleFilter: document.getElementById('scheduleRoleFilter'),
   scheduleMemberFilter: document.getElementById('scheduleMemberFilter'),
+  scheduleMineOnly: document.getElementById('scheduleMineOnly'),
+  scheduleMonthPicker: document.getElementById('scheduleMonthPicker'),
+  schedulePrevMonthBtn: document.getElementById('schedulePrevMonthBtn'),
+  scheduleNextMonthBtn: document.getElementById('scheduleNextMonthBtn'),
   scheduleClearBtn: document.getElementById('scheduleClearBtn'),
   schedulePrintBtn: document.getElementById('schedulePrintBtn'),
   scheduleSaveBtn: document.getElementById('scheduleSaveBtn'),
   scheduleEditStatus: document.getElementById('scheduleEditStatus'),
   scheduleSummary: document.getElementById('scheduleSummary'),
-  scheduleTableBody: document.getElementById('scheduleTableBody')
+  scheduleTableBody: document.getElementById('scheduleTableBody'),
+  whatsappSetlistDetail: document.getElementById('whatsappSetlistDetail'),
+  printSetlistDetail: document.getElementById('printSetlistDetail'),
+  changeToneModal: document.getElementById('changeToneModal'),
+  closeChangeTone: document.getElementById('closeChangeTone'),
+  changeToneApplyBtn: document.getElementById('changeToneApplyBtn'),
+  changeToneResetBtn: document.getElementById('changeToneResetBtn')
 };
-
-document.title = cfg.APP_TITLE;
-
-initAppwriteClient();
-loadAppwriteServerConfig().finally(initSessionUI);
-bindEvents();
-initSchedule();
-applyTheme(loadJSON('vs_theme_v1', 'dark'));
-showLoading('Carregando biblioteca e organizando o ambiente...');
-loadLibrary().then(() => { readDeepLinks(); routeInternalPage(); if (loadJSON(SESSION_KEY, null)?.name) maybeLaunchTour(); });
 
 function setPlayButtonState(isPlaying){
   if (!el.playPauseBtn) return;
@@ -236,8 +258,7 @@ function setPlayButtonState(isPlaying){
 
 function bindEvents(){
   window.addEventListener('hashchange', routeInternalPage);
-  el.search.addEventListener('input', onGlobalSearchInput);
-  el.search.addEventListener('keydown', onGlobalSearchKeydown);
+  el.search.addEventListener('input', render);
   el.viewThumbBtn.addEventListener('click', () => setViewMode('thumbnails'));
   el.viewDetailBtn.addEventListener('click', () => setViewMode('details'));
   el.musicFilter.addEventListener('change', render);
@@ -255,17 +276,12 @@ function bindEvents(){
   el.randomBtn.addEventListener('click', () => {
     const list = getFiltered();
     if (!list.length) return;
-    randomContinuousMode = true;
-    shuffleMode = true;
-    el.shuffleBtn?.classList.add('favorites-active');
-    playTrack(list[Math.floor(Math.random() * list.length)], 0, list, { randomContinuous: true });
-    toast('Reprodução aleatória contínua iniciada.');
+    playTrack(list[Math.floor(Math.random() * list.length)], 0, list);
   });
   el.copyLinkBtn.addEventListener('click', () => copyText(location.origin + location.pathname, 'Link do sistema copiado.'));
 
   el.shuffleBtn.addEventListener('click', () => {
     shuffleMode = !shuffleMode;
-    if (!shuffleMode) randomContinuousMode = false;
     el.shuffleBtn.classList.toggle('favorites-active', shuffleMode);
   });
   el.repeatBtn.addEventListener('click', () => {
@@ -275,6 +291,7 @@ function bindEvents(){
   el.prevBtn.addEventListener('click', playPrev);
   el.nextBtn.addEventListener('click', playNext);
   el.playPauseBtn.addEventListener('click', togglePlayPause);
+  if (el.closePlayerBtn) el.closePlayerBtn.addEventListener('click', closePlayer);
   el.progressBar.addEventListener('input', onSeek);
   el.volumeBar.addEventListener('input', () => el.audio.volume = Number(el.volumeBar.value) / 100);
   el.audio.volume = 1;
@@ -282,7 +299,7 @@ function bindEvents(){
   el.audio.addEventListener('pause', () => setPlayButtonState(false));
   el.audio.addEventListener('timeupdate', syncProgressUI);
   el.audio.addEventListener('loadedmetadata', syncProgressUI);
-  el.audio.addEventListener('ended', handleAudioEnded);
+  el.audio.addEventListener('ended', () => { setPlayButtonState(false); });
 
   el.closeTone.addEventListener('click', closeToneModal);
   el.toneModal.addEventListener('click', e => { if (e.target === el.toneModal) closeToneModal(); });
@@ -356,19 +373,40 @@ function bindEvents(){
   if (el.profileStartTourBtn) el.profileStartTourBtn.addEventListener('click', () => { closeProfileModal(); startGuidedTour(); });
   if (el.profileLogoutBtn) el.profileLogoutBtn.addEventListener('click', () => { closeProfileModal(); logoutSession(); });
   ['loginName','loginEmail','loginPassword'].forEach(key => { const node = el[key]; if (node) node.addEventListener('input', () => validateAuthField(key)); });
-  if (el.loginName) el.loginName.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
-  if (el.loginEmail) el.loginEmail.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
+  if (el.loginName) el.loginName.addEventListener('keydown', e => { if (e.key === 'Enter') authMode === 'register' ? createAccount() : enterSystem(); });
+  if (el.loginEmail) el.loginEmail.addEventListener('keydown', e => { if (e.key === 'Enter') authMode === 'register' ? createAccount() : enterSystem(); });
   if (el.loginPassword) el.loginPassword.addEventListener('keydown', e => { if (e.key === 'Enter') authMode === 'register' ? createAccount() : enterSystem(); });
   if (el.logoutBtn) el.logoutBtn.addEventListener('click', logoutSession);
 
 
   if (el.scheduleSearch) el.scheduleSearch.addEventListener('input', renderSchedule);
   if (el.scheduleDayFilter) el.scheduleDayFilter.addEventListener('change', renderSchedule);
+  if (el.scheduleRoleFilter) el.scheduleRoleFilter.addEventListener('change', renderSchedule);
   if (el.scheduleMemberFilter) el.scheduleMemberFilter.addEventListener('change', renderSchedule);
+  if (el.scheduleMineOnly) el.scheduleMineOnly.addEventListener('change', renderSchedule);
+  if (el.scheduleMonthPicker) el.scheduleMonthPicker.addEventListener('change', (e) => changeScheduleMonth(e.target.value));
+  if (el.schedulePrevMonthBtn) el.schedulePrevMonthBtn.addEventListener('click', () => shiftScheduleMonth(-1));
+  if (el.scheduleNextMonthBtn) el.scheduleNextMonthBtn.addEventListener('click', () => shiftScheduleMonth(1));
   if (el.scheduleTableBody) el.scheduleTableBody.addEventListener('change', onScheduleSelectChange);
   if (el.scheduleSaveBtn) el.scheduleSaveBtn.addEventListener('click', () => saveScheduleState(true));
   if (el.scheduleClearBtn) el.scheduleClearBtn.addEventListener('click', clearScheduleFilters);
   if (el.schedulePrintBtn) el.schedulePrintBtn.addEventListener('click', () => window.print());
+
+  // Setlist detail: WhatsApp e Imprimir
+  if (el.whatsappSetlistDetail) el.whatsappSetlistDetail.addEventListener('click', () => {
+    if (currentSetlistDetailId) shareSetlistWhatsApp(currentSetlistDetailId);
+  });
+  if (el.printSetlistDetail) el.printSetlistDetail.addEventListener('click', () => {
+    if (currentSetlistDetailId) printSetlist(currentSetlistDetailId);
+  });
+
+  // Modal de alterar tom dentro do repertório
+  if (el.closeChangeTone) el.closeChangeTone.addEventListener('click', closeChangeToneModal);
+  if (el.changeToneApplyBtn) el.changeToneApplyBtn.addEventListener('click', applyChangeTone);
+  if (el.changeToneResetBtn) el.changeToneResetBtn.addEventListener('click', resetChangeTone);
+  if (el.changeToneModal) el.changeToneModal.addEventListener('click', (e) => {
+    if (e.target === el.changeToneModal) closeChangeToneModal();
+  });
 
   document.querySelectorAll('.tutorial-item').forEach(item => {
     item.addEventListener('toggle', () => {
@@ -378,26 +416,6 @@ function bindEvents(){
   });
 }
 
-
-function onGlobalSearchInput(){
-  render();
-  const query = String(el.search?.value || '').trim();
-  if (getPageFromHash() === 'home' && query) {
-    location.hash = '#biblioteca';
-    setTimeout(() => { routeInternalPage(); render(); }, 0);
-  }
-}
-
-function onGlobalSearchKeydown(event){
-  if (event.key !== 'Enter') return;
-  const query = String(el.search?.value || '').trim();
-  if (!query) return;
-  if (getPageFromHash() !== 'library') {
-    event.preventDefault();
-    location.hash = '#biblioteca';
-    setTimeout(() => { routeInternalPage(); render(); }, 0);
-  }
-}
 
 function getPageFromHash(){
   const hash = (location.hash || '#inicio').replace('#','');
@@ -467,10 +485,22 @@ async function loadAppwriteServerConfig(){
     const res = await fetch('/api/appwrite/config');
     if (!res.ok) return;
     const data = await res.json();
-    if (Array.isArray(data.adminEmails)) cloudAdminEmails = data.adminEmails.map(e => String(e).toLowerCase());
     cloudAdminConfigured = Boolean(data.adminConfigured);
   } catch (error) {
     console.warn('Configuração Appwrite do servidor não carregada:', error);
+  }
+}
+async function loadCurrentUserAdminFlag(){
+  cloudIsAdmin = false;
+  if (!authUser || !appwriteAccount) return;
+  try {
+    const jwt = await getAuthJwt();
+    const res = await fetch('/api/appwrite/me', { headers: { Authorization: `Bearer ${jwt}` } });
+    if (!res.ok) return;
+    const data = await res.json();
+    cloudIsAdmin = Boolean(data.isAdmin);
+  } catch (error) {
+    console.warn('Não foi possível verificar permissão de admin:', error);
   }
 }
 
@@ -485,12 +515,9 @@ function setAuthMode(mode = 'login'){
   el.createAccountBtn?.classList.toggle('btn-secondary', !isRegister);
   el.enterSystemBtn?.classList.toggle('btn-primary', !isRegister);
   el.enterSystemBtn?.classList.toggle('btn-secondary', isRegister);
-  if (el.loginScreen) el.loginScreen.dataset.authMode = authMode;
-  if (el.loginNameField) {
-    el.loginNameField.classList.toggle('hidden', !isRegister);
-    el.loginNameField.style.display = isRegister ? '' : 'none';
-  }
+  el.loginNameField?.classList.toggle('hidden', !isRegister);
   el.recoverPasswordBtn?.classList.toggle('hidden', isRegister);
+  if (el.loginPassword) el.loginPassword.autocomplete = isRegister ? 'new-password' : 'current-password';
   if (el.authModeHint) el.authModeHint.textContent = isRegister
     ? 'Crie sua conta informando nome, e-mail e senha.'
     : 'Entre com seu e-mail e senha para acessar sua conta.';
@@ -502,7 +529,6 @@ function setAuthMode(mode = 'login'){
   setAuthStatus('', false);
   ['loginName','loginEmail','loginPassword'].forEach(validateAuthField);
 }
-
 function togglePasswordVisibility(inputKey = 'loginPassword', buttonKey = 'togglePasswordBtn'){
   const input = el[inputKey];
   const button = el[buttonKey];
@@ -579,6 +605,27 @@ function showLoading(message = 'Preparando a plataforma...'){
   el.loadingScreen?.classList.remove('hidden');
 }
 function hideLoading(){ el.loadingScreen?.classList.add('hidden'); }
+
+// Skeleton inline na seção biblioteca: mostra placeholder bonito enquanto
+// Drive responde. UI da home, escala e player ficam todas usáveis.
+function showLibrarySkeleton(){
+  if (!el.trackList) return;
+  if (el.status) el.status.textContent = 'Carregando biblioteca...';
+  el.trackList.innerHTML = `
+    <div class="library-skeleton" aria-busy="true" aria-label="Carregando biblioteca">
+      ${Array.from({length: 6}).map(() => `
+        <div class="skeleton-card">
+          <div class="skeleton-cover"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton-line skeleton-line-lg"></div>
+            <div class="skeleton-line skeleton-line-md"></div>
+            <div class="skeleton-line skeleton-line-sm"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
 function showLogin(){
   setAuthMode(authMode || 'login');
   el.loginScreen?.classList.remove('hidden');
@@ -600,6 +647,7 @@ async function applyAuthUser(user){
     el.userBadge.innerHTML = `<span class="user-badge-avatar">${esc(getInitials(session.name))}</span><span class="user-badge-text">${esc(role ? `${session.name} • ${role}` : session.name)}</span>`;
     el.userBadge.classList.remove('hidden');
   }
+  await loadCurrentUserAdminFlag();
   updateProfileModal();
   el.logoutBtn?.classList.remove('hidden');
   hideLogin();
@@ -687,6 +735,7 @@ async function recoverPassword(){
 async function logoutSession(){
   try { await appwriteAccount?.deleteSession('current'); } catch {}
   authUser = null;
+  cloudIsAdmin = false;
   localStorage.removeItem(SESSION_KEY);
   if (el.userBadge) {
     el.userBadge.innerHTML = '';
@@ -699,21 +748,38 @@ async function logoutSession(){
 async function loadCloudState(){
   if (!authUser) return;
   try {
-    const [shared, userState, cloudMembers, cloudSchedule] = await Promise.all([
+    const monthKey = `monthlySchedule:${currentScheduleMonth}`;
+    const [shared, userState, cloudMembers, cloudScheduleNew, cloudScheduleLegacy] = await Promise.all([
       getSharedState('setlists'),
       getUserState('favorites'),
       getSharedState('members'),
-      getSharedState('monthlySchedule')
+      getSharedState(monthKey).catch(() => null),
+      // Compatibilidade com versão anterior (sem :YYYY-MM)
+      currentScheduleMonth === '2026-05' ? getSharedState('monthlySchedule').catch(() => null) : Promise.resolve(null)
     ]);
     if (Array.isArray(shared)) setlists = shared;
     if (Array.isArray(userState)) favorites = userState;
     if (Array.isArray(cloudMembers) && cloudMembers.length) members = normalizeMembers(cloudMembers);
-    if (Array.isArray(cloudSchedule) && cloudSchedule.length) scheduleRows = normalizeScheduleRows(cloudSchedule);
+
+    // Prioriza chave nova; se não existe e é o mês de Maio/2026, usa legado
+    const cloudSchedule = (Array.isArray(cloudScheduleNew) && cloudScheduleNew.length)
+      ? cloudScheduleNew
+      : (Array.isArray(cloudScheduleLegacy) && cloudScheduleLegacy.length ? cloudScheduleLegacy : null);
+
+    if (Array.isArray(cloudSchedule) && cloudSchedule.length) {
+      scheduleRows = normalizeScheduleRows(cloudSchedule);
+    } else if (currentScheduleMonth === '2026-05') {
+      scheduleRows = DEFAULT_scheduleRows.map(r => ({...r}));
+    } else {
+      // Mês novo sem dados — gera linhas vazias com domingos e quintas
+      scheduleRows = generateBlankScheduleForMonth(currentScheduleMonth);
+    }
+
     saveJSON('vs_setlists_v1', setlists);
     saveJSON('vs_favorites_v1', favorites);
     saveJSON('vs_members_v1', members);
-    saveJSON('vs_schedule_rows_v1', scheduleRows);
-    await seedScheduleDataIfNeeded(cloudMembers, cloudSchedule);
+    saveJSON(`vs_schedule_rows_${currentScheduleMonth}`, scheduleRows);
+    await seedScheduleDataIfNeeded(cloudMembers, cloudScheduleNew);
     updateStats();
     updateFavoriteCount();
     populateScheduleFilters();
@@ -725,6 +791,30 @@ async function loadCloudState(){
     toast('Não foi possível sincronizar com Appwrite. Usando dados locais.');
   }
 }
+
+// Gera estrutura vazia para um mês: domingos e quintas
+function generateBlankScheduleForMonth(monthKey){
+  const m = /^(\d{4})-(\d{2})$/.exec(monthKey);
+  if (!m) return [];
+  const year = Number(m[1]);
+  const month = Number(m[2]) - 1;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const rows = [];
+  for (let d = 1; d <= lastDay; d++) {
+    const date = new Date(year, month, d);
+    const dow = date.getDay(); // 0=Domingo, 4=Quinta
+    if (dow === 0 || dow === 4) {
+      const dayName = dow === 0 ? 'Domingo' : 'Quinta';
+      const dateStr = `${String(d).padStart(2,'0')}/${String(month+1).padStart(2,'0')}`;
+      rows.push({
+        day: dayName, date: dateStr,
+        minister:'', back1:'', back2:'', back3:'',
+        bass:'', drums:'', guitar:'', keyboard:'', sound:''
+      });
+    }
+  }
+  return rows;
+}
 async function getSharedState(key){
   const res = await fetch(`/api/appwrite/state/${encodeURIComponent(key)}`);
   if (!res.ok) throw new Error(await res.text());
@@ -733,12 +823,17 @@ async function getSharedState(key){
 }
 async function setSharedState(key, value){
   if (!authUser) return;
+  const jwt = await getAuthJwt();
   const res = await fetch(`/api/appwrite/state/${encodeURIComponent(key)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
     body: JSON.stringify({ value, updatedBy: authUser.name || authUser.email })
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    let message = await res.text();
+    try { message = JSON.parse(message).error || message; } catch {}
+    throw new Error(message);
+  }
   return res.json();
 }
 async function getAuthJwt(){
@@ -747,8 +842,7 @@ async function getAuthJwt(){
   return data.jwt;
 }
 function isScheduleAdmin(){
-  const email = String(authUser?.email || '').toLowerCase();
-  return Boolean(email && cloudAdminEmails.includes(email));
+  return cloudIsAdmin === true;
 }
 async function setAdminSharedState(key, value){
   if (!authUser) throw new Error('Faça login para salvar.');
@@ -783,11 +877,14 @@ function normalizeScheduleRows(rows){
     bass: row.bass || '', drums: row.drums || '', guitar: row.guitar || '', keyboard: row.keyboard || '', sound: row.sound || ''
   }));
 }
-async function seedScheduleDataIfNeeded(cloudMembers, cloudSchedule){
+async function seedScheduleDataIfNeeded(cloudMembers, cloudScheduleForCurrentMonth){
   if (!isScheduleAdmin()) return;
   const tasks = [];
   if (!Array.isArray(cloudMembers) || !cloudMembers.length) tasks.push(setAdminSharedState('members', members));
-  if (!Array.isArray(cloudSchedule) || !cloudSchedule.length) tasks.push(setAdminSharedState('monthlySchedule', scheduleRows));
+  // Apenas seed do mês atual se ele estiver vazio na nuvem E for o mês default (2026-05)
+  if ((!Array.isArray(cloudScheduleForCurrentMonth) || !cloudScheduleForCurrentMonth.length) && currentScheduleMonth === '2026-05') {
+    tasks.push(setAdminSharedState(`monthlySchedule:${currentScheduleMonth}`, scheduleRows));
+  }
   if (!tasks.length) return;
   try {
     await Promise.all(tasks);
@@ -805,11 +902,11 @@ async function saveScheduleState(showToast = false){
     setScheduleEditStatus('Salvando escala no Appwrite...', 'saving');
     await Promise.all([
       setAdminSharedState('members', members),
-      setAdminSharedState('monthlySchedule', scheduleRows)
+      setAdminSharedState(`monthlySchedule:${currentScheduleMonth}`, scheduleRows)
     ]);
     scheduleDirty = false;
     saveJSON('vs_members_v1', members);
-    saveJSON('vs_schedule_rows_v1', scheduleRows);
+    saveJSON(`vs_schedule_rows_${currentScheduleMonth}`, scheduleRows);
     setScheduleEditStatus('Escala salva no banco de dados Appwrite.', 'admin');
     if (showToast) toast('Escala salva com sucesso.');
   } catch (error) {
@@ -833,12 +930,17 @@ async function getUserState(key){
 }
 async function setUserState(key, value){
   if (!authUser) return;
+  const jwt = await getAuthJwt();
   const res = await fetch(`/api/appwrite/user-state/${encodeURIComponent(authUser.$id)}/${encodeURIComponent(key)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jwt}` },
     body: JSON.stringify({ value, userName: authUser.name || authUser.email })
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    let message = await res.text();
+    try { message = JSON.parse(message).error || message; } catch {}
+    throw new Error(message);
+  }
   return res.json();
 }
 function saveFavoritesState(){
@@ -972,34 +1074,149 @@ function finishGuidedTour(){
 }
 
 function initSchedule(){
-  const localMembers = loadJSON('vs_members_v1', null);
-  const localSchedule = loadJSON('vs_schedule_rows_v1', null);
-  if (Array.isArray(localMembers)) members = normalizeMembers(localMembers);
-  if (Array.isArray(localSchedule)) scheduleRows = normalizeScheduleRows(localSchedule);
+  // Determina mês inicial: se é maio/2026 mostra o mês com dados; senão, o mês atual
+  const now = new Date();
+  const yyyymm = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  // Tenta o mês atual primeiro; se cache local existir, usa; senão, default para 2026-05
+  const stored = loadJSON('vs_current_schedule_month', null);
+  if (stored && /^\d{4}-\d{2}$/.test(stored)) {
+    currentScheduleMonth = stored;
+  } else if (loadJSON(`vs_schedule_rows_${yyyymm}`, null)) {
+    currentScheduleMonth = yyyymm;
+  } else {
+    currentScheduleMonth = '2026-05';
+  }
+  loadLocalScheduleForMonth();
+  buildScheduleMonthPicker();
+  updateScheduleTitle();
   populateScheduleFilters();
   renderSchedule();
 }
+
+function loadLocalScheduleForMonth(){
+  const localMembers = loadJSON('vs_members_v1', null);
+  const localSchedule = loadJSON(`vs_schedule_rows_${currentScheduleMonth}`, null)
+    // Compatibilidade com versão antiga (vs_schedule_rows_v1 existia para Maio/2026)
+    ?? (currentScheduleMonth === '2026-05' ? loadJSON('vs_schedule_rows_v1', null) : null);
+
+  if (Array.isArray(localMembers)) members = normalizeMembers(localMembers);
+  if (Array.isArray(localSchedule) && localSchedule.length) {
+    scheduleRows = normalizeScheduleRows(localSchedule);
+  } else if (currentScheduleMonth === '2026-05') {
+    scheduleRows = DEFAULT_scheduleRows.map(r => ({...r}));
+  } else {
+    scheduleRows = generateBlankScheduleForMonth(currentScheduleMonth);
+  }
+  scheduleDirty = false;
+}
+
+function updateScheduleTitle(){
+  const titleEl = document.getElementById('scheduleTitle');
+  if (!titleEl) return;
+  const { year, month } = getScheduleMonthYear();
+  titleEl.textContent = `Escala Louvor Ávida — ${MONTH_NAMES_PT[month]} ${year}`;
+}
+
+function buildScheduleMonthPicker(){
+  const picker = document.getElementById('scheduleMonthPicker');
+  if (!picker) return;
+  // Gera 24 meses ao redor do mês atual (12 antes, 12 depois) + garantir 2026-05 presente
+  const now = new Date();
+  const baseYear = now.getFullYear();
+  const baseMonth = now.getMonth();
+  const set = new Set();
+  for (let i = -12; i <= 12; i++) {
+    const d = new Date(baseYear, baseMonth + i, 1);
+    set.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  set.add('2026-05'); // sempre disponível
+  set.add(currentScheduleMonth); // mês atual selecionado
+  const list = [...set].sort();
+  picker.innerHTML = list.map(key => {
+    const [y, m] = key.split('-');
+    const label = `${MONTH_NAMES_PT[Number(m)-1]} ${y}`;
+    return `<option value="${key}" ${key === currentScheduleMonth ? 'selected' : ''}>${label}</option>`;
+  }).join('');
+}
+
+async function changeScheduleMonth(newMonth){
+  if (!/^\d{4}-\d{2}$/.test(newMonth)) return;
+  if (newMonth === currentScheduleMonth) return;
+
+  if (scheduleDirty) {
+    const ok = await openConfirmModal({
+      title: 'Alterações não salvas',
+      message: 'Existem mudanças no mês atual que ainda não foram salvas. Trocar de mês descartará essas alterações.',
+      okLabel: 'Descartar e trocar',
+      danger: true
+    });
+    if (!ok) return;
+  }
+
+  currentScheduleMonth = newMonth;
+  saveJSON('vs_current_schedule_month', currentScheduleMonth);
+  loadLocalScheduleForMonth();
+  updateScheduleTitle();
+  buildScheduleMonthPicker();
+  populateScheduleFilters();
+  renderSchedule();
+
+  if (authUser) {
+    // Recarrega dados do mês escolhido
+    try {
+      const monthKey = `monthlySchedule:${currentScheduleMonth}`;
+      const cloudSchedule = await getSharedState(monthKey).catch(() => null);
+      if (Array.isArray(cloudSchedule) && cloudSchedule.length) {
+        scheduleRows = normalizeScheduleRows(cloudSchedule);
+        saveJSON(`vs_schedule_rows_${currentScheduleMonth}`, scheduleRows);
+        renderSchedule();
+      }
+    } catch (error) {
+      console.warn('Falha ao buscar mês na nuvem:', error);
+    }
+  }
+}
+
+function shiftScheduleMonth(delta){
+  const { year, month } = getScheduleMonthYear();
+  const d = new Date(year, month + delta, 1);
+  const next = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  changeScheduleMonth(next);
+}
 function populateScheduleFilters(){
-  if (!el.scheduleDayFilter) return;
+  if (!el.scheduleDayFilter || !el.scheduleRoleFilter) return;
   const currentDay = el.scheduleDayFilter.value;
+  const currentRole = el.scheduleRoleFilter.value;
   const currentMember = el.scheduleMemberFilter?.value || '';
   const days = [...new Set(scheduleRows.map(row => row.day))];
   el.scheduleDayFilter.innerHTML = '<option value="">Todos os dias</option>' + days.map(day => `<option value="${esc(day)}">${esc(day)}</option>`).join('');
+  const roles = Object.entries(SCHEDULE_ROLE_LABELS).map(([key,label]) => ({key,label}));
+  el.scheduleRoleFilter.innerHTML = '<option value="">Todas as funções</option>' + roles.map(role => `<option value="${role.key}">${esc(role.label)}</option>`).join('');
   if (el.scheduleMemberFilter) {
     el.scheduleMemberFilter.innerHTML = '<option value="">Todos os membros</option>' + members.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join('');
     if (members.includes(currentMember)) el.scheduleMemberFilter.value = currentMember;
   }
   if (days.includes(currentDay)) el.scheduleDayFilter.value = currentDay;
+  if (roles.some(r => r.key === currentRole)) el.scheduleRoleFilter.value = currentRole;
 }
 function getFilteredScheduleRows(){
   const q = normalize(el.scheduleSearch?.value || '');
   const day = el.scheduleDayFilter?.value || '';
+  const role = el.scheduleRoleFilter?.value || '';
   const member = el.scheduleMemberFilter?.value || '';
+  const mineOnly = isMineOnly();
+  const myName = mineOnly ? getMyName() : '';
   return scheduleRows.filter(row => {
     if (day && row.day !== day) return false;
+    if (mineOnly && !rowIncludesMember(row, myName)) return false;
     if (member) {
       const values = Object.keys(SCHEDULE_ROLE_LABELS).map(field => row[field] || '');
       if (!values.some(value => normalize(value) === normalize(member))) return false;
+    }
+    if (role) {
+      const value = normalize(row[role] || '');
+      if (q && !value.includes(q)) return false;
+      return true;
     }
     if (!q) return true;
     const blob = normalize(Object.values(row).join(' '));
@@ -1031,7 +1248,7 @@ function renderScheduleRow(row, q){
   const nextClass = isNextSchedule(row) ? ' schedule-row-next' : '';
   const rowIndex = scheduleRows.findIndex(item => item.day === row.day && item.date === row.date);
   return `<tr class="${row.day === 'Quinta' ? 'schedule-row-alt' : ''}${nextClass}" data-row-index="${rowIndex}">
-    <td class="schedule-date"><span class="schedule-day-name">${esc(row.day)}</span><strong>${esc(row.date)}</strong></td>
+    <td class="schedule-date" data-label="Data"><span class="schedule-day-name">${esc(row.day)}</span><strong>${esc(row.date)}</strong></td>
     ${fields.map(field => `<td data-label="${esc(SCHEDULE_ROLE_LABELS[field])}">${renderScheduleCell(row, rowIndex, field, q)}</td>`).join('')}
   </tr>`;
 }
@@ -1057,7 +1274,7 @@ function onScheduleSelectChange(event){
   scheduleRows[rowIndex][field] = select.value;
   select.classList.add('changed', 'schedule-save-pulse');
   scheduleDirty = true;
-  saveJSON('vs_schedule_rows_v1', scheduleRows);
+  saveJSON(`vs_schedule_rows_${currentScheduleMonth}`, scheduleRows);
   renderScheduleSummary(getFilteredScheduleRows());
   setScheduleEditStatus('Alteração pendente. Clique em “Salvar escala” para gravar no banco de dados.', 'admin');
 }
@@ -1088,15 +1305,34 @@ function renderScheduleSummary(rows){
 function clearScheduleFilters(){
   if (el.scheduleSearch) el.scheduleSearch.value = '';
   if (el.scheduleDayFilter) el.scheduleDayFilter.value = '';
+  if (el.scheduleRoleFilter) el.scheduleRoleFilter.value = '';
   if (el.scheduleMemberFilter) el.scheduleMemberFilter.value = '';
+  if (el.scheduleMineOnly) el.scheduleMineOnly.checked = false;
   renderSchedule();
 }
+function getScheduleMonthYear(){
+  // currentScheduleMonth no formato 'YYYY-MM' → { year, month (0-11) }
+  const m = /^(\d{4})-(\d{2})$/.exec(currentScheduleMonth);
+  if (!m) return { year: 2026, month: 4 };
+  return { year: Number(m[1]), month: Number(m[2]) - 1 };
+}
+
 function isNextSchedule(row){
-  const [day, month] = row.date.split('/').map(Number);
+  const [day, monthFromRow] = String(row.date || '').split('/').map(Number);
+  if (!Number.isFinite(day) || !Number.isFinite(monthFromRow)) return false;
+  const { year, month } = getScheduleMonthYear();
+  // Só destaca "próxima" se estamos vendo o mês correspondente ao ano/mês atuais
   const now = new Date();
-  const target = new Date(2026, month - 1, day, 23, 59, 59);
-  if (now.getFullYear() !== 2026 || now.getMonth() !== 4) return false;
-  const futureRows = scheduleRows.map(r => ({ row: r, date: new Date(2026, Number(r.date.split('/')[1]) - 1, Number(r.date.split('/')[0]), 23, 59, 59) })).filter(item => item.date >= new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+  if (now.getFullYear() !== year || now.getMonth() !== month) return false;
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const futureRows = scheduleRows
+    .map(r => {
+      const [d, mo] = String(r.date || '').split('/').map(Number);
+      if (!Number.isFinite(d) || !Number.isFinite(mo)) return null;
+      return { row: r, date: new Date(year, mo - 1, d, 23, 59, 59) };
+    })
+    .filter(item => item && item.date >= today);
   futureRows.sort((a,b) => a.date - b.date);
   return futureRows.length && futureRows[0].row.date === row.date && futureRows[0].row.day === row.day;
 }
@@ -1123,8 +1359,34 @@ function esc(str){ return String(str).replace(/[&<>'"]/g, ch => ({ '&':'&amp;','
 
 function detectKey(text){
   const s = String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const m = s.match(/(?:^|[\s_\-\(\[])((?:A|B|C|D|E|F|G)(?:#|b)?m?)(?:$|[\s_\-\)\]])/i);
-  return m ? m[1].toUpperCase().replace('M','m') : '—';
+  // Padrões aceitos (do mais específico para o mais genérico):
+  //   "Nome - D.mp3", "Nome (D).mp3", "Nome [D#m].mp3"
+  //   "Nome em D.mp3"
+  //   "Nome - D" no final do nome
+  // Exige separador claro antes do tom (espaço-traço-espaço, "em ", parênteses, colchetes)
+  // e que o tom apareça perto do final do arquivo
+  const noExt = s.replace(/\.[a-z0-9]+$/i, '');
+  const trimmed = noExt.trim();
+
+  // 1) Tom entre parênteses ou colchetes: "(D)", "[D#m]"
+  let m = trimmed.match(/[\(\[]([A-G][#b]?m?)[\)\]]\s*$/i);
+  if (m) return formatKey(m[1]);
+
+  // 2) Sufixo " - X" ou " — X" ou " em X" no final
+  m = trimmed.match(/(?:\s[-–—]\s|\s+em\s+)([A-G][#b]?m?)\s*$/i);
+  if (m) return formatKey(m[1]);
+
+  // 3) Última opção: " X" no final, mas só se for tom complexo (com #/b ou m) — evita falso positivo de letra solta
+  m = trimmed.match(/\s([A-G](?:[#b]m?|m))\s*$/);
+  if (m) return formatKey(m[1]);
+
+  return '—';
+}
+function formatKey(raw){
+  let value = String(raw).trim().replace('♯','#').replace('♭','b');
+  const minor = /m$/i.test(value);
+  value = value.replace(/m$/i,'').toUpperCase();
+  return `${value}${minor ? 'm' : ''}`;
 }
 function suggestTags(t){
   const text = normalize(`${t.name} ${t.singer} ${t.fileName}`);
@@ -1168,14 +1430,58 @@ async function listChildren(folderId){
   return files;
 }
 
-async function loadFolder(folderId, singerName = '', inheritedCover = '') {
-  const items = await listChildren(folderId);
+// Semáforo global: controla quantas chamadas Drive estão em vôo simultaneamente
+// no sistema todo (não por nível). Limite total mais alto que o por-nível
+// porque árvores profundas se beneficiam de muitas chamadas ao mesmo tempo.
+const DRIVE_CONCURRENCY_LIMIT = 12;
+let driveInflight = 0;
+const driveQueue = [];
+
+function acquireDriveSlot(){
+  return new Promise(resolve => {
+    if (driveInflight < DRIVE_CONCURRENCY_LIMIT) {
+      driveInflight++;
+      resolve();
+    } else {
+      driveQueue.push(resolve);
+    }
+  });
+}
+function releaseDriveSlot(){
+  driveInflight--;
+  if (driveQueue.length > 0) {
+    driveInflight++;
+    const next = driveQueue.shift();
+    next();
+  }
+}
+
+async function loadFolder(folderId, singerName = '', inheritedCover = '', depth = 0, visited = new Set(), onTracksFound = null) {
+  if (depth > 8) {
+    console.warn('Profundidade máxima atingida em', folderId);
+    return [];
+  }
+  if (visited.has(folderId)) {
+    console.warn('Loop detectado na pasta', folderId);
+    return [];
+  }
+  visited = new Set([...visited, folderId]);
+
+  // Aguarda slot disponível antes de fazer a chamada Drive
+  await acquireDriveSlot();
+  let items;
+  try {
+    items = await listChildren(folderId);
+  } finally {
+    releaseDriveSlot();
+  }
+
   const folders = items.filter(i => i.mimeType === 'application/vnd.google-apps.folder').sort(sortName);
   const files = items.filter(i => i.mimeType !== 'application/vnd.google-apps.folder').sort(sortName);
   const localCoverFile = files.find(f => imageExt.includes(getExt(f.name)));
   const cover = localCoverFile ? thumbnailUrl(localCoverFile.id) : inheritedCover;
 
-  let tracks = [];
+  const localTracks = [];
   for (const file of files) {
     const ext = getExt(file.name);
     if (!audioExt.includes(ext)) continue;
@@ -1188,46 +1494,163 @@ async function loadFolder(folderId, singerName = '', inheritedCover = '') {
       singer,
       key: detectKey(file.name),
       tags: [],
-      coverUrl: 'assets/logo-avida.jpg',
+      coverUrl: cover || 'assets/logo-avida.jpg',
       webViewLink: file.webViewLink || driveViewUrl(file.id)
     };
     track.tags = suggestTags(track);
-    tracks.push(track);
+    localTracks.push(track);
   }
 
-  for (const folder of folders) {
-    const nextSinger = singerName || folder.name;
-    const childTracks = await loadFolder(folder.id, nextSinger, cover);
-    tracks = tracks.concat(childTracks);
+  // Notifica o orquestrador assim que esta pasta terminou de processar
+  // suas próprias músicas, sem esperar as subpastas. Isso permite renderização
+  // progressiva: a UI vai sendo populada conforme cada pasta resolve.
+  if (localTracks.length && typeof onTracksFound === 'function') {
+    onTracksFound(localTracks);
   }
-  return tracks;
+
+  let allTracksHere = [...localTracks];
+
+  if (folders.length > 0) {
+    // Dispara TODAS as subpastas em paralelo — o semáforo global controla
+    // quantas vão de fato ao Drive ao mesmo tempo. Isso permite que pastas
+    // de níveis diferentes estejam sendo lidas simultaneamente.
+    const subResults = await Promise.all(
+      folders.map(folder => {
+        const nextSinger = singerName || folder.name;
+        return loadFolder(folder.id, nextSinger, cover, depth + 1, visited, onTracksFound)
+          .catch(err => {
+            console.warn(`Erro ao carregar subpasta "${folder.name}":`, err.message);
+            return [];
+          });
+      })
+    );
+    for (const childTracks of subResults) {
+      allTracksHere = allTracksHere.concat(childTracks);
+    }
+  }
+  return allTracksHere;
+}
+
+// Helper antigo, mantido para retrocompatibilidade caso alguma chamada use
+async function mapWithConcurrency(items, limit, fn){
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker(){
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = [];
+  for (let i = 0; i < Math.min(limit, items.length); i++) workers.push(worker());
+  await Promise.all(workers);
+  return results;
 }
 
 async function loadLibrary(force = false){
+  const cacheKey = 'vs_drive_cache_v10';
+  const SCHEMA_VERSION = 2;
+  const CACHE_FRESH_MS = 4 * 60 * 60 * 1000;
+
   try {
-    showLoading(force ? 'Atualizando biblioteca do Google Drive...' : 'Lendo Google Drive e organizando as músicas...');
-    el.status.textContent = 'Lendo Google Drive...';
-    const cacheKey = 'vs_drive_cache_v9';
-    if (!force) {
-      const cached = loadJSON(cacheKey, null);
-      if (cached && Array.isArray(cached.tracks) && cached.tracks.length) {
-        allTracks = cached.tracks;
-        afterLibraryLoaded();
-        el.status.textContent = 'Biblioteca carregada do cache';
-        hideLoading();
-        return;
+    const cached = !force ? loadJSON(cacheKey, null) : null;
+    const hasUsableCache = cached && cached.schemaVersion === SCHEMA_VERSION
+      && Array.isArray(cached.tracks) && cached.tracks.length;
+    const cacheAge = cached?.updatedAt ? Date.now() - cached.updatedAt : Infinity;
+    const cacheIsFresh = cacheAge < CACHE_FRESH_MS;
+
+    if (hasUsableCache) {
+      allTracks = cached.tracks;
+      afterLibraryLoaded();
+      el.status.textContent = cacheIsFresh
+        ? 'Biblioteca carregada do cache'
+        : 'Biblioteca em uso (atualizando em segundo plano…)';
+      if (!cacheIsFresh) {
+        refreshLibraryInBackground(cacheKey, SCHEMA_VERSION);
+      }
+      return;
+    }
+
+    // === Sem cache: carga progressiva ===
+    // Mostra músicas conforme cada pasta retorna, em vez de esperar a árvore inteira.
+    if (force && el.status) el.status.textContent = 'Atualizando biblioteca…';
+    else if (el.status) el.status.textContent = 'Lendo Google Drive...';
+
+    let progressTracks = [];
+    let renderScheduled = false;
+    let firstBatchRendered = false;
+
+    // Throttle de render: agenda no próximo frame em vez de re-renderizar
+    // a cada pasta (que poderia disparar dezenas de renders por segundo).
+    function scheduleProgressRender(){
+      if (renderScheduled) return;
+      renderScheduled = true;
+      const tick = () => {
+        renderScheduled = false;
+        // Ordena já — keep insertion stable enough para não pular mucho na tela
+        allTracks = [...progressTracks].sort((a,b) =>
+          a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'})
+        );
+        if (!firstBatchRendered) {
+          firstBatchRendered = true;
+          afterLibraryLoaded();
+        } else {
+          // Só atualiza dados visíveis e contadores, sem refazer a UI inteira
+          updateStats();
+          render();
+        }
+        if (el.status) {
+          el.status.textContent = `Carregando… ${progressTracks.length} música${progressTracks.length === 1 ? '' : 's'}`;
+        }
+      };
+      // requestAnimationFrame é melhor para fluidez, mas se aba está em background
+      // ele não dispara — fallback para setTimeout depois de 100ms garante.
+      if (document.hidden) {
+        setTimeout(tick, 0);
+      } else {
+        requestAnimationFrame(tick);
       }
     }
-    allTracks = (await loadFolder(cfg.ROOT_FOLDER_ID)).sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
-    saveJSON(cacheKey, { updatedAt: Date.now(), tracks: allTracks });
-    afterLibraryLoaded();
-    el.status.textContent = 'Biblioteca carregada';
-    hideLoading();
+
+    const onTracksFound = (newTracks) => {
+      progressTracks = progressTracks.concat(newTracks);
+      scheduleProgressRender();
+    };
+
+    const finalTracks = await loadFolder(cfg.ROOT_FOLDER_ID, '', '', 0, new Set(), onTracksFound);
+    allTracks = finalTracks.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
+    saveJSON(cacheKey, { schemaVersion: SCHEMA_VERSION, updatedAt: Date.now(), tracks: allTracks });
+    if (!firstBatchRendered) afterLibraryLoaded();
+    else { updateStats(); render(); }
+    el.status.textContent = `Biblioteca carregada • ${allTracks.length} músicas`;
   } catch (error) {
     console.error(error);
-    hideLoading();
     el.status.textContent = 'Erro ao carregar a biblioteca';
     el.trackList.innerHTML = `<div class="empty">${esc(error.message || 'Erro ao carregar')}</div>`;
+  }
+}
+
+async function refreshLibraryInBackground(cacheKey, schemaVersion){
+  try {
+    const fresh = (await loadFolder(cfg.ROOT_FOLDER_ID))
+      .sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
+    // Compara hash simples para ver se mudou algo
+    const oldIds = JSON.stringify(allTracks.map(t => t.id).sort());
+    const newIds = JSON.stringify(fresh.map(t => t.id).sort());
+    saveJSON(cacheKey, { schemaVersion, updatedAt: Date.now(), tracks: fresh });
+    if (oldIds !== newIds || allTracks.length !== fresh.length) {
+      allTracks = fresh;
+      afterLibraryLoaded();
+      el.status.textContent = 'Biblioteca atualizada';
+      toast('Biblioteca atualizada com novidades.');
+    } else {
+      el.status.textContent = 'Biblioteca atualizada';
+    }
+  } catch (error) {
+    console.warn('Atualização em segundo plano falhou:', error.message);
+    // Não mostra erro pro usuário — ele já tem o cache funcionando
+    el.status.textContent = 'Biblioteca carregada do cache';
   }
 }
 
@@ -1427,27 +1850,10 @@ function bindTrackCardEvents(container){
   });
 }
 
-function handleAudioEnded(){
-  setPlayButtonState(false);
-  if (!randomContinuousMode) return;
-
-  const queue = currentQueue.length ? currentQueue : getFiltered();
-  if (!queue.length) return;
-
-  let nextIndex = Math.floor(Math.random() * queue.length);
-  if (queue.length > 1 && nextIndex === currentIndex) {
-    nextIndex = (nextIndex + 1) % queue.length;
-  }
-
-  currentIndex = nextIndex;
-  playTrack(queue[nextIndex], null, queue, { randomContinuous: true });
-}
-
 function findTrack(id){ return allTracks.find(t => t.id === id); }
 
-function playTrack(track, semitones = null, queue = currentQueue, options = {}){
+function playTrack(track, semitones = null, queue = currentQueue){
   if (!track) return;
-  randomContinuousMode = Boolean(options.randomContinuous);
   document.body.classList.add('player-visible');
   document.getElementById('playerArea')?.classList.remove('player-hidden');
   if (semitones === null || semitones === undefined) semitones = Number(track.repertoireSemitones || 0);
@@ -1465,6 +1871,27 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   el.nowCover.src = track.coverUrl || 'assets/logo-avida.jpg';
   syncProgressUI();
 }
+function closePlayer(){
+  if (el.audio) {
+    el.audio.pause();
+    el.audio.removeAttribute('src');
+    el.audio.load();
+  }
+  current = null;
+  currentIndex = -1;
+  currentQueue = [];
+  document.body.classList.remove('player-visible');
+  document.getElementById('playerArea')?.classList.add('player-hidden');
+  if (el.nowTitle) el.nowTitle.textContent = 'Selecione uma música';
+  if (el.nowSinger) el.nowSinger.textContent = 'Igreja Amor e Vida';
+  if (el.nowCover) el.nowCover.src = 'assets/logo-avida.jpg';
+  if (el.progressBar) el.progressBar.value = 0;
+  if (el.progressFill) el.progressFill.style.width = '0%';
+  if (el.currentTime) el.currentTime.textContent = '0:00';
+  if (el.durationTime) el.durationTime.textContent = '0:00';
+  setPlayButtonState(false);
+}
+
 function togglePlayPause(){
   if (!el.audio.src && allTracks.length) { playTrack(getFiltered()[0] || allTracks[0], 0, getFiltered()); return; }
   if (el.audio.paused) el.audio.play(); else el.audio.pause();
@@ -1473,13 +1900,13 @@ function playPrev(){
   const queue = currentQueue.length ? currentQueue : getFiltered();
   if (!queue.length) return;
   currentIndex = currentIndex <= 0 ? queue.length - 1 : currentIndex - 1;
-  playTrack(queue[currentIndex], null, queue, { randomContinuous: randomContinuousMode });
+  playTrack(queue[currentIndex], null, queue);
 }
 function playNext(){
   const queue = currentQueue.length ? currentQueue : getFiltered();
   if (!queue.length) return;
   currentIndex = shuffleMode ? Math.floor(Math.random() * queue.length) : (currentIndex >= queue.length - 1 ? 0 : currentIndex + 1);
-  playTrack(queue[currentIndex], null, queue, { randomContinuous: randomContinuousMode });
+  playTrack(queue[currentIndex], null, queue);
 }
 function syncProgressUI(){
   const duration = Number.isFinite(el.audio.duration) ? el.audio.duration : 0;
@@ -1553,6 +1980,7 @@ function openToneModal(track){
   el.downloadToneBtn.textContent = 'Baixar tom original';
   if (el.addToneToSetlistBtn) el.addToneToSetlistBtn.textContent = '+ Adicionar ao repertório';
   el.toneModal.classList.remove('hidden');
+  document.body.classList.add('app-locked');
 }
 
 function parseTone(raw){
@@ -1580,7 +2008,10 @@ function calculateToneLabel(originalTone, semitones){
   return `${CHROMATIC_KEYS[to]}${parsed.minor ? 'm' : ''}`;
 }
 
-function closeToneModal(){ el.toneModal.classList.add('hidden'); }
+function closeToneModal(){
+  el.toneModal.classList.add('hidden');
+  if (!isAnyModalOpen()) document.body.classList.remove('app-locked');
+}
 
 function toggleFavorite(id){
   if (favorites.includes(id)) favorites = favorites.filter(x => x !== id);
@@ -1603,8 +2034,12 @@ function openSetlistModal(track, toneInfo = { semitones: 0, tone: '' }){
   el.newSetlistName.value = '';
   renderSetlistOptions();
   el.setlistModal.classList.remove('hidden');
+  document.body.classList.add('app-locked');
 }
-function closeSetlistModal(){ el.setlistModal.classList.add('hidden'); }
+function closeSetlistModal(){
+  el.setlistModal.classList.add('hidden');
+  if (!isAnyModalOpen()) document.body.classList.remove('app-locked');
+}
 function createSetlistFromInput(){
   const name = el.newSetlistName.value.trim();
   if (!name) return;
@@ -1664,8 +2099,15 @@ function renderSetlists(){
   el.setlistsGrid.querySelectorAll('.share-setlist').forEach(btn => btn.addEventListener('click', () => {
     copyText(`${location.origin}${location.pathname}?setlist=${encodeURIComponent(btn.dataset.id)}`, 'Link do repertório copiado.');
   }));
-  el.setlistsGrid.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
-    if (!confirm('Excluir este repertório?')) return;
+  el.setlistsGrid.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', async () => {
+    const setlist = setlists.find(s => s.id === btn.dataset.id);
+    const ok = await openConfirmModal({
+      title: 'Excluir repertório',
+      message: setlist ? `Tem certeza que deseja excluir o repertório “${setlist.name}”? Esta ação não pode ser desfeita.` : 'Excluir este repertório?',
+      okLabel: 'Excluir',
+      danger: true
+    });
+    if (!ok) return;
     setlists = setlists.filter(s => s.id !== btn.dataset.id);
     saveSetlistsState();
     updateStats();
@@ -1720,8 +2162,20 @@ function openSetlistDetail(id){
   el.setlistDetailTitle.textContent = setlist.name;
   renderSetlistDetailTracks();
   el.setlistDetailModal.classList.remove('hidden');
+  document.body.classList.add('app-locked');
 }
-function closeSetlistDetail(){ el.setlistDetailModal.classList.add('hidden'); }
+function closeSetlistDetail(){
+  el.setlistDetailModal.classList.add('hidden');
+  // Só remove app-locked se nenhum outro modal estiver aberto
+  if (!isAnyModalOpen()) document.body.classList.remove('app-locked');
+}
+function isAnyModalOpen(){
+  const modals = ['setlistDetailModal','setlistModal','toneModal','songModal','profileModal','confirmModal','changeToneModal','loginScreen'];
+  return modals.some(id => {
+    const node = document.getElementById(id);
+    return node && !node.classList.contains('hidden');
+  });
+}
 function renderSetlistDetailTracks(){
   const setlist = setlists.find(s => s.id === currentSetlistDetailId);
   if (!setlist) return;
@@ -1741,6 +2195,7 @@ function renderSetlistDetailTracks(){
       </div>
       <div class="row-actions">
         <button class="mini-btn play-one" data-id="${esc(track.id)}">Tocar</button>
+        <button class="mini-btn change-tone-one" data-index="${index}">Alterar tom</button>
         <button class="mini-btn remove-one" data-id="${esc(track.id)}">Remover</button>
       </div>
     </div>
@@ -1750,6 +2205,10 @@ function renderSetlistDetailTracks(){
     const idx = Number(btn.closest('.reorder-item')?.dataset.index || 0);
     const track = tracks[idx];
     if (track) playTrack(track, null, tracks);
+  }));
+  el.setlistDetailTracks.querySelectorAll('.change-tone-one').forEach(btn => btn.addEventListener('click', () => {
+    const idx = Number(btn.dataset.index);
+    if (Number.isInteger(idx) && idx >= 0) openChangeToneModal(currentSetlistDetailId, idx);
   }));
   el.setlistDetailTracks.querySelectorAll('.remove-one').forEach(btn => btn.addEventListener('click', () => {
     const idx = Number(btn.closest('.reorder-item')?.dataset.index);
@@ -1802,8 +2261,12 @@ function openSongModal(track){
   el.songModalTags.innerHTML = (track.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('');
   el.songModalFavorite.textContent = favorites.includes(track.id) ? '♥ Favorita' : '♡ Favoritar';
   el.songModal.classList.remove('hidden');
+  document.body.classList.add('app-locked');
 }
-function closeSongModal(){ el.songModal.classList.add('hidden'); }
+function closeSongModal(){
+  el.songModal.classList.add('hidden');
+  if (!isAnyModalOpen()) document.body.classList.remove('app-locked');
+}
 
 function shareTrack(track){
   if (!track) return;
@@ -1854,3 +2317,260 @@ function applyTheme(theme){
   el.themeToggle.textContent = theme === 'light' ? '☾' : '☼';
   el.themeToggle.title = theme === 'light' ? 'Usar modo escuro' : 'Usar modo claro';
 }
+
+// ===========================================================
+// Modal de confirmação genérico (substitui confirm() do navegador)
+// Retorna Promise<boolean>
+// ===========================================================
+function openConfirmModal({ title = 'Confirmar', message = 'Tem certeza?', okLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false } = {}){
+  return new Promise(resolve => {
+    const modal = document.getElementById('confirmModal');
+    const titleEl = document.getElementById('confirmModalTitle');
+    const msgEl = document.getElementById('confirmModalMessage');
+    const okBtn = document.getElementById('confirmModalOk');
+    const cancelBtn = document.getElementById('confirmModalCancel');
+    if (!modal || !titleEl || !msgEl || !okBtn || !cancelBtn) {
+      // Fallback se o modal não existir
+      resolve(window.confirm(message));
+      return;
+    }
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    okBtn.textContent = okLabel;
+    cancelBtn.textContent = cancelLabel;
+    okBtn.classList.toggle('confirm-danger', !!danger);
+
+    const close = (result) => {
+      modal.classList.add('hidden');
+      if (!isAnyModalOpen()) document.body.classList.remove('app-locked');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      modal.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+    const onOk = () => close(true);
+    const onCancel = () => close(false);
+    const onBackdrop = (e) => { if (e.target === modal) close(false); };
+    const onKey = (e) => { if (e.key === 'Escape') close(false); else if (e.key === 'Enter') close(true); };
+
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    modal.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+    modal.classList.remove('hidden');
+    document.body.classList.add('app-locked');
+    setTimeout(() => okBtn.focus(), 60);
+  });
+}
+
+// ===========================================================
+// Filtro "Apenas onde estou escalado"
+// ===========================================================
+function isMineOnly(){
+  return Boolean(el.scheduleMineOnly?.checked);
+}
+function getMyName(){
+  // Tenta nome do user atual
+  const session = loadJSON(SESSION_KEY, {});
+  return String(authUser?.name || session?.name || '').trim();
+}
+function rowIncludesMember(row, name){
+  if (!name) return false;
+  const target = normalize(name);
+  return Object.keys(SCHEDULE_ROLE_LABELS).some(k => normalize(row[k] || '') === target);
+}
+
+// ===========================================================
+// Imprimir repertório
+// ===========================================================
+function printSetlist(setlistId){
+  const setlist = setlists.find(s => s.id === setlistId);
+  if (!setlist) return;
+  const tracks = mapSetlistTracks(setlist);
+  if (!tracks.length) {
+    toast('Repertório vazio.');
+    return;
+  }
+  const win = window.open('', '_blank', 'width=820,height=900');
+  if (!win) {
+    toast('O navegador bloqueou a janela de impressão.');
+    return;
+  }
+  const rows = tracks.map((t, i) => `
+    <tr>
+      <td class="num">${i+1}</td>
+      <td><strong>${esc(t.name)}</strong><div class="sub">${esc(t.singer || '')}</div></td>
+      <td class="key">Tom: <strong>${esc(t.repertoireTone || t.key || '—')}</strong>${t.repertoireTone && t.repertoireTone !== t.key ? `<div class="sub">(original: ${esc(t.key || '—')})</div>` : ''}</td>
+    </tr>
+  `).join('');
+
+  const html = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<title>${esc(setlist.name)} — Repertório</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; padding: 32px; color: #111; }
+  h1 { margin: 0 0 4px; font-size: 26px; }
+  .sub-title { color: #666; margin-bottom: 22px; font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 12px 10px; border-bottom: 1px solid #ddd; vertical-align: top; }
+  td.num { width: 38px; font-weight: 800; color: #888; }
+  td.key { width: 200px; text-align: right; font-size: 14px; }
+  .sub { color: #888; font-size: 12px; margin-top: 2px; font-weight: 400; }
+  footer { margin-top: 30px; color: #999; font-size: 12px; text-align: center; }
+  @media print { body { padding: 12px; } }
+</style></head>
+<body>
+  <h1>${esc(setlist.name)}</h1>
+  <div class="sub-title">${tracks.length} música(s) • Igreja Amor e Vida — Ministério de Louvor</div>
+  <table>${rows}</table>
+  <footer>Impresso em ${new Date().toLocaleDateString('pt-BR')} via Biblioteca de Louvor</footer>
+  <script>window.addEventListener('load', () => setTimeout(() => window.print(), 250));<\/script>
+</body></html>`;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+// ===========================================================
+// Compartilhar repertório via WhatsApp
+// ===========================================================
+function shareSetlistWhatsApp(setlistId){
+  const setlist = setlists.find(s => s.id === setlistId);
+  if (!setlist) return;
+  const tracks = mapSetlistTracks(setlist);
+  const lines = tracks.map((t, i) => {
+    const tone = t.repertoireTone || t.key || '';
+    return `${i+1}. ${t.name}${tone && tone !== '—' ? ` (${tone})` : ''}`;
+  });
+  const link = `${location.origin}${location.pathname}?setlist=${encodeURIComponent(setlist.id)}`;
+  const text = `🎵 *${setlist.name}*\n_Ministério de Louvor — Igreja Amor e Vida_\n\n${lines.join('\n')}\n\nAbrir no app: ${link}`;
+  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+  window.open(url, '_blank', 'noopener');
+}
+
+// ===========================================================
+// Alterar tom de uma entrada já dentro do repertório
+// ===========================================================
+function openChangeToneModal(setlistId, entryIndex){
+  const setlist = setlists.find(s => s.id === setlistId);
+  if (!setlist) return;
+  const entry = setlist.trackIds[entryIndex];
+  if (!entry) return;
+  const trackId = getSetlistEntryTrackId(entry);
+  const baseTrack = findTrack(trackId);
+  if (!baseTrack) {
+    toast('Música não encontrada na biblioteca.');
+    return;
+  }
+  changeToneTargetEntryIndex = entryIndex;
+  const parsed = parseTone(baseTrack.key);
+  const originalBase = parsed.base || 'C';
+  const suffix = parsed.minor ? 'm' : '';
+  const originalIndex = CHROMATIC_KEYS.indexOf(originalBase);
+  const currentSemitones = getSetlistEntrySemitones(entry);
+
+  changeToneSelectedSemitones = currentSemitones;
+  changeToneSelectedLabel = parsed.base ? `${CHROMATIC_KEYS[(originalIndex + currentSemitones + 120) % 12]}${suffix}` : '';
+
+  const trackNameEl = document.getElementById('changeToneTrackName');
+  const originalEl = document.getElementById('changeToneOriginal');
+  const selectedEl = document.getElementById('changeToneSelected');
+  const buttonsEl = document.getElementById('changeToneButtons');
+  const modal = document.getElementById('changeToneModal');
+  if (!modal || !buttonsEl) return;
+
+  if (trackNameEl) trackNameEl.textContent = baseTrack.name;
+  if (originalEl) originalEl.textContent = parsed.base ? `${originalBase}${suffix}` : 'Não detectado';
+  if (selectedEl) selectedEl.textContent = changeToneSelectedLabel || 'Escolha o tom';
+
+  buttonsEl.innerHTML = CHROMATIC_KEYS.map(key => {
+    const semitone = calculateShortestShift(originalIndex >= 0 ? originalIndex : 0, CHROMATIC_KEYS.indexOf(key));
+    const label = `${key}${suffix}`;
+    const isSelected = parsed.base && (key === CHROMATIC_KEYS[(originalIndex + currentSemitones + 120) % 12]);
+    return `<button type="button" class="tone-btn ${isSelected ? 'active' : ''}" data-key="${key}" data-step="${semitone}">${label}<small>${semitone === 0 ? 'original' : `${semitone > 0 ? '+' : ''}${semitone}`}</small></button>`;
+  }).join('');
+  buttonsEl.querySelectorAll('.tone-btn').forEach(btn => btn.addEventListener('click', () => {
+    changeToneSelectedSemitones = Number(btn.dataset.step);
+    changeToneSelectedLabel = `${btn.dataset.key}${suffix}`;
+    buttonsEl.querySelectorAll('.tone-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (selectedEl) selectedEl.textContent = changeToneSelectedLabel;
+  }));
+
+  modal.classList.remove('hidden');
+  document.body.classList.add('app-locked');
+}
+function closeChangeToneModal(){
+  document.getElementById('changeToneModal')?.classList.add('hidden');
+  changeToneTargetEntryIndex = -1;
+  if (!isAnyModalOpen()) document.body.classList.remove('app-locked');
+}
+function applyChangeTone(){
+  if (changeToneTargetEntryIndex < 0) return closeChangeToneModal();
+  const setlist = setlists.find(s => s.id === currentSetlistDetailId);
+  if (!setlist) return closeChangeToneModal();
+  const entry = setlist.trackIds[changeToneTargetEntryIndex];
+  if (!entry) return closeChangeToneModal();
+  const trackId = getSetlistEntryTrackId(entry);
+  if (!changeToneSelectedSemitones && !changeToneSelectedLabel) {
+    setlist.trackIds[changeToneTargetEntryIndex] = trackId;
+  } else {
+    setlist.trackIds[changeToneTargetEntryIndex] = {
+      trackId,
+      semitones: changeToneSelectedSemitones,
+      tone: changeToneSelectedLabel
+    };
+  }
+  saveSetlistsState();
+  closeChangeToneModal();
+  renderSetlistDetailTracks();
+  renderSetlists();
+  toast('Tom atualizado.');
+}
+function resetChangeTone(){
+  if (changeToneTargetEntryIndex < 0) return closeChangeToneModal();
+  const setlist = setlists.find(s => s.id === currentSetlistDetailId);
+  if (!setlist) return closeChangeToneModal();
+  const entry = setlist.trackIds[changeToneTargetEntryIndex];
+  if (!entry) return closeChangeToneModal();
+  const trackId = getSetlistEntryTrackId(entry);
+  setlist.trackIds[changeToneTargetEntryIndex] = trackId;
+  saveSetlistsState();
+  closeChangeToneModal();
+  renderSetlistDetailTracks();
+  renderSetlists();
+  toast('Tom voltou ao original.');
+}
+
+function registerServiceWorker(){
+  // Service Worker — opcional, falha silenciosa
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW falhou:', err));
+    });
+  }
+}
+
+function bootstrapApp(){
+  document.title = cfg.APP_TITLE;
+
+  initAppwriteClient();
+  loadAppwriteServerConfig().finally(initSessionUI);
+  bindEvents();
+  initSchedule();
+  applyTheme(loadJSON('vs_theme_v1', 'dark'));
+  // Antes: mostrava tela cheia de loading bloqueando tudo até biblioteca carregar.
+  // Agora: esconde a tela cheia já no boot e libera UI; só a seção da biblioteca
+  // mostra estado de carregamento enquanto Drive responde.
+  hideLoading();
+  showLibrarySkeleton();
+  registerServiceWorker();
+  loadLibrary().then(() => {
+    readDeepLinks();
+    routeInternalPage();
+    if (loadJSON(SESSION_KEY, null)?.name) maybeLaunchTour();
+  });
+}
+
+bootstrapApp();
