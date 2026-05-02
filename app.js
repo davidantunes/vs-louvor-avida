@@ -515,7 +515,14 @@ function setAuthMode(mode = 'login'){
   el.createAccountBtn?.classList.toggle('btn-secondary', !isRegister);
   el.enterSystemBtn?.classList.toggle('btn-primary', !isRegister);
   el.enterSystemBtn?.classList.toggle('btn-secondary', isRegister);
+  el.createAccountBtn?.classList.toggle('hidden', !isRegister);
+  el.enterSystemBtn?.classList.toggle('hidden', isRegister);
   el.loginNameField?.classList.toggle('hidden', !isRegister);
+  el.loginNameField?.setAttribute('aria-hidden', String(!isRegister));
+  if (el.loginName) {
+    el.loginName.disabled = !isRegister;
+    if (!isRegister) el.loginName.value = '';
+  }
   el.recoverPasswordBtn?.classList.toggle('hidden', isRegister);
   if (el.loginPassword) el.loginPassword.autocomplete = isRegister ? 'new-password' : 'current-password';
   if (el.authModeHint) el.authModeHint.textContent = isRegister

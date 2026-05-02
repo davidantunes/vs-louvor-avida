@@ -3085,3 +3085,32 @@ body[data-theme="light"] .skeleton-line {
   .schedule-row-next{box-shadow:0 0 0 1px rgba(41,217,208,.55),0 14px 34px rgba(0,0,0,.22)}
   body.app-locked.player-visible .modal{padding:10px 10px calc(var(--player-h) + 110px) !important}
 }
+
+
+/* ============================================================
+   v2.16.1 — Correção definitiva das guias de login
+   Entrar: somente e-mail e senha. Criar cadastro: nome, e-mail e senha.
+   ============================================================ */
+#loginScreen .login-card .auth-grid #loginNameField.hidden,
+#loginScreen .login-card #loginNameField.hidden{
+  display:none !important;
+}
+#loginScreen .login-card .auth-actions .hidden{
+  display:none !important;
+}
+#loginScreen .login-card .auth-grid-clean{
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+}
+#loginScreen .login-card .auth-grid-clean #loginEmailField,
+#loginScreen .login-card .auth-grid-clean #loginPasswordField{
+  grid-column:auto !important;
+}
+#loginScreen .login-card .auth-grid-clean #loginNameField:not(.hidden){
+  display:block !important;
+  grid-column:1 / -1 !important;
+}
+@media (max-width:760px){
+  #loginScreen .login-card .auth-grid-clean{
+    grid-template-columns:1fr !important;
+  }
+}
