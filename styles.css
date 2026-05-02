@@ -3114,3 +3114,79 @@ body[data-theme="light"] .skeleton-line {
     grid-template-columns:1fr !important;
   }
 }
+
+
+/* ============================================================
+   v2.16.1 — Ajuste do checklist "Apenas onde estou escalado"
+   ============================================================ */
+.schedule-toolbar{
+  grid-template-columns:minmax(280px,2fr) minmax(180px,1fr) minmax(220px,1fr) minmax(230px,.9fr) !important;
+  align-items:end !important;
+}
+.schedule-mine-only-wrap{
+  height:56px !important;
+  min-height:56px !important;
+  width:100% !important;
+  box-sizing:border-box !important;
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:10px !important;
+  margin:0 !important;
+  padding:0 16px !important;
+  border-radius:16px !important;
+  border:1px solid var(--line) !important;
+  background:var(--panel) !important;
+  color:var(--text) !important;
+}
+.schedule-toolbar .schedule-mine-only-wrap input[type="checkbox"],
+.schedule-mine-only-wrap input[type="checkbox"]{
+  width:18px !important;
+  height:18px !important;
+  min-width:18px !important;
+  min-height:18px !important;
+  max-width:18px !important;
+  max-height:18px !important;
+  margin:0 !important;
+  padding:0 !important;
+  border-radius:4px !important;
+  accent-color:var(--teal) !important;
+  appearance:auto !important;
+  -webkit-appearance:checkbox !important;
+  box-shadow:none !important;
+}
+.schedule-toolbar .schedule-mine-only-wrap span,
+.schedule-mine-only-wrap span{
+  display:inline !important;
+  margin:0 !important;
+  color:var(--muted) !important;
+  font-size:13px !important;
+  font-weight:900 !important;
+  line-height:1.25 !important;
+  text-align:left !important;
+}
+.schedule-mine-only-wrap:has(input:checked){
+  border-color:rgba(41,217,208,.55) !important;
+  background:rgba(41,217,208,.10) !important;
+}
+@media (max-width:1180px){
+  .schedule-toolbar{
+    grid-template-columns:minmax(240px,1.4fr) minmax(170px,1fr) minmax(200px,1fr) !important;
+  }
+  .schedule-mine-only-wrap{
+    grid-column:1 / -1 !important;
+    justify-self:center !important;
+    max-width:360px !important;
+  }
+}
+@media (max-width:640px){
+  .schedule-toolbar{
+    grid-template-columns:1fr !important;
+  }
+  .schedule-mine-only-wrap{
+    grid-column:auto !important;
+    max-width:none !important;
+    justify-content:flex-start !important;
+  }
+}
