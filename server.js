@@ -113,10 +113,9 @@ app.put('/api/appwrite/admin/state/:key', async (req, res) => {
     const doc = await upsertState(APPWRITE_APP_STATE_COLLECTION_ID, d => d.key === req.params.key, {
       key: req.params.key,
       value: JSON.stringify(req.body.value ?? null),
-      updatedAt,
-      updatedBy: admin.name || admin.email || 'Administrador'
+      updated_at: updatedAt
     });
-    res.json({ ok: true, id: doc.$id, updatedAt, updatedBy: admin.name || admin.email });
+    res.json({ ok: true, id: doc.$id, updatedAt });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -126,7 +125,7 @@ app.get('/api/appwrite/state/:key', async (req, res) => {
   try {
     const docs = await listDocuments(APPWRITE_APP_STATE_COLLECTION_ID);
     const doc = docs.find(d => d.key === req.params.key);
-    res.json({ value: doc?.value ? JSON.parse(doc.value) : null, updatedAt: doc?.updatedAt || null });
+    res.json({ value: doc?.value ? JSON.parse(doc.value) : null, updatedAt: doc?.updated_at || null });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -138,8 +137,7 @@ app.put('/api/appwrite/state/:key', async (req, res) => {
     const doc = await upsertState(APPWRITE_APP_STATE_COLLECTION_ID, d => d.key === req.params.key, {
       key: req.params.key,
       value: JSON.stringify(req.body.value ?? null),
-      updatedAt,
-      updatedBy: String(req.body.updatedBy || 'Sistema')
+      updated_at: updatedAt
     });
     res.json({ ok: true, id: doc.$id, updatedAt });
   } catch (error) {
@@ -150,8 +148,8 @@ app.put('/api/appwrite/state/:key', async (req, res) => {
 app.get('/api/appwrite/user-state/:userId/:key', async (req, res) => {
   try {
     const docs = await listDocuments(APPWRITE_USER_STATE_COLLECTION_ID);
-    const doc = docs.find(d => d.userId === req.params.userId && d.key === req.params.key);
-    res.json({ value: doc?.value ? JSON.parse(doc.value) : null, updatedAt: doc?.updatedAt || null });
+    const doc = docs.find(d => d.user_id === req.params.userId && d.key === req.params.key);
+    res.json({ value: doc?.value ? JSON.parse(doc.value) : null, updatedAt: doc?.updated_at || null });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -160,7 +158,7 @@ app.get('/api/appwrite/user-state/:userId/:key', async (req, res) => {
 app.put('/api/appwrite/user-state/:userId/:key', async (req, res) => {
   try {
     const updatedAt = new Date().toISOString();
-    const doc = await upsertState(APPWRITE_USER_STATE_COLLECTION_ID, d => d.userId === req.params.userId && d.key === req.params.key, {
+    const doc = await upsertState(APPWRITE_USER_STATE_COLLECTION_ID, d => d.user_id === req.params.userId && d.key === req.params.key, {
       userId: req.params.userId,
       key: req.params.key,
       value: JSON.stringify(req.body.value ?? null),

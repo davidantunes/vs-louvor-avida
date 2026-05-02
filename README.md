@@ -349,3 +349,20 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - recuperação de senha por e-mail via Appwrite Auth
 - avatar com iniciais do usuário
 - painel de perfil com dados da conta, permissão, favoritos e repertórios
+
+
+## V38
+
+- tela de login simplificada
+- modo Entrar mostra apenas **e-mail** e **senha**
+- modo Criar cadastro mostra apenas **nome**, **e-mail** e **senha**
+- campo **Equipe / escala** removido
+- tela de acesso sem redundância visual
+
+
+## V39
+
+- corrigida integração com Appwrite para usar os atributos esperados nas collections:
+  - app_state: `key`, `value`, `updated_at`
+  - user_state: `user_id`, `key`, `value`, `updated_at`
+- removidos campos não cadastrados no Appwrite, como `updatedAt`, `updatedBy`, `userId` e `userName` no payload gravado.

@@ -2079,3 +2079,13 @@ body[data-theme="light"] .schedule-toolbar input,
 body[data-theme="light"] .schedule-toolbar select{
   background:#fff !important;
 }
+
+
+/* V38 — login simplificado sem redundância */
+.auth-grid-clean{grid-template-columns:1fr 1fr;align-items:start}
+.auth-grid-clean #loginNameField{grid-column:1 / -1}
+.auth-grid-clean #loginPasswordField .password-wrap input{padding-right:96px !important}
+@media (max-width:760px){
+  .auth-grid-clean{grid-template-columns:1fr}
+  .auth-grid-clean #loginNameField{grid-column:auto}
+}

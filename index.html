@@ -41,12 +41,10 @@
         <button id="modeRegisterBtn" class="auth-mode-btn" type="button" role="tab" aria-selected="false">Criar cadastro</button>
       </div>
       <div id="authModeHint" class="auth-mode-hint">Entre com seu e-mail e senha para acessar sua conta.</div>
-      <div class="login-grid auth-grid">
-        <label id="loginNameField"><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /><small class="field-hint">Informe seu nome completo.</small></label>
-        <label id="loginRoleField"><span>Equipe / escala</span><input id="loginRole" type="text" placeholder="Ex.: Louvor Domingo Noite" /><small class="field-hint">Campo opcional para identificação da sua equipe.</small></label>
+      <div class="login-grid auth-grid auth-grid-clean">
+        <label id="loginNameField" class="hidden"><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /><small class="field-hint">Informe seu nome completo.</small></label>
         <label id="loginEmailField"><span>E-mail</span><input id="loginEmail" type="email" placeholder="seuemail@exemplo.com" autocomplete="email" /><small class="field-hint">Use um e-mail válido para entrar.</small></label>
         <label id="loginPasswordField"><span>Senha</span><div class="input-wrap password-wrap"><input id="loginPassword" type="password" placeholder="Sua senha" autocomplete="current-password" /><button id="togglePasswordBtn" class="field-toggle" type="button" aria-label="Mostrar senha">Mostrar</button></div><small class="field-hint">Sua senha deve ter pelo menos 6 caracteres.</small></label>
-        <label id="loginPasswordConfirmField" class="register-only"><span>Confirmar senha</span><div class="input-wrap password-wrap"><input id="loginPasswordConfirm" type="password" placeholder="Repita sua senha" autocomplete="new-password" /><button id="togglePasswordConfirmBtn" class="field-toggle" type="button" aria-label="Mostrar confirmação de senha">Mostrar</button></div><small class="field-hint">Repita a mesma senha do cadastro.</small></label>
       </div>
       <div class="login-options-row">
         <label class="remember-option"><input id="rememberSession" type="checkbox" checked><span>Lembrar sessão neste dispositivo</span></label>

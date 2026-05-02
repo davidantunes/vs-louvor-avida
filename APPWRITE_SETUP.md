@@ -34,7 +34,7 @@ Attributes:
 ```text
 key       string  tamanho 100     obrigatório
 value     string  tamanho 100000  obrigatório
-updatedAt string  tamanho 40      opcional
+updated_at string  tamanho 50      obrigatório
 updatedBy string  tamanho 255     opcional
 ```
 
@@ -51,7 +51,7 @@ Attributes:
 userId    string  tamanho 255     obrigatório
 key       string  tamanho 100     obrigatório
 value     string  tamanho 100000  obrigatório
-updatedAt string  tamanho 40      opcional
+updated_at string  tamanho 50      obrigatório
 userName  string  tamanho 255     opcional
 ```
 

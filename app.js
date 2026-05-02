@@ -177,17 +177,12 @@ const el = {
   loadingMessage: document.getElementById('loadingMessage'),
   loginScreen: document.getElementById('loginScreen'),
   loginName: document.getElementById('loginName'),
-  loginRole: document.getElementById('loginRole'),
   loginEmail: document.getElementById('loginEmail'),
   loginPassword: document.getElementById('loginPassword'),
-  loginPasswordConfirm: document.getElementById('loginPasswordConfirm'),
   loginNameField: document.getElementById('loginNameField'),
-  loginRoleField: document.getElementById('loginRoleField'),
   loginEmailField: document.getElementById('loginEmailField'),
   loginPasswordField: document.getElementById('loginPasswordField'),
-  loginPasswordConfirmField: document.getElementById('loginPasswordConfirmField'),
   togglePasswordBtn: document.getElementById('togglePasswordBtn'),
-  togglePasswordConfirmBtn: document.getElementById('togglePasswordConfirmBtn'),
   rememberSession: document.getElementById('rememberSession'),
   recoverPasswordBtn: document.getElementById('recoverPasswordBtn'),
   modeLoginBtn: document.getElementById('modeLoginBtn'),
@@ -347,19 +342,16 @@ function bindEvents(){
   if (el.modeLoginBtn) el.modeLoginBtn.addEventListener('click', () => setAuthMode('login'));
   if (el.modeRegisterBtn) el.modeRegisterBtn.addEventListener('click', () => setAuthMode('register'));
   if (el.togglePasswordBtn) el.togglePasswordBtn.addEventListener('click', () => togglePasswordVisibility('loginPassword', 'togglePasswordBtn'));
-  if (el.togglePasswordConfirmBtn) el.togglePasswordConfirmBtn.addEventListener('click', () => togglePasswordVisibility('loginPasswordConfirm', 'togglePasswordConfirmBtn'));
   if (el.recoverPasswordBtn) el.recoverPasswordBtn.addEventListener('click', recoverPassword);
   if (el.userBadge) el.userBadge.addEventListener('click', openProfileModal);
   if (el.closeProfileModal) el.closeProfileModal.addEventListener('click', closeProfileModal);
   if (el.profileModal) el.profileModal.addEventListener('click', e => { if (e.target === el.profileModal) closeProfileModal(); });
   if (el.profileStartTourBtn) el.profileStartTourBtn.addEventListener('click', () => { closeProfileModal(); startGuidedTour(); });
   if (el.profileLogoutBtn) el.profileLogoutBtn.addEventListener('click', () => { closeProfileModal(); logoutSession(); });
-  ['loginName','loginRole','loginEmail','loginPassword','loginPasswordConfirm'].forEach(key => { const node = el[key]; if (node) node.addEventListener('input', () => validateAuthField(key)); });
+  ['loginName','loginEmail','loginPassword'].forEach(key => { const node = el[key]; if (node) node.addEventListener('input', () => validateAuthField(key)); });
   if (el.loginName) el.loginName.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
-  if (el.loginRole) el.loginRole.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
   if (el.loginEmail) el.loginEmail.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
   if (el.loginPassword) el.loginPassword.addEventListener('keydown', e => { if (e.key === 'Enter') authMode === 'register' ? createAccount() : enterSystem(); });
-  if (el.loginPasswordConfirm) el.loginPasswordConfirm.addEventListener('keydown', e => { if (e.key === 'Enter') createAccount(); });
   if (el.logoutBtn) el.logoutBtn.addEventListener('click', logoutSession);
 
 
@@ -467,18 +459,20 @@ function setAuthMode(mode = 'login'){
   el.createAccountBtn?.classList.toggle('btn-secondary', !isRegister);
   el.enterSystemBtn?.classList.toggle('btn-primary', !isRegister);
   el.enterSystemBtn?.classList.toggle('btn-secondary', isRegister);
-  document.body.classList.toggle('auth-register-mode', isRegister);
-  if (el.loginPassword) el.loginPassword.autocomplete = isRegister ? 'new-password' : 'current-password';
-  if (el.recoverPasswordBtn) el.recoverPasswordBtn.style.display = isRegister ? 'none' : '';
+  el.loginNameField?.classList.toggle('hidden', !isRegister);
+  el.recoverPasswordBtn?.classList.toggle('hidden', isRegister);
   if (el.authModeHint) el.authModeHint.textContent = isRegister
-    ? 'Crie sua conta com nome, e-mail e senha. Depois, entre para acessar a plataforma.'
+    ? 'Crie sua conta informando nome, e-mail e senha.'
     : 'Entre com seu e-mail e senha para acessar sua conta.';
   if (el.loginNote) el.loginNote.textContent = isRegister
-    ? 'Após criar o cadastro, sua conta ficará disponível para login em qualquer dispositivo. Usuários comuns não têm permissão para alterar a escala.'
+    ? 'Crie sua conta com nome, e-mail e senha. Após o cadastro, faça login para acessar sua conta de usuário. Usuários comuns não têm permissão para alterar a escala.'
     : 'Use seu e-mail e senha para entrar. Usuários comuns acessam a plataforma em modo de uso e não podem alterar a escala.';
+  if (el.enterSystemBtn) el.enterSystemBtn.textContent = 'Entrar na conta';
+  if (el.createAccountBtn) el.createAccountBtn.textContent = 'Criar cadastro';
   setAuthStatus('', false);
-  ['loginName','loginRole','loginEmail','loginPassword','loginPasswordConfirm'].forEach(validateAuthField);
+  ['loginName','loginEmail','loginPassword'].forEach(validateAuthField);
 }
+
 function togglePasswordVisibility(inputKey = 'loginPassword', buttonKey = 'togglePasswordBtn'){
   const input = el[inputKey];
   const button = el[buttonKey];
@@ -508,12 +502,6 @@ function validateAuthField(key){
     setFieldState(el.loginNameField, 'valid', 'Nome válido.');
     return true;
   }
-  if (key === 'loginRole') {
-    const hint = 'Campo opcional para identificação da sua equipe.';
-    if (!value) return setFieldState(el.loginRoleField, 'neutral', hint), true;
-    setFieldState(el.loginRoleField, 'valid', 'Equipe/escala informada.');
-    return true;
-  }
   if (key === 'loginEmail') {
     const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
     if (!value) return setFieldState(el.loginEmailField, 'invalid', 'Informe seu e-mail.'), false;
@@ -525,15 +513,6 @@ function validateAuthField(key){
     if (!value) return setFieldState(el.loginPasswordField, 'invalid', 'Informe sua senha.'), false;
     if (value.length < 6) return setFieldState(el.loginPasswordField, 'invalid', 'A senha deve ter pelo menos 6 caracteres.'), false;
     setFieldState(el.loginPasswordField, 'valid', authMode === 'register' ? 'Senha válida para cadastro.' : 'Senha válida.');
-    if (authMode === 'register' && el.loginPasswordConfirm?.value) validateAuthField('loginPasswordConfirm');
-    return true;
-  }
-  if (key === 'loginPasswordConfirm') {
-    const hint = 'Repita a mesma senha do cadastro.';
-    if (authMode !== 'register') return setFieldState(el.loginPasswordConfirmField, 'neutral', hint), true;
-    if (!value) return setFieldState(el.loginPasswordConfirmField, 'invalid', 'Confirme sua senha.'), false;
-    if (value !== String(el.loginPassword?.value || '')) return setFieldState(el.loginPasswordConfirmField, 'invalid', 'As senhas não conferem.'), false;
-    setFieldState(el.loginPasswordConfirmField, 'valid', 'As senhas conferem.');
     return true;
   }
   return true;
@@ -542,9 +521,7 @@ function validateAuthForm(mode = authMode){
   const emailOk = validateAuthField('loginEmail');
   const passwordOk = validateAuthField('loginPassword');
   const nameOk = mode === 'register' ? validateAuthField('loginName') : true;
-  const confirmOk = mode === 'register' ? validateAuthField('loginPasswordConfirm') : true;
-  validateAuthField('loginRole');
-  return emailOk && passwordOk && nameOk && confirmOk;
+  return emailOk && passwordOk && nameOk;
 }
 
 async function initSessionUI(){
