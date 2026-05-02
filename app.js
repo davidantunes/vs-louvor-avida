@@ -256,7 +256,11 @@ loadAppwriteServerConfig().finally(initSessionUI);
 bindEvents();
 initSchedule();
 applyTheme(loadJSON('vs_theme_v1', 'dark'));
-showLoading('Carregando biblioteca e organizando o ambiente...');
+// Antes: mostrava tela cheia de loading bloqueando tudo até biblioteca carregar.
+// Agora: esconde a tela cheia já no boot e libera UI; só a seção da biblioteca
+// mostra estado de carregamento enquanto Drive responde.
+hideLoading();
+showLibrarySkeleton();
 loadLibrary().then(() => { readDeepLinks(); routeInternalPage(); if (loadJSON(SESSION_KEY, null)?.name) maybeLaunchTour(); });
 
 function setPlayButtonState(isPlaying){
@@ -635,6 +639,27 @@ function showLoading(message = 'Preparando a plataforma...'){
   el.loadingScreen?.classList.remove('hidden');
 }
 function hideLoading(){ el.loadingScreen?.classList.add('hidden'); }
+
+// Skeleton inline na seção biblioteca: mostra placeholder bonito enquanto
+// Drive responde. UI da home, escala e player ficam todas usáveis.
+function showLibrarySkeleton(){
+  if (!el.trackList) return;
+  if (el.status) el.status.textContent = 'Carregando biblioteca...';
+  el.trackList.innerHTML = `
+    <div class="library-skeleton" aria-busy="true" aria-label="Carregando biblioteca">
+      ${Array.from({length: 6}).map(() => `
+        <div class="skeleton-card">
+          <div class="skeleton-cover"></div>
+          <div class="skeleton-lines">
+            <div class="skeleton-line skeleton-line-lg"></div>
+            <div class="skeleton-line skeleton-line-md"></div>
+            <div class="skeleton-line skeleton-line-sm"></div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
 function showLogin(){
   setAuthMode(authMode || 'login');
   el.loginScreen?.classList.remove('hidden');
@@ -1448,7 +1473,33 @@ async function listChildren(folderId){
   return files;
 }
 
-async function loadFolder(folderId, singerName = '', inheritedCover = '', depth = 0, visited = new Set()) {
+// Semáforo global: controla quantas chamadas Drive estão em vôo simultaneamente
+// no sistema todo (não por nível). Limite total mais alto que o por-nível
+// porque árvores profundas se beneficiam de muitas chamadas ao mesmo tempo.
+const DRIVE_CONCURRENCY_LIMIT = 12;
+let driveInflight = 0;
+const driveQueue = [];
+
+function acquireDriveSlot(){
+  return new Promise(resolve => {
+    if (driveInflight < DRIVE_CONCURRENCY_LIMIT) {
+      driveInflight++;
+      resolve();
+    } else {
+      driveQueue.push(resolve);
+    }
+  });
+}
+function releaseDriveSlot(){
+  driveInflight--;
+  if (driveQueue.length > 0) {
+    driveInflight++;
+    const next = driveQueue.shift();
+    next();
+  }
+}
+
+async function loadFolder(folderId, singerName = '', inheritedCover = '', depth = 0, visited = new Set(), onTracksFound = null) {
   if (depth > 8) {
     console.warn('Profundidade máxima atingida em', folderId);
     return [];
@@ -1459,13 +1510,21 @@ async function loadFolder(folderId, singerName = '', inheritedCover = '', depth 
   }
   visited = new Set([...visited, folderId]);
 
-  const items = await listChildren(folderId);
+  // Aguarda slot disponível antes de fazer a chamada Drive
+  await acquireDriveSlot();
+  let items;
+  try {
+    items = await listChildren(folderId);
+  } finally {
+    releaseDriveSlot();
+  }
+
   const folders = items.filter(i => i.mimeType === 'application/vnd.google-apps.folder').sort(sortName);
   const files = items.filter(i => i.mimeType !== 'application/vnd.google-apps.folder').sort(sortName);
   const localCoverFile = files.find(f => imageExt.includes(getExt(f.name)));
   const cover = localCoverFile ? thumbnailUrl(localCoverFile.id) : inheritedCover;
 
-  let tracks = [];
+  const localTracks = [];
   for (const file of files) {
     const ext = getExt(file.name);
     if (!audioExt.includes(ext)) continue;
@@ -1478,48 +1537,163 @@ async function loadFolder(folderId, singerName = '', inheritedCover = '', depth 
       singer,
       key: detectKey(file.name),
       tags: [],
-      // Herda capa da pasta atual; fallback para logo da igreja
       coverUrl: cover || 'assets/logo-avida.jpg',
       webViewLink: file.webViewLink || driveViewUrl(file.id)
     };
     track.tags = suggestTags(track);
-    tracks.push(track);
+    localTracks.push(track);
   }
 
-  for (const folder of folders) {
-    const nextSinger = singerName || folder.name;
-    const childTracks = await loadFolder(folder.id, nextSinger, cover, depth + 1, visited);
-    tracks = tracks.concat(childTracks);
+  // Notifica o orquestrador assim que esta pasta terminou de processar
+  // suas próprias músicas, sem esperar as subpastas. Isso permite renderização
+  // progressiva: a UI vai sendo populada conforme cada pasta resolve.
+  if (localTracks.length && typeof onTracksFound === 'function') {
+    onTracksFound(localTracks);
   }
-  return tracks;
+
+  let allTracksHere = [...localTracks];
+
+  if (folders.length > 0) {
+    // Dispara TODAS as subpastas em paralelo — o semáforo global controla
+    // quantas vão de fato ao Drive ao mesmo tempo. Isso permite que pastas
+    // de níveis diferentes estejam sendo lidas simultaneamente.
+    const subResults = await Promise.all(
+      folders.map(folder => {
+        const nextSinger = singerName || folder.name;
+        return loadFolder(folder.id, nextSinger, cover, depth + 1, visited, onTracksFound)
+          .catch(err => {
+            console.warn(`Erro ao carregar subpasta "${folder.name}":`, err.message);
+            return [];
+          });
+      })
+    );
+    for (const childTracks of subResults) {
+      allTracksHere = allTracksHere.concat(childTracks);
+    }
+  }
+  return allTracksHere;
+}
+
+// Helper antigo, mantido para retrocompatibilidade caso alguma chamada use
+async function mapWithConcurrency(items, limit, fn){
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker(){
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = [];
+  for (let i = 0; i < Math.min(limit, items.length); i++) workers.push(worker());
+  await Promise.all(workers);
+  return results;
 }
 
 async function loadLibrary(force = false){
+  const cacheKey = 'vs_drive_cache_v10';
+  const SCHEMA_VERSION = 2;
+  const CACHE_FRESH_MS = 4 * 60 * 60 * 1000;
+
   try {
-    showLoading(force ? 'Atualizando biblioteca do Google Drive...' : 'Lendo Google Drive e organizando as músicas...');
-    el.status.textContent = 'Lendo Google Drive...';
-    const cacheKey = 'vs_drive_cache_v10';
-    const SCHEMA_VERSION = 2;
-    if (!force) {
-      const cached = loadJSON(cacheKey, null);
-      if (cached && cached.schemaVersion === SCHEMA_VERSION && Array.isArray(cached.tracks) && cached.tracks.length) {
-        allTracks = cached.tracks;
-        afterLibraryLoaded();
-        el.status.textContent = 'Biblioteca carregada do cache';
-        hideLoading();
-        return;
+    const cached = !force ? loadJSON(cacheKey, null) : null;
+    const hasUsableCache = cached && cached.schemaVersion === SCHEMA_VERSION
+      && Array.isArray(cached.tracks) && cached.tracks.length;
+    const cacheAge = cached?.updatedAt ? Date.now() - cached.updatedAt : Infinity;
+    const cacheIsFresh = cacheAge < CACHE_FRESH_MS;
+
+    if (hasUsableCache) {
+      allTracks = cached.tracks;
+      afterLibraryLoaded();
+      el.status.textContent = cacheIsFresh
+        ? 'Biblioteca carregada do cache'
+        : 'Biblioteca em uso (atualizando em segundo plano…)';
+      if (!cacheIsFresh) {
+        refreshLibraryInBackground(cacheKey, SCHEMA_VERSION);
+      }
+      return;
+    }
+
+    // === Sem cache: carga progressiva ===
+    // Mostra músicas conforme cada pasta retorna, em vez de esperar a árvore inteira.
+    if (force && el.status) el.status.textContent = 'Atualizando biblioteca…';
+    else if (el.status) el.status.textContent = 'Lendo Google Drive...';
+
+    let progressTracks = [];
+    let renderScheduled = false;
+    let firstBatchRendered = false;
+
+    // Throttle de render: agenda no próximo frame em vez de re-renderizar
+    // a cada pasta (que poderia disparar dezenas de renders por segundo).
+    function scheduleProgressRender(){
+      if (renderScheduled) return;
+      renderScheduled = true;
+      const tick = () => {
+        renderScheduled = false;
+        // Ordena já — keep insertion stable enough para não pular mucho na tela
+        allTracks = [...progressTracks].sort((a,b) =>
+          a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'})
+        );
+        if (!firstBatchRendered) {
+          firstBatchRendered = true;
+          afterLibraryLoaded();
+        } else {
+          // Só atualiza dados visíveis e contadores, sem refazer a UI inteira
+          updateStats();
+          render();
+        }
+        if (el.status) {
+          el.status.textContent = `Carregando… ${progressTracks.length} música${progressTracks.length === 1 ? '' : 's'}`;
+        }
+      };
+      // requestAnimationFrame é melhor para fluidez, mas se aba está em background
+      // ele não dispara — fallback para setTimeout depois de 100ms garante.
+      if (document.hidden) {
+        setTimeout(tick, 0);
+      } else {
+        requestAnimationFrame(tick);
       }
     }
-    allTracks = (await loadFolder(cfg.ROOT_FOLDER_ID)).sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
+
+    const onTracksFound = (newTracks) => {
+      progressTracks = progressTracks.concat(newTracks);
+      scheduleProgressRender();
+    };
+
+    const finalTracks = await loadFolder(cfg.ROOT_FOLDER_ID, '', '', 0, new Set(), onTracksFound);
+    allTracks = finalTracks.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
     saveJSON(cacheKey, { schemaVersion: SCHEMA_VERSION, updatedAt: Date.now(), tracks: allTracks });
-    afterLibraryLoaded();
-    el.status.textContent = 'Biblioteca carregada';
-    hideLoading();
+    if (!firstBatchRendered) afterLibraryLoaded();
+    else { updateStats(); render(); }
+    el.status.textContent = `Biblioteca carregada • ${allTracks.length} músicas`;
   } catch (error) {
     console.error(error);
-    hideLoading();
     el.status.textContent = 'Erro ao carregar a biblioteca';
     el.trackList.innerHTML = `<div class="empty">${esc(error.message || 'Erro ao carregar')}</div>`;
+  }
+}
+
+async function refreshLibraryInBackground(cacheKey, schemaVersion){
+  try {
+    const fresh = (await loadFolder(cfg.ROOT_FOLDER_ID))
+      .sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
+    // Compara hash simples para ver se mudou algo
+    const oldIds = JSON.stringify(allTracks.map(t => t.id).sort());
+    const newIds = JSON.stringify(fresh.map(t => t.id).sort());
+    saveJSON(cacheKey, { schemaVersion, updatedAt: Date.now(), tracks: fresh });
+    if (oldIds !== newIds || allTracks.length !== fresh.length) {
+      allTracks = fresh;
+      afterLibraryLoaded();
+      el.status.textContent = 'Biblioteca atualizada';
+      toast('Biblioteca atualizada com novidades.');
+    } else {
+      el.status.textContent = 'Biblioteca atualizada';
+    }
+  } catch (error) {
+    console.warn('Atualização em segundo plano falhou:', error.message);
+    // Não mostra erro pro usuário — ele já tem o cache funcionando
+    el.status.textContent = 'Biblioteca carregada do cache';
   }
 }
 

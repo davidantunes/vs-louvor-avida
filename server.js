@@ -62,9 +62,11 @@ app.set('trust proxy', 1);
 // =============================================================
 // Rate limiters
 // =============================================================
+// Limite geral mais generoso para acomodar bibliotecas com muitas pastas
+// (uma chamada /api/drive por pasta na carga inicial).
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 120,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Muitas requisições. Aguarde um momento e tente novamente.' }
@@ -362,7 +364,7 @@ function requireApiKey(res) {
 }
 
 const driveListCache = new Map();
-const DRIVE_CACHE_TTL_MS = Number(process.env.DRIVE_CACHE_TTL_MS || 5 * 60 * 1000);
+const DRIVE_CACHE_TTL_MS = Number(process.env.DRIVE_CACHE_TTL_MS || 30 * 60 * 1000);
 
 function safeFolderId(raw) {
   return /^[A-Za-z0-9_\-]{10,80}$/.test(String(raw || '')) ? String(raw) : '';
@@ -379,6 +381,8 @@ app.get('/api/drive', async (req, res) => {
     const cached = driveListCache.get(cacheKey);
     if (!force && cached && Date.now() < cached.expires) {
       res.setHeader('X-Cache', 'HIT');
+      // Permite o navegador cachear por 5 min com revalidação
+      res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
       return res.json(cached.files);
     }
 
@@ -408,6 +412,7 @@ app.get('/api/drive', async (req, res) => {
 
     driveListCache.set(cacheKey, { files, expires: Date.now() + DRIVE_CACHE_TTL_MS });
     res.setHeader('X-Cache', 'MISS');
+    res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
     res.json(files);
   } catch (error) {
     console.error(error);

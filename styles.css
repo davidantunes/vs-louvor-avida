@@ -2954,3 +2954,87 @@ html {
 body.app-locked.player-visible {
   padding-bottom: 0 !important; /* modal cobre tudo, padding vira do modal-card */
 }
+
+/* ============================================================
+   v2.15.0 — Skeleton da biblioteca enquanto Drive carrega
+   ============================================================ */
+.library-skeleton {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  padding: 4px 0;
+}
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255,255,255,.03);
+  overflow: hidden;
+  position: relative;
+}
+.skeleton-cover {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,.04) 0%,
+    rgba(41,217,208,.08) 50%,
+    rgba(255,255,255,.04) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,.04) 0%,
+    rgba(41,217,208,.08) 50%,
+    rgba(255,255,255,.04) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line-lg { width: 80%; height: 14px; }
+.skeleton-line-md { width: 55%; }
+.skeleton-line-sm { width: 35%; height: 10px; }
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+body[data-theme="light"] .skeleton-card {
+  background: rgba(0,0,0,.025);
+}
+body[data-theme="light"] .skeleton-cover,
+body[data-theme="light"] .skeleton-line {
+  background: linear-gradient(90deg,
+    rgba(0,0,0,.05) 0%,
+    rgba(14,185,176,.10) 50%,
+    rgba(0,0,0,.05) 100%);
+  background-size: 200% 100%;
+}
+
+@media (max-width: 640px) {
+  .library-skeleton {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .skeleton-cover {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-cover, .skeleton-line {
+    animation: none;
+    opacity: .6;
+  }
+}
