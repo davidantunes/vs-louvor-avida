@@ -20,6 +20,7 @@ let currentQueue = [];
 let currentIndex = -1;
 let repeatMode = false;
 let shuffleMode = false;
+let randomContinuousMode = false;
 let selectedSemitone = 0;
 let selectedToneLabel = '';
 let toneTarget = null;
@@ -276,13 +277,20 @@ function bindEvents(){
   el.randomBtn.addEventListener('click', () => {
     const list = getFiltered();
     if (!list.length) return;
-    playTrack(list[Math.floor(Math.random() * list.length)], 0, list);
+    randomContinuousMode = true;
+    shuffleMode = true;
+    el.shuffleBtn?.classList.add('favorites-active');
+    el.shuffleBtn?.setAttribute('aria-pressed', 'true');
+    const randomQueue = list.slice().sort(() => Math.random() - 0.5);
+    playTrack(randomQueue[0], 0, randomQueue, { keepRandomMode: true });
+    toast('Reprodução aleatória contínua ativada.');
   });
   el.copyLinkBtn.addEventListener('click', () => copyText(location.origin + location.pathname, 'Link do sistema copiado.'));
 
   el.shuffleBtn.addEventListener('click', () => {
     shuffleMode = !shuffleMode;
     el.shuffleBtn.classList.toggle('favorites-active', shuffleMode);
+    el.shuffleBtn.setAttribute('aria-pressed', shuffleMode ? 'true' : 'false');
   });
   el.repeatBtn.addEventListener('click', () => {
     repeatMode = !repeatMode;
@@ -299,7 +307,14 @@ function bindEvents(){
   el.audio.addEventListener('pause', () => setPlayButtonState(false));
   el.audio.addEventListener('timeupdate', syncProgressUI);
   el.audio.addEventListener('loadedmetadata', syncProgressUI);
-  el.audio.addEventListener('ended', () => { setPlayButtonState(false); });
+  el.audio.addEventListener('ended', () => {
+    setPlayButtonState(false);
+    if (repeatMode && current) {
+      playTrack(current, null, currentQueue, { keepRandomMode: randomContinuousMode });
+      return;
+    }
+    if (randomContinuousMode) playNext();
+  });
 
   el.closeTone.addEventListener('click', closeToneModal);
   el.toneModal.addEventListener('click', e => { if (e.target === el.toneModal) closeToneModal(); });
@@ -1848,8 +1863,9 @@ function bindTrackCardEvents(container){
 
 function findTrack(id){ return allTracks.find(t => t.id === id); }
 
-function playTrack(track, semitones = null, queue = currentQueue){
+function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   if (!track) return;
+  if (!options.keepRandomMode) randomContinuousMode = false;
   document.body.classList.add('player-visible');
   document.getElementById('playerArea')?.classList.remove('player-hidden');
   if (semitones === null || semitones === undefined) semitones = Number(track.repertoireSemitones || 0);
@@ -1876,6 +1892,7 @@ function closePlayer(){
   current = null;
   currentIndex = -1;
   currentQueue = [];
+  randomContinuousMode = false;
   document.body.classList.remove('player-visible');
   document.getElementById('playerArea')?.classList.add('player-hidden');
   if (el.nowTitle) el.nowTitle.textContent = 'Selecione uma música';
@@ -1896,13 +1913,13 @@ function playPrev(){
   const queue = currentQueue.length ? currentQueue : getFiltered();
   if (!queue.length) return;
   currentIndex = currentIndex <= 0 ? queue.length - 1 : currentIndex - 1;
-  playTrack(queue[currentIndex], null, queue);
+  playTrack(queue[currentIndex], null, queue, { keepRandomMode: randomContinuousMode });
 }
 function playNext(){
   const queue = currentQueue.length ? currentQueue : getFiltered();
   if (!queue.length) return;
   currentIndex = shuffleMode ? Math.floor(Math.random() * queue.length) : (currentIndex >= queue.length - 1 ? 0 : currentIndex + 1);
-  playTrack(queue[currentIndex], null, queue);
+  playTrack(queue[currentIndex], null, queue, { keepRandomMode: randomContinuousMode });
 }
 function syncProgressUI(){
   const duration = Number.isFinite(el.audio.duration) ? el.audio.duration : 0;
