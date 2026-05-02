@@ -34,7 +34,7 @@ Attributes:
 ```text
 key       string  tamanho 100     obrigatório
 value     string  tamanho 100000  obrigatório
-updatedAt string  tamanho 40      opcional
+updated_at string  tamanho 50      obrigatório
 updatedBy string  tamanho 255     opcional
 ```
 
@@ -51,7 +51,7 @@ Attributes:
 userId    string  tamanho 255     obrigatório
 key       string  tamanho 100     obrigatório
 value     string  tamanho 100000  obrigatório
-updatedAt string  tamanho 40      opcional
+updated_at string  tamanho 50      obrigatório
 userName  string  tamanho 255     opcional
 ```
 
@@ -109,46 +109,3 @@ Somente usuários logados com e-mail presente nessa lista verão as listas suspe
 4. Clique em **Salvar escala**.
 
 A lista inicial de membros foi extraída da escala de maio, sem nomes repetidos.
-
----
-
-## V38 — Multi-mês na escala e endpoint /me
-
-### Chaves de mês
-
-A partir da V38, cada mês da escala fica em uma chave própria do `app_state`:
-
-```text
-monthlySchedule:2026-05
-monthlySchedule:2026-06
-monthlySchedule:2026-07
-...
-```
-
-A chave antiga `monthlySchedule` (sem `:YYYY-MM`) continua sendo lida em modo de compatibilidade para Maio/2026, mas novas gravações vão sempre para `monthlySchedule:2026-05`. **Não é necessário fazer nenhuma migração manual** — basta abrir a escala de Maio/2026 logado como admin e clicar em **Salvar escala** uma vez. O sistema gravará na chave nova.
-
-### Endpoint /api/appwrite/me
-
-Em V38 o servidor não expõe mais a lista de e-mails de administradores. Em vez disso, o cliente faz uma chamada autenticada (com JWT) a `/api/appwrite/me`, que devolve apenas:
-
-```json
-{
-  "id": "abc123",
-  "email": "voce@exemplo.com",
-  "name": "Seu Nome",
-  "isAdmin": true
-}
-```
-
-Isso evita que qualquer pessoa visitando o site descubra quem são os administradores apenas inspecionando o tráfego.
-
-### Endpoint admin separado
-
-Operações de admin agora vão por uma rota distinta:
-
-```text
-PUT /api/appwrite/admin/state/:key   — exige JWT de admin (members, monthlySchedule:YYYY-MM)
-PUT /api/appwrite/state/:key         — exige JWT de qualquer usuário (setlists)
-```
-
-Ambos validam **no servidor** que a chave faz sentido para o tipo de operação.
