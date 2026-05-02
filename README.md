@@ -1,4 +1,62 @@
-# VS Louvor — Igreja Amor e Vida — V19 Tom alterado visível + textos padronizados
+# VS Louvor — Igreja Amor e Vida — V38
+
+> **Versão 2.15.0** — Hardening de segurança, PWA, escala multi-mês e novas funcionalidades de repertório.
+
+## Novidades da V38
+
+### Segurança (servidor)
+- **helmet + CSP customizada** protegendo contra XSS e clickjacking (`frame-ancestors none`)
+- **Rate limiting**: 120 req/min em `/api/*` e 10 req/min em `/api/transpose`
+- **Adminship não vaza mais**: `/api/appwrite/config` deixou de expor a lista de e-mails de administradores. A verificação de admin agora acontece em `/api/appwrite/me` (exige JWT).
+- **Endpoint admin separado**: `/api/appwrite/admin/state/:key` valida JWT e e-mail antes de gravar `members` e `monthlySchedule`.
+- **Validação de chaves**: o servidor só aceita chaves conhecidas em cada endpoint (defesa em profundidade).
+- **Sanitização do `Content-Disposition`** no download de áudios e transposições.
+- **`trust proxy`** habilitado para que o rate limit funcione corretamente atrás do proxy do Render.
+
+### Performance
+- **Cache de transposições em disco** (`/tmp/vs-louvor-transpose-cache` por padrão), com limpeza LRU automática quando excede 500 MB.
+- **Cache em memória** das listagens do Google Drive (5 min, configurável via `DRIVE_CACHE_TTL_MS`).
+- **Cache-Control** nos arquivos estáticos (1 dia para imagens, 5 min para CSS/JS).
+
+### PWA
+- `manifest.json` para instalação como app no celular.
+- **Service worker** (`sw.js`) com:
+  - Cache do app shell (HTML/CSS/JS/imagens) com estratégia stale-while-revalidate.
+  - Cache de áudios já tocados (até 50 itens, LRU).
+  - Funcionamento offline básico — a interface carrega mesmo sem internet.
+
+### Escala mensal
+- **Suporte a múltiplos meses**: agora cada mês tem sua chave própria no Appwrite (`monthlySchedule:YYYY-MM`).
+- Seletor de mês no topo da seção, com botões anterior/próximo.
+- Filtro **"Apenas onde estou escalado"** mostra só os domingos/quintas em que o usuário aparece.
+- Mês novo sem dados é gerado automaticamente com domingos e quintas vazios.
+- Compatibilidade retroativa: a chave antiga `monthlySchedule` (sem `:YYYY-MM`) continua sendo lida para Maio/2026.
+
+### Repertórios
+- Botão **"Imprimir"** abre uma versão A4 limpa, pronta para imprimir.
+- Botão **"Enviar WhatsApp"** abre o WhatsApp Web/App com o repertório formatado.
+- Botão **"Alterar tom"** em cada música do repertório, sem precisar abrir o tone modal global.
+
+### Acessibilidade
+- Skip link "Pular para o conteúdo" para usuários de teclado.
+- `aria-label`, `aria-pressed` e `role="dialog"` em todos os modais.
+- Foco visível global (`:focus-visible`).
+- Modais agora respeitam `Esc` (fecha) e `Enter` (confirma).
+
+### UX
+- **Modal de confirmação customizado** substitui o `confirm()` do navegador (que era horrível em mobile).
+- **Detector de tom** mais conservador: parou de marcar "letra solta A-G" como tom da música.
+- **Capa herdada da pasta**: músicas em subpastas agora exibem a capa da pasta-mãe quando a subpasta não tem capa própria (antes mostravam só o logo).
+- **`isNextSchedule`** parou de estar travada em Maio/2026 — funciona para qualquer mês.
+
+### Cadastro
+- Senha mínima passou de **6 para 8 caracteres** no cadastro.
+- **Lista de senhas comuns bloqueadas** (123456, senha123, igreja123, etc).
+- Exigência de **2 categorias** entre minúscula, MAIÚSCULA, número e símbolo.
+
+---
+
+## Histórico anterior (V19)
 
 ## O que entra na V10
 
@@ -50,9 +108,22 @@ http://localhost:3000
 2. no Render, clique em **New +** → **Web Service**
 3. conecte o repositório
 4. o Render deve ler automaticamente o `render.yaml`
-5. adicione a variável de ambiente:
+5. adicione as variáveis de ambiente:
 
+**Obrigatórias:**
 - `GOOGLE_DRIVE_API_KEY` = sua chave da API do Google Drive
+- `APPWRITE_ENDPOINT` = `https://nyc.cloud.appwrite.io/v1` (ou o endpoint do seu projeto)
+- `APPWRITE_PROJECT_ID` = `69f4cb460024e484358b`
+- `APPWRITE_DATABASE_ID` = `louvor_avida`
+- `APPWRITE_API_KEY` = chave de servidor do Appwrite (com permissões de read/write nas coleções)
+- `APPWRITE_ADMIN_EMAILS` = lista separada por vírgula dos e-mails de administradores que podem editar a escala
+
+**Opcionais (V38):**
+- `TRANSPOSE_CACHE_DIR` = pasta para cache de áudios transpostos (default: `/tmp/vs-louvor-transpose-cache`)
+- `TRANSPOSE_CACHE_MAX_BYTES` = limite máximo do cache em bytes (default: 524288000 = 500 MB)
+- `DRIVE_CACHE_TTL_MS` = tempo de cache da listagem do Drive em milissegundos (default: 300000 = 5 min)
+- `APPWRITE_APP_STATE_COLLECTION_ID` = id da coleção compartilhada (default: `app_state`)
+- `APPWRITE_USER_STATE_COLLECTION_ID` = id da coleção de usuário (default: `user_state`)
 
 ### Configuração manual
 - **Environment**: Node
@@ -349,49 +420,3 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - recuperação de senha por e-mail via Appwrite Auth
 - avatar com iniciais do usuário
 - painel de perfil com dados da conta, permissão, favoritos e repertórios
-
-
-## V38
-
-- tela de login simplificada
-- modo Entrar mostra apenas **e-mail** e **senha**
-- modo Criar cadastro mostra apenas **nome**, **e-mail** e **senha**
-- campo **Equipe / escala** removido
-- tela de acesso sem redundância visual
-
-
-## V39
-
-- corrigida integração com Appwrite para usar os atributos esperados nas collections:
-  - app_state: `key`, `value`, `updated_at`
-  - user_state: `user_id`, `key`, `value`, `updated_at`
-- removidos campos não cadastrados no Appwrite, como `updatedAt`, `updatedBy`, `userId` e `userName` no payload gravado.
-
-
-## V40
-
-- campo **Nome** oculto no modo **Entrar**
-- campo **Nome** exibido somente em **Criar cadastro**
-- correção global da classe `hidden` para evitar exibição indevida
-
-
-## V41
-
-- removido o filtro **Função** da página **Escala**
-- a busca feita na página inicial agora redireciona automaticamente para **Biblioteca**
-- quando não houver resultado, a mensagem aparece já na página **Biblioteca**
-
-
-## V42
-
-- botão **Reproduzir aleatório** agora inicia reprodução contínua aleatória
-- ao terminar uma música, outra música aleatória é iniciada automaticamente
-- esse comportamento só fica ativo quando iniciado pelo botão **Reproduzir aleatório**
-- ao escolher uma música manualmente, o player volta ao comportamento normal
-
-
-## V43
-
-- correção definitiva do campo **Nome**: oculto no modo **Entrar** e visível somente em **Criar cadastro**
-- reforço via CSS e JavaScript para evitar cache/ordem de estilos exibindo o campo indevidamente
-- mantém o comportamento de reprodução aleatória contínua da V42

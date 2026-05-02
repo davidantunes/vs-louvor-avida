@@ -1,0 +1,27 @@
+{
+  "name": "Biblioteca de Louvor — Igreja Amor e Vida",
+  "short_name": "VS Louvor",
+  "description": "Plataforma do Ministério de Louvor da Igreja Amor e Vida",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#040606",
+  "theme_color": "#040606",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "assets/logo-avida.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/logo-avida.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["music", "lifestyle"]
+}
