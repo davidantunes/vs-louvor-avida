@@ -2479,3 +2479,182 @@ body[data-theme="light"] .schedule-toolbar select{
     display:none !important;
   }
 }
+
+
+/* V46 — carregamento progressivo e tela de impacto */
+.loading-card-impact{
+  position:relative;
+  width:min(720px,100%);
+  min-height:320px;
+  padding:34px;
+  overflow:hidden;
+  grid-template-columns:108px 1fr;
+  isolation:isolate;
+}
+.loading-card-impact::before{
+  content:"";
+  position:absolute;
+  inset:-40%;
+  background:
+    radial-gradient(circle at 25% 35%, rgba(41,217,208,.18), transparent 26%),
+    radial-gradient(circle at 80% 15%, rgba(255,255,255,.08), transparent 18%),
+    conic-gradient(from 180deg, transparent, rgba(41,217,208,.14), transparent, rgba(255,255,255,.06), transparent);
+  animation:loadingAura 8s linear infinite;
+  z-index:-2;
+}
+.loading-card-impact::after{
+  content:"";
+  position:absolute;
+  inset:1px;
+  border-radius:29px;
+  background:linear-gradient(180deg, rgba(4,7,7,.92), rgba(2,4,4,.96));
+  z-index:-1;
+}
+@keyframes loadingAura{
+  to{transform:rotate(360deg)}
+}
+.loading-card-impact img{
+  width:108px;
+  height:108px;
+  border-radius:30px;
+  position:relative;
+  z-index:2;
+}
+.loading-orbit{
+  position:absolute;
+  right:34px;
+  top:30px;
+  width:96px;
+  height:96px;
+  border-radius:50%;
+  border:1px solid rgba(41,217,208,.14);
+  animation:orbitSpin 5s linear infinite;
+  opacity:.8;
+}
+.loading-orbit span{
+  position:absolute;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--teal);
+  box-shadow:0 0 18px rgba(41,217,208,.65);
+}
+.loading-orbit span:nth-child(1){left:8px;top:12px}
+.loading-orbit span:nth-child(2){right:8px;top:34px;transform:scale(.7)}
+.loading-orbit span:nth-child(3){left:42px;bottom:6px;transform:scale(.5)}
+@keyframes orbitSpin{
+  to{transform:rotate(360deg)}
+}
+.loading-stage{
+  margin-top:12px;
+  display:inline-flex;
+  padding:8px 12px;
+  border-radius:999px;
+  border:1px solid rgba(41,217,208,.20);
+  background:rgba(41,217,208,.08);
+  color:var(--teal);
+  font-size:12px;
+  font-weight:900;
+}
+.loading-progress{
+  grid-column:1 / -1;
+  display:grid;
+  gap:10px;
+  margin-top:8px;
+}
+.loading-progress-track{
+  height:11px;
+  border-radius:999px;
+  background:rgba(255,255,255,.075);
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.06);
+}
+.loading-progress-track i{
+  display:block;
+  width:8%;
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--teal),#b9fffb);
+  box-shadow:0 0 24px rgba(41,217,208,.45);
+  transition:width .28s ease;
+}
+.loading-stats{
+  color:var(--muted);
+  font-size:13px;
+  font-weight:800;
+}
+#loadingSkipBtn{
+  grid-column:1 / -1;
+  justify-self:end;
+}
+@media (max-width:700px){
+  .loading-card-impact{
+    grid-template-columns:1fr;
+    padding:26px;
+  }
+  .loading-card-impact img{
+    width:86px;
+    height:86px;
+  }
+  .loading-orbit{
+    right:22px;
+    top:22px;
+    width:76px;
+    height:76px;
+  }
+  #loadingSkipBtn{
+    justify-self:stretch;
+  }
+}
+
+
+/* V47 — escala mobile nítida + player fixo no bottom */
+.player{
+  position:fixed !important;
+  left:calc(var(--sidebar-w) + 18px) !important;
+  right:18px !important;
+  bottom:14px !important;
+  z-index:9999 !important;
+  transform:translateZ(0);
+  will-change:transform;
+}
+.player.player-hidden{display:none !important;opacity:0;pointer-events:none}
+body.player-visible .player{display:block !important;opacity:1;pointer-events:auto}
+.schedule-cards-mobile{display:none}
+.schedule-mobile-empty{padding:18px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.03);color:var(--muted);font-weight:800}
+@media (max-width:760px){
+  .schedule-table-wrap{display:none !important}
+  .schedule-summary{grid-template-columns:repeat(2,1fr) !important}
+  .schedule-cards-mobile{display:grid !important;gap:12px;margin-top:10px}
+  .schedule-mobile-card{padding:14px;border-radius:20px;border:1px solid var(--line);background:linear-gradient(180deg, rgba(9,12,12,.95), rgba(5,8,8,.96));box-shadow:0 18px 40px rgba(0,0,0,.26)}
+  .schedule-mobile-card.is-quinta{background:linear-gradient(180deg, rgba(26,48,74,.95), rgba(17,27,42,.96))}
+  .schedule-mobile-card.is-domingo{background:linear-gradient(180deg, rgba(8,18,18,.96), rgba(4,8,8,.98))}
+  .schedule-mobile-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+  .schedule-mobile-datebox{display:flex;flex-direction:column;gap:2px}
+  .schedule-mobile-datebox small{font-size:12px;font-weight:900;color:var(--teal);letter-spacing:.04em;text-transform:uppercase}
+  .schedule-mobile-datebox strong{font-size:24px;line-height:1;font-weight:1000;color:var(--text)}
+  .schedule-mobile-next{display:inline-flex;padding:7px 10px;border-radius:999px;background:rgba(41,217,208,.12);border:1px solid var(--line);font-size:11px;font-weight:900;color:var(--teal);white-space:nowrap}
+  .schedule-mobile-grid{display:grid;grid-template-columns:1fr;gap:8px}
+  .schedule-mobile-item{display:grid;grid-template-columns:86px 1fr;align-items:start;gap:10px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.05)}
+  .schedule-mobile-item span{font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;padding-top:2px}
+  .schedule-mobile-value,.schedule-mobile-value .schedule-cell-readonly,.schedule-mobile-value .schedule-match{font-size:14px;line-height:1.25;color:var(--text);font-weight:900;word-break:break-word;white-space:normal}
+  .schedule-mobile-value select.schedule-member-select{min-width:0 !important;width:100%;height:40px !important;border-radius:12px !important;font-size:13px !important}
+  .player{
+    left:10px !important;
+    right:10px !important;
+    bottom:76px !important;
+    max-height:none !important;
+    overflow:visible !important;
+    border-radius:22px !important;
+    box-shadow:0 16px 45px rgba(0,0,0,.48), 0 0 0 1px rgba(41,217,208,.12) !important;
+  }
+  body.player-visible{padding-bottom:230px !important}
+}
+@media (max-width:480px){
+  .schedule-mobile-item{grid-template-columns:80px 1fr;padding:9px 10px}
+  .schedule-mobile-item span{font-size:10px}
+  .schedule-mobile-value,.schedule-mobile-value .schedule-cell-readonly{font-size:13px}
+  .schedule-mobile-datebox strong{font-size:22px}
+  .player{bottom:72px !important}
+  body.player-visible{padding-bottom:240px !important}
+}

@@ -404,3 +404,12 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - repertórios em cards mais limpos no mobile
 - player mobile mais compacto e refinado
 - melhorias para celular em modo paisagem
+
+
+## V46
+
+- carregamento progressivo das músicas do Google Drive
+- acesso liberado antes do fim da indexação completa
+- uso de cache local para abertura quase imediata nas próximas visitas
+- atualização do Drive em segundo plano
+- nova tela de carregamento com visual mais impactante e progresso de indexação

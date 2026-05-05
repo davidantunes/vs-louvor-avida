@@ -13,14 +13,22 @@
   <div class="bg-blur bg-blur-c"></div>
 
   <div id="loadingScreen" class="loading-screen">
-    <div class="loading-card glass">
+    <div class="loading-card loading-card-impact glass">
+      <div class="loading-orbit" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
       <img src="assets/logo-avida.jpg" alt="Igreja Amor e Vida">
       <div class="loading-copy">
         <span class="kicker">Preparando a plataforma</span>
         <strong>Biblioteca de Louvor</strong>
-        <p id="loadingMessage">Carregando biblioteca e organizando o ambiente...</p>
+        <p id="loadingMessage">Estamos liberando o acesso e indexando as músicas do Google Drive em segundo plano.</p>
+        <div class="loading-stage" id="loadingStage">Iniciando biblioteca...</div>
       </div>
-      <div class="loading-bar"><i></i></div>
+      <div class="loading-progress">
+        <div class="loading-progress-track"><i id="loadingProgressFill"></i></div>
+        <div id="loadingStats" class="loading-stats">Acesso será liberado em instantes.</div>
+      </div>
+      <button id="loadingSkipBtn" class="btn btn-secondary btn-compact" type="button">Entrar enquanto carrega</button>
     </div>
   </div>
 
@@ -192,6 +200,8 @@
             <tbody id="scheduleTableBody"></tbody>
           </table>
         </div>
+
+        <div id="scheduleCards" class="schedule-cards-mobile"></div>
 
         <div class="schedule-notes">
           <strong>Observações:</strong>

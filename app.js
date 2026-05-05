@@ -62,6 +62,12 @@ const SCHEDULE_ROLE_LABELS = {
 };
 
 let infiniteObserver = null;
+let libraryLoadingInBackground = false;
+let progressiveRenderTimer = null;
+let indexedFolderCount = 0;
+let discoveredFolderCount = 0;
+let indexedTrackCount = 0;
+let firstProgressBatchReleased = false;
 let tourStepIndex = 0;
 const TOUR_DISABLE_KEY = "vs_guided_tour_disabled_v16";
 const TOUR_STORAGE_KEY = "vs_guided_tour_done_v16";
@@ -177,6 +183,10 @@ const el = {
   tourDontShowAgain: document.getElementById('tourDontShowAgain'),
   loadingScreen: document.getElementById('loadingScreen'),
   loadingMessage: document.getElementById('loadingMessage'),
+  loadingStage: document.getElementById('loadingStage'),
+  loadingStats: document.getElementById('loadingStats'),
+  loadingProgressFill: document.getElementById('loadingProgressFill'),
+  loadingSkipBtn: document.getElementById('loadingSkipBtn'),
   loginScreen: document.getElementById('loginScreen'),
   loginName: document.getElementById('loginName'),
   loginEmail: document.getElementById('loginEmail'),
@@ -216,6 +226,7 @@ const el = {
   scheduleSaveBtn: document.getElementById('scheduleSaveBtn'),
   scheduleEditStatus: document.getElementById('scheduleEditStatus'),
   scheduleSummary: document.getElementById('scheduleSummary'),
+  scheduleCards: document.getElementById('scheduleCards'),
   scheduleTableBody: document.getElementById('scheduleTableBody')
 };
 
@@ -246,6 +257,10 @@ function bindEvents(){
   el.tagFilter.addEventListener('change', render);
   el.typeFilter.addEventListener('change', render);
   el.refresh.addEventListener('click', () => loadLibrary(true));
+  if (el.loadingSkipBtn) el.loadingSkipBtn.addEventListener('click', () => {
+    hideLoading();
+    toast('Acesso liberado. As músicas continuam carregando em segundo plano.');
+  });
   el.themeToggle.addEventListener('click', toggleTheme);
   el.favoritesOnly.addEventListener('click', () => {
     isFavoritesFilter = !isFavoritesFilter;
@@ -1023,11 +1038,38 @@ function renderSchedule(){
   const q = normalize(el.scheduleSearch?.value || '');
   if (!rows.length) {
     el.scheduleTableBody.innerHTML = '<tr><td colspan="10" class="schedule-empty">Nenhum resultado encontrado na escala.</td></tr>';
+    if (el.scheduleCards) el.scheduleCards.innerHTML = '<div class="schedule-mobile-empty">Nenhum resultado encontrado na escala.</div>';
   } else {
     el.scheduleTableBody.innerHTML = rows.map(row => renderScheduleRow(row, q)).join('');
+    renderScheduleCards(rows, q);
   }
   renderScheduleSummary(rows);
 }
+function renderScheduleCards(rows, q){
+  if (!el.scheduleCards) return;
+  const fields = ['minister','back1','back2','back3','bass','drums','guitar','keyboard','sound'];
+  el.scheduleCards.innerHTML = rows.map(row => {
+    const rowIndex = scheduleRows.findIndex(item => item.day === row.day && item.date === row.date);
+    const entries = fields.map(field => {
+      const content = isScheduleAdmin() && rowIndex >= 0
+        ? renderScheduleCell(row, rowIndex, field, q)
+        : highlightScheduleMatch(row[field] || '—', q);
+      return `<div class="schedule-mobile-item"><span>${esc(SCHEDULE_ROLE_LABELS[field])}</span><div class="schedule-mobile-value">${content}</div></div>`;
+    }).join('');
+    const nextBadge = isNextSchedule(row) ? '<span class="schedule-mobile-next">Próxima escala</span>' : '';
+    return `<article class="schedule-mobile-card ${row.day === 'Quinta' ? 'is-quinta' : 'is-domingo'}">
+      <header class="schedule-mobile-head">
+        <div class="schedule-mobile-datebox">
+          <small>${esc(row.day)}</small>
+          <strong>${esc(row.date)}</strong>
+        </div>
+        ${nextBadge}
+      </header>
+      <div class="schedule-mobile-grid">${entries}</div>
+    </article>`;
+  }).join('');
+}
+
 function renderScheduleRow(row, q){
   const fields = ['minister','back1','back2','back3','bass','drums','guitar','keyboard','sound'];
   const nextClass = isNextSchedule(row) ? ' schedule-row-next' : '';
@@ -1205,24 +1247,159 @@ async function loadFolder(folderId, singerName = '', inheritedCover = '') {
   return tracks;
 }
 
+function resetProgressCounters(){
+  indexedFolderCount = 0;
+  discoveredFolderCount = 0;
+  indexedTrackCount = 0;
+  firstProgressBatchReleased = false;
+  updateLoadingProgress('Preparando leitura do Google Drive...');
+}
+
+function updateLoadingProgress(stage = ''){
+  const folderRatio = discoveredFolderCount ? Math.min(1, indexedFolderCount / discoveredFolderCount) : 0.08;
+  const trackBoost = Math.min(0.34, indexedTrackCount / 700);
+  const progress = Math.max(8, Math.min(96, Math.round((folderRatio * 62) + (trackBoost * 100))));
+  if (el.loadingProgressFill) el.loadingProgressFill.style.width = `${progress}%`;
+  if (el.loadingStage && stage) el.loadingStage.textContent = stage;
+  if (el.loadingStats) {
+    const foldersText = discoveredFolderCount ? `${indexedFolderCount}/${discoveredFolderCount} pastas lidas` : 'Procurando pastas...';
+    const tracksText = `${indexedTrackCount} música(s) indexada(s)`;
+    el.loadingStats.textContent = `${foldersText} • ${tracksText}`;
+  }
+}
+
+function completeLoadingProgress(){
+  if (el.loadingProgressFill) el.loadingProgressFill.style.width = '100%';
+  if (el.loadingStage) el.loadingStage.textContent = 'Biblioteca sincronizada.';
+  if (el.loadingStats) el.loadingStats.textContent = `${indexedTrackCount || allTracks.length} música(s) disponíveis.`;
+}
+
+function scheduleProgressiveLibraryRender(){
+  if (progressiveRenderTimer) return;
+  progressiveRenderTimer = setTimeout(() => {
+    progressiveRenderTimer = null;
+    allTracks.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
+    populateFilters();
+    updateStats();
+    render();
+  }, 180);
+}
+
+function createTrackFromDriveFile(file, singer, cover){
+  const ext = getExt(file.name);
+  const track = {
+    id: file.id,
+    fileName: file.name,
+    ext,
+    name: cleanName(file.name),
+    singer,
+    key: detectKey(file.name),
+    tags: [],
+    coverUrl: 'assets/logo-avida.jpg',
+    webViewLink: file.webViewLink || driveViewUrl(file.id)
+  };
+  track.tags = suggestTags(track);
+  return track;
+}
+
+async function loadFolderProgressive(folderId, singerName = '', inheritedCover = '', targetTracks = allTracks, live = true){
+  discoveredFolderCount += 1;
+  updateLoadingProgress(`Lendo ${singerName || 'pasta principal'}...`);
+
+  const items = await listChildren(folderId);
+  indexedFolderCount += 1;
+
+  const folders = items.filter(i => i.mimeType === 'application/vnd.google-apps.folder').sort(sortName);
+  const files = items.filter(i => i.mimeType !== 'application/vnd.google-apps.folder').sort(sortName);
+  const localCoverFile = files.find(f => imageExt.includes(getExt(f.name)));
+  const cover = localCoverFile ? thumbnailUrl(localCoverFile.id) : inheritedCover;
+
+  const batch = [];
+  for (const file of files) {
+    const ext = getExt(file.name);
+    if (!audioExt.includes(ext)) continue;
+    const singer = singerName || 'Sem pasta';
+    batch.push(createTrackFromDriveFile(file, singer, cover));
+  }
+
+  if (batch.length) {
+    targetTracks.push(...batch);
+    indexedTrackCount += batch.length;
+    if (live) {
+      if (!firstProgressBatchReleased && targetTracks.length >= 12) {
+        firstProgressBatchReleased = true;
+        hideLoading();
+        toast('Biblioteca liberada. Continuamos indexando o restante em segundo plano.');
+      }
+      scheduleProgressiveLibraryRender();
+    }
+  }
+
+  updateLoadingProgress(`Indexando ${singerName || 'biblioteca'}...`);
+
+  for (const folder of folders) {
+    const nextSinger = singerName || folder.name;
+    await loadFolderProgressive(folder.id, nextSinger, cover, targetTracks, live);
+  }
+
+  return targetTracks;
+}
+
+async function refreshLibraryInBackground(){
+  try {
+    libraryLoadingInBackground = true;
+    resetProgressCounters();
+    const freshTracks = [];
+    await loadFolderProgressive(cfg.ROOT_FOLDER_ID, '', '', freshTracks, false);
+    freshTracks.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
+    if (freshTracks.length) {
+      allTracks = freshTracks;
+      saveJSON('vs_drive_cache_v10', { updatedAt: Date.now(), tracks: allTracks });
+      afterLibraryLoaded();
+      el.status.textContent = 'Biblioteca sincronizada em segundo plano.';
+    }
+  } catch (error) {
+    console.warn('Atualização em segundo plano falhou:', error);
+  } finally {
+    libraryLoadingInBackground = false;
+  }
+}
+
 async function loadLibrary(force = false){
   try {
-    showLoading(force ? 'Atualizando biblioteca do Google Drive...' : 'Lendo Google Drive e organizando as músicas...');
-    el.status.textContent = 'Lendo Google Drive...';
-    const cacheKey = 'vs_drive_cache_v9';
+    showLoading(force ? 'Atualizando biblioteca do Google Drive...' : 'Liberando acesso e preparando a biblioteca...');
+    resetProgressCounters();
+    el.status.textContent = 'Preparando biblioteca...';
+
+    const cacheKey = 'vs_drive_cache_v10';
     if (!force) {
       const cached = loadJSON(cacheKey, null);
       if (cached && Array.isArray(cached.tracks) && cached.tracks.length) {
         allTracks = cached.tracks;
         afterLibraryLoaded();
-        el.status.textContent = 'Biblioteca carregada do cache';
+        el.status.textContent = 'Biblioteca carregada do cache. Atualizando em segundo plano...';
         hideLoading();
+        refreshLibraryInBackground();
         return;
       }
     }
-    allTracks = (await loadFolder(cfg.ROOT_FOLDER_ID)).sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
+
+    allTracks = [];
+    afterLibraryLoaded();
+    el.status.textContent = 'Biblioteca sendo indexada em segundo plano...';
+
+    setTimeout(() => {
+      if (!firstProgressBatchReleased) {
+        hideLoading();
+        toast('Acesso liberado. As músicas aparecerão conforme forem indexadas.');
+      }
+    }, 1400);
+
+    await loadFolderProgressive(cfg.ROOT_FOLDER_ID, '', '', allTracks, true);
+    allTracks.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
     saveJSON(cacheKey, { updatedAt: Date.now(), tracks: allTracks });
     afterLibraryLoaded();
+    completeLoadingProgress();
     el.status.textContent = 'Biblioteca carregada';
     hideLoading();
   } catch (error) {
@@ -1342,8 +1519,11 @@ function render(){
   el.resultCount.textContent = `${filteredTracksCache.length} resultado(s)`;
 
   if (!filteredTracksCache.length) {
-    el.trackList.innerHTML = '<div class="empty">Nenhuma música encontrada com os filtros atuais.</div>';
-    el.loadStatus.textContent = 'Nenhuma música para carregar';
+    const loadingMsg = indexedTrackCount === 0 && (libraryLoadingInBackground || discoveredFolderCount > indexedFolderCount)
+      ? 'A biblioteca ainda está sendo indexada. As músicas aparecerão automaticamente conforme forem encontradas.'
+      : 'Nenhuma música encontrada com os filtros atuais.';
+    el.trackList.innerHTML = `<div class="empty">${loadingMsg}</div>`;
+    el.loadStatus.textContent = indexedTrackCount === 0 ? 'Indexando músicas...' : 'Nenhuma música para carregar';
     return;
   }
 
