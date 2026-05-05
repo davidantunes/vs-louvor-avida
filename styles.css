@@ -2658,3 +2658,15 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
   .player{bottom:72px !important}
   body.player-visible{padding-bottom:240px !important}
 }
+
+/* V48 — permissões dos repertórios compartilhados */
+.setlist-permission-note{
+  grid-column:1 / -1;
+  padding:12px 14px;
+  border-radius:16px;
+  border:1px solid var(--line);
+  background:rgba(41,217,208,.07);
+  color:var(--muted);
+  font-weight:800;
+  line-height:1.45;
+}

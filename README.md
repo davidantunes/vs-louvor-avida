@@ -413,3 +413,12 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - uso de cache local para abertura quase imediata nas próximas visitas
 - atualização do Drive em segundo plano
 - nova tela de carregamento com visual mais impactante e progresso de indexação
+
+
+## V48
+
+- repertórios continuam compartilhados no Appwrite (`app_state/setlists`)
+- usuários comuns podem criar repertórios
+- usuários comuns podem adicionar músicas e reordenar repertórios
+- usuários comuns podem editar repertórios
+- apenas administradores/líderes configurados em `APPWRITE_ADMIN_EMAILS` podem excluir repertórios

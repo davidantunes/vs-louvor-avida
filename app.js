@@ -767,6 +767,12 @@ function isScheduleAdmin(){
   const email = String(authUser?.email || '').toLowerCase();
   return Boolean(email && cloudAdminEmails.includes(email));
 }
+function canDeleteSetlists(){
+  return isScheduleAdmin();
+}
+function canEditSetlists(){
+  return Boolean(authUser);
+}
 async function setAdminSharedState(key, value){
   if (!authUser) throw new Error('Faça login para salvar.');
   const jwt = await getAuthJwt();
@@ -1810,6 +1816,10 @@ function openSetlistModal(track, toneInfo = { semitones: 0, tone: '' }){
 }
 function closeSetlistModal(){ el.setlistModal.classList.add('hidden'); }
 function createSetlistFromInput(){
+  if (!canEditSetlists()) {
+    toast('Faça login para criar repertórios.');
+    return;
+  }
   const name = el.newSetlistName.value.trim();
   if (!name) return;
   const s = { id: String(Date.now()), name, trackIds: setlistTarget ? [makeSetlistEntry(setlistTarget, setlistTargetTone)] : [] };
@@ -1833,6 +1843,10 @@ function renderSetlistOptions(){
     </div>
   `).join('');
   el.setlistOptions.querySelectorAll('.add-to-setlist').forEach(btn => btn.addEventListener('click', () => {
+    if (!canEditSetlists()) {
+      toast('Faça login para alterar repertórios.');
+      return;
+    }
     const setlist = setlists.find(s => s.id === btn.dataset.id);
     if (!setlist || !setlistTarget) return;
     const entry = makeSetlistEntry(setlistTarget, setlistTargetTone);
@@ -1846,11 +1860,14 @@ function renderSetlistOptions(){
 }
 
 function renderSetlists(){
+  const permissionNotice = authUser
+    ? (canDeleteSetlists() ? 'Modo líder: você pode criar, editar e excluir repertórios.' : 'Usuário comum: você pode criar e editar repertórios; excluir é restrito aos líderes.')
+    : 'Faça login para criar ou editar repertórios.';
   if (!setlists.length) {
-    el.setlistsGrid.innerHTML = '<div class="empty">Nenhum repertório criado ainda. Clique em “+ Novo repertório” ou adicione músicas a partir da biblioteca.</div>';
+    el.setlistsGrid.innerHTML = `<div class="empty">Nenhum repertório criado ainda. ${permissionNotice}</div>`;
     return;
   }
-  el.setlistsGrid.innerHTML = setlists.map(s => `
+  el.setlistsGrid.innerHTML = `<div class="setlist-permission-note">${permissionNotice}</div>` + setlists.map(s => `
     <article class="setlist-card">
       <strong>${esc(s.name)}</strong>
       <div class="muted">${s.trackIds.length} música(s)</div>
@@ -1858,7 +1875,7 @@ function renderSetlists(){
         <button class="mini-btn play-setlist" data-id="${esc(s.id)}">Tocar</button>
         <button class="mini-btn open-setlist" data-id="${esc(s.id)}">Abrir</button>
         <button class="mini-btn share-setlist" data-id="${esc(s.id)}">Compartilhar</button>
-        <button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>
+        ${canDeleteSetlists() ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>` : ''}
       </div>
     </article>
   `).join('');
@@ -1869,6 +1886,10 @@ function renderSetlists(){
     copyText(`${location.origin}${location.pathname}?setlist=${encodeURIComponent(btn.dataset.id)}`, 'Link do repertório copiado.');
   }));
   el.setlistsGrid.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
+    if (!canDeleteSetlists()) {
+      toast('Somente administradores podem excluir repertórios.');
+      return;
+    }
     if (!confirm('Excluir este repertório?')) return;
     setlists = setlists.filter(s => s.id !== btn.dataset.id);
     saveSetlistsState();
