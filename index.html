@@ -2,19 +2,12 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Biblioteca de Louvor — Igreja Amor e Vida</title>
-  <meta name="description" content="Plataforma do Ministério de Louvor da Igreja Amor e Vida — biblioteca, repertórios, escala mensal e player.">
-  <meta name="theme-color" content="#040606" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#f3f8f8" media="(prefers-color-scheme: light)">
   <link rel="icon" href="assets/logo-avida.jpg" />
-  <link rel="apple-touch-icon" href="assets/logo-avida.jpg" />
-  <link rel="manifest" href="manifest.json" />
-  <link rel="preload" as="image" href="assets/hero-blue-cross.png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body data-theme="dark">
-  <a class="skip-link" href="#mainContent">Pular para o conteúdo principal</a>
   <div class="bg-blur bg-blur-a"></div>
   <div class="bg-blur bg-blur-b"></div>
   <div class="bg-blur bg-blur-c"></div>
@@ -31,7 +24,7 @@
     </div>
   </div>
 
-  <div id="loginScreen" class="login-screen hidden" aria-hidden="true">
+  <div id="loginScreen" class="login-screen hidden" aria-hidden="true" data-auth-mode="login">
     <div class="login-backdrop"></div>
     <div class="login-card glass">
       <div class="login-brand">
@@ -49,7 +42,7 @@
       </div>
       <div id="authModeHint" class="auth-mode-hint">Entre com seu e-mail e senha para acessar sua conta.</div>
       <div class="login-grid auth-grid auth-grid-clean">
-        <label id="loginNameField" class="hidden"><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /><small class="field-hint">Informe seu nome completo.</small></label>
+        <label id="loginNameField" class="hidden" style="display:none"><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /><small class="field-hint">Informe seu nome completo.</small></label>
         <label id="loginEmailField"><span>E-mail</span><input id="loginEmail" type="email" placeholder="seuemail@exemplo.com" autocomplete="email" /><small class="field-hint">Use um e-mail válido para entrar.</small></label>
         <label id="loginPasswordField"><span>Senha</span><div class="input-wrap password-wrap"><input id="loginPassword" type="password" placeholder="Sua senha" autocomplete="current-password" /><button id="togglePasswordBtn" class="field-toggle" type="button" aria-label="Mostrar senha">Mostrar</button></div><small class="field-hint">Sua senha deve ter pelo menos 6 caracteres.</small></label>
       </div>
@@ -102,11 +95,11 @@
       </div>
     </aside>
 
-    <main class="content" id="mainContent">
+    <main class="content">
       <header class="topbar reveal" id="inicio" data-tour="search">
         <div class="searchbox">
-          <span aria-hidden="true">⌕</span>
-          <input id="searchInput" type="search" placeholder="Buscar por música, pasta, cantor, tom, tag ou arquivo..." aria-label="Buscar músicas">
+          <span>⌕</span>
+          <input id="searchInput" type="search" placeholder="Buscar por música, pasta, cantor, tom, tag ou arquivo...">
         </div>
         <div class="topbar-actions">
           <button id="userBadge" class="user-badge hidden" type="button" title="Abrir perfil do usuário"></button>
@@ -161,14 +154,9 @@
         <div class="section-head schedule-head">
           <div>
             <span class="kicker">Escala mensal</span>
-            <h2 id="scheduleTitle">Escala Louvor Ávida — Maio 2026</h2>
+            <h2>Escala Louvor Ávida — Maio 2026</h2>
           </div>
           <div class="schedule-actions">
-            <div class="schedule-month-nav" role="group" aria-label="Navegação entre meses">
-              <button id="schedulePrevMonthBtn" class="btn btn-secondary btn-compact" type="button" aria-label="Mês anterior">‹</button>
-              <select id="scheduleMonthPicker" aria-label="Escolher mês"></select>
-              <button id="scheduleNextMonthBtn" class="btn btn-secondary btn-compact" type="button" aria-label="Próximo mês">›</button>
-            </div>
             <button id="schedulePrintBtn" class="btn btn-secondary btn-compact" type="button">Imprimir</button>
             <button id="scheduleClearBtn" class="btn btn-secondary btn-compact" type="button">Limpar filtros</button>
             <button id="scheduleSaveBtn" class="btn btn-primary btn-compact hidden" type="button">Salvar escala</button>
@@ -179,14 +167,12 @@
           <label><span>Buscar pessoa</span><input id="scheduleSearch" type="search" placeholder="Digite um nome da escala..." /></label>
           <label><span>Dia</span><select id="scheduleDayFilter"><option value="">Todos os dias</option></select></label>
           <label id="scheduleMemberFilterWrap"><span>Membros</span><select id="scheduleMemberFilter"><option value="">Todos os membros</option></select></label>
-          <label class="schedule-mine-only-wrap"><input id="scheduleMineOnly" type="checkbox"><span>Apenas onde estou escalado</span></label>
         </div>
 
         <div id="scheduleEditStatus" class="schedule-edit-status"></div>
 
         <div class="schedule-summary" id="scheduleSummary"></div>
 
-        <div class="schedule-table-hint" aria-hidden="true">← deslize para ver mais colunas →</div>
         <div class="schedule-table-wrap">
           <table class="schedule-table">
             <thead>
@@ -313,6 +299,9 @@
   </div>
 
   <footer id="playerArea" class="player glass reveal player-hidden" data-tour="player">
+    <div class="player-topbar">
+      <button id="closePlayerBtn" class="player-close-top" type="button" aria-label="Fechar player" title="Fechar player">✕ Fechar</button>
+    </div>
     <div class="player-main-row">
       <div class="now-playing">
         <img id="nowCover" src="assets/logo-avida.jpg" alt="Capa atual">
@@ -323,28 +312,27 @@
       </div>
       <div class="player-center">
         <div class="player-controls" id="playerControls">
-          <button id="shuffleBtn" title="Aleatório" aria-label="Alternar modo aleatório" aria-pressed="false">⤨</button>
-          <button id="prevBtn" title="Anterior" aria-label="Música anterior">⏮</button>
+          <button id="shuffleBtn" title="Aleatório">⤨</button>
+          <button id="prevBtn" title="Anterior">⏮</button>
           <button id="playPauseBtn" class="play-main" title="Play/Pause" aria-label="Tocar">
             <span class="player-icon player-icon-play" aria-hidden="true"></span>
           </button>
-          <button id="nextBtn" title="Próxima" aria-label="Próxima música">⏭</button>
-          <button id="repeatBtn" title="Reiniciar música" aria-label="Reiniciar música atual">↻</button>
+          <button id="nextBtn" title="Próxima">⏭</button>
+          <button id="repeatBtn" title="Reiniciar música">↻</button>
         </div>
         <div class="player-progress-row">
-          <span id="currentTime" aria-live="off">0:00</span>
+          <span id="currentTime">0:00</span>
           <div class="progress-shell">
             <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
-            <input id="progressBar" type="range" min="0" max="100" value="0" step="0.1" aria-label="Posição da música">
+            <input id="progressBar" type="range" min="0" max="100" value="0" step="0.1">
           </div>
           <span id="durationTime">0:00</span>
         </div>
       </div>
       <div class="player-side">
-        <button id="closePlayerBtn" class="player-close-btn" type="button" aria-label="Fechar reprodutor" title="Fechar reprodutor">✕ Fechar</button>
         <div class="volume-card">
-          <span aria-hidden="true">🔊</span>
-          <input id="volumeBar" type="range" min="0" max="100" value="100" aria-label="Volume">
+          <span>🔊</span>
+          <input id="volumeBar" type="range" min="0" max="100" value="100">
         </div>
         <div class="player-caption">Modo Louvor Premium</div>
       </div>
@@ -360,11 +348,11 @@
     <a href="#tutorialPage"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><small>Tutorial</small></a>
   </nav>
 
-  <div id="toneModal" class="modal hidden" role="dialog" aria-labelledby="toneModalTitle" aria-modal="true">
+  <div id="toneModal" class="modal hidden">
     <div class="modal-card glass">
-      <button id="closeTone" class="modal-close" aria-label="Fechar">×</button>
+      <button id="closeTone" class="modal-close">×</button>
       <span class="kicker">Transposição</span>
-      <h3 id="toneModalTitle">Alterar tom</h3>
+      <h3>Alterar tom</h3>
       <p id="toneTrackName">Selecione o tom desejado.</p>
       <div class="tone-info-grid">
         <div class="info-strip">Tom original: <strong id="toneCurrent">—</strong></div>
@@ -380,11 +368,11 @@
     </div>
   </div>
 
-  <div id="setlistModal" class="modal hidden" role="dialog" aria-labelledby="setlistModalTitle" aria-modal="true">
+  <div id="setlistModal" class="modal hidden">
     <div class="modal-card glass">
-      <button id="closeSetlist" class="modal-close" aria-label="Fechar">×</button>
+      <button id="closeSetlist" class="modal-close">×</button>
       <span class="kicker">Repertórios</span>
-      <h3 id="setlistModalTitle">Adicionar ao repertório</h3>
+      <h3>Adicionar ao repertório</h3>
       <p id="setlistTrackName">Escolha um repertório abaixo.</p>
       <div class="create-inline">
         <input id="newSetlistName" type="text" placeholder="Ex.: Culto Domingo Noite">
@@ -396,23 +384,21 @@
 
   <div id="setlistDetailModal" class="modal hidden">
     <div class="modal-card glass modal-wide">
-      <button id="closeSetlistDetail" class="modal-close" aria-label="Fechar">×</button>
-      <span class="kicker">Repertório</span>
+      <button id="closeSetlistDetail" class="modal-close">×</button>
+      <span class="kicker">Acabamento V9</span>
       <h3 id="setlistDetailTitle">Repertório</h3>
-      <p>Arraste para reordenar as músicas, remova faixas, altere o tom de cada item ou toque o repertório inteiro.</p>
+      <p>Arraste para reordenar as músicas, remova faixas ou toque o repertório inteiro.</p>
       <div class="modal-actions modal-actions-top">
         <button id="playSetlistDetail" class="btn btn-primary">▶ Tocar repertório</button>
-        <button id="shareSetlistDetail" class="btn btn-secondary">Copiar link</button>
-        <button id="whatsappSetlistDetail" class="btn btn-secondary">Enviar WhatsApp</button>
-        <button id="printSetlistDetail" class="btn btn-secondary">Imprimir</button>
+        <button id="shareSetlistDetail" class="btn btn-secondary">Compartilhar</button>
       </div>
       <div id="setlistDetailTracks" class="reorder-list"></div>
     </div>
   </div>
 
-  <div id="songModal" class="modal hidden" role="dialog" aria-labelledby="songModalTitle" aria-modal="true">
+  <div id="songModal" class="modal hidden">
     <div class="modal-card glass modal-wide song-modal">
-      <button id="closeSongModal" class="modal-close" aria-label="Fechar">×</button>
+      <button id="closeSongModal" class="modal-close">×</button>
       <div class="song-modal-grid">
         <div class="song-cover-panel">
           <img id="songModalCover" src="assets/logo-avida.jpg" alt="Capa da música">
@@ -430,64 +416,6 @@
             <button id="songModalShare" class="btn btn-secondary">Compartilhar</button>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== Modal: Perfil do usuário ===== -->
-  <div id="profileModal" class="modal hidden" role="dialog" aria-labelledby="profileModalTitle" aria-modal="true">
-    <div class="modal-card glass profile-modal-card">
-      <button id="closeProfileModal" class="modal-close" aria-label="Fechar">×</button>
-      <span class="kicker">Conta</span>
-      <h3 id="profileModalTitle" class="visually-hidden">Perfil do usuário</h3>
-      <div class="profile-head">
-        <div id="profileAvatar" class="profile-avatar" aria-hidden="true">U</div>
-        <div>
-          <h3 id="profileName">Usuário</h3>
-          <p id="profileEmail">email@exemplo.com</p>
-        </div>
-      </div>
-      <div class="profile-grid">
-        <div class="profile-info-card"><span>Equipe / escala</span><strong id="profileRole">—</strong></div>
-        <div class="profile-info-card"><span>Permissão</span><strong id="profilePermission">Usuário</strong></div>
-        <div class="profile-info-card"><span>Favoritas</span><strong id="profileFavorites">0</strong></div>
-        <div class="profile-info-card"><span>Repertórios</span><strong id="profileSetlists">0</strong></div>
-      </div>
-      <div class="modal-actions profile-actions">
-        <button id="profileStartTourBtn" class="btn btn-secondary" type="button">Iniciar tour novamente</button>
-        <button id="profileLogoutBtn" class="btn btn-primary" type="button">Sair da conta</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== Modal: Confirmação genérica (substitui confirm() do navegador) ===== -->
-  <div id="confirmModal" class="modal hidden" role="alertdialog" aria-labelledby="confirmModalTitle" aria-describedby="confirmModalMessage" aria-modal="true">
-    <div class="modal-card glass confirm-modal-card">
-      <span class="kicker" id="confirmModalKicker">Confirmação</span>
-      <h3 id="confirmModalTitle">Tem certeza?</h3>
-      <p id="confirmModalMessage">Esta ação não pode ser desfeita.</p>
-      <div class="modal-actions confirm-modal-actions">
-        <button id="confirmModalCancel" class="btn btn-secondary" type="button">Cancelar</button>
-        <button id="confirmModalOk" class="btn btn-primary confirm-danger" type="button">Confirmar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== Modal: Alterar tom de uma entrada já no repertório ===== -->
-  <div id="changeToneModal" class="modal hidden" role="dialog" aria-labelledby="changeToneTitle" aria-modal="true">
-    <div class="modal-card glass">
-      <button id="closeChangeTone" class="modal-close" aria-label="Fechar">×</button>
-      <span class="kicker">Repertório</span>
-      <h3 id="changeToneTitle">Alterar tom desta entrada</h3>
-      <p id="changeToneTrackName">—</p>
-      <div class="tone-info-grid">
-        <div class="info-strip">Tom original: <strong id="changeToneOriginal">—</strong></div>
-        <div class="info-strip">Novo tom: <strong id="changeToneSelected">—</strong></div>
-      </div>
-      <div id="changeToneButtons" class="tone-buttons tone-key-buttons"></div>
-      <div class="modal-actions">
-        <button id="changeToneApplyBtn" class="btn btn-primary" type="button">Aplicar tom</button>
-        <button id="changeToneResetBtn" class="btn btn-secondary" type="button">Voltar ao tom original</button>
       </div>
     </div>
   </div>

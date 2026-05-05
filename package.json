@@ -1,6 +1,6 @@
 {
   "name": "vs-louvor-avida",
-  "version": "2.15.0",
+  "version": "2.21.0",
   "private": true,
   "description": "Biblioteca de Louvor Igreja Amor e Vida com Google Drive, player premium, escala e repertórios.",
   "scripts": {
@@ -9,9 +9,7 @@
   },
   "dependencies": {
     "express": "^4.18.3",
-    "express-rate-limit": "^7.4.1",
     "ffmpeg-static": "^5.2.0",
-    "helmet": "^8.0.0",
     "node-fetch": "^2.7.0"
   },
   "main": "server.js",
