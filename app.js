@@ -248,6 +248,7 @@ function setPlayButtonState(isPlaying){
 
 function bindEvents(){
   window.addEventListener('hashchange', routeInternalPage);
+  window.addEventListener('resize', () => { /* force details view on mobile */ applyViewMode(); render(); });
   el.search.addEventListener('input', onGlobalSearchInput);
   el.search.addEventListener('keydown', onGlobalSearchKeydown);
   el.viewThumbBtn.addEventListener('click', () => setViewMode('thumbnails'));
@@ -1486,19 +1487,29 @@ function getFiltered(){
   });
 }
 
+function isMobileMusicView(){
+  return window.matchMedia('(max-width: 760px)').matches;
+}
+
+function getEffectiveViewMode(){
+  return isMobileMusicView() ? 'details' : viewMode;
+}
+
 function setViewMode(mode){
   if (!['thumbnails', 'details'].includes(mode)) return;
-  viewMode = mode;
+  viewMode = isMobileMusicView() ? 'details' : mode;
   saveJSON('vs_view_mode_v10', viewMode);
   applyViewMode();
   render();
 }
 
 function applyViewMode(){
-  el.viewThumbBtn.classList.toggle('is-active', viewMode === 'thumbnails');
-  el.viewDetailBtn.classList.toggle('is-active', viewMode === 'details');
-  el.trackList.classList.toggle('view-thumbnails', viewMode === 'thumbnails');
-  el.trackList.classList.toggle('view-details', viewMode === 'details');
+  const effectiveMode = getEffectiveViewMode();
+  el.viewThumbBtn.classList.toggle('is-active', effectiveMode === 'thumbnails');
+  el.viewDetailBtn.classList.toggle('is-active', effectiveMode === 'details');
+  el.trackList.classList.toggle('view-thumbnails', effectiveMode === 'thumbnails');
+  el.trackList.classList.toggle('view-details', effectiveMode === 'details');
+  el.viewThumbBtn.disabled = isMobileMusicView();
 }
 
 function setupInfiniteScroll(){
@@ -1534,11 +1545,11 @@ function render(){
   }
 
   el.trackList.innerHTML = '';
-  loadMoreTracks(PAGE_SIZE[viewMode], true);
+  loadMoreTracks(PAGE_SIZE[getEffectiveViewMode()], true);
   setupInfiniteScroll();
 }
 
-function loadMoreTracks(amount = LOAD_MORE_SIZE[viewMode], initial = false){
+function loadMoreTracks(amount = LOAD_MORE_SIZE[getEffectiveViewMode()], initial = false){
   if (!filteredTracksCache.length) return;
 
   const nextItems = filteredTracksCache.slice(renderedCount, renderedCount + amount);
@@ -1555,7 +1566,7 @@ function loadMoreTracks(amount = LOAD_MORE_SIZE[viewMode], initial = false){
     el.loadStatus.textContent = `Todas as ${filteredTracksCache.length} músicas foram carregadas`;
   } else {
     const remaining = filteredTracksCache.length - renderedCount;
-    const modeLabel = viewMode === 'thumbnails' ? 'miniaturas' : 'detalhes';
+    const modeLabel = getEffectiveViewMode() === 'thumbnails' ? 'miniaturas' : 'detalhes';
     el.loadStatus.textContent = `${renderedCount} de ${filteredTracksCache.length} carregadas • ${remaining} restantes • modo ${modeLabel}`;
   }
 }

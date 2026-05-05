@@ -2670,3 +2670,109 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
   font-weight:800;
   line-height:1.45;
 }
+
+
+/* V49 — no smartphone, biblioteca somente em visualização por detalhes */
+@media (max-width:760px){
+  #viewThumbBtn{
+    display:none !important;
+  }
+
+  .view-toggle{
+    grid-template-columns:1fr !important;
+    width:100%;
+  }
+
+  #viewDetailBtn{
+    width:100%;
+    background:linear-gradient(135deg,var(--teal),var(--teal-2)) !important;
+    color:#001312 !important;
+  }
+
+  .track-grid,
+  .track-grid.view-thumbnails,
+  .track-grid.view-details{
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    gap:10px !important;
+  }
+
+  .track-grid .track-card,
+  .track-grid.view-thumbnails .track-card,
+  .track-grid.view-details .track-card{
+    min-height:unset !important;
+    border-radius:18px !important;
+  }
+
+  .track-grid .track-head,
+  .track-grid.view-thumbnails .track-head,
+  .track-grid.view-details .track-head{
+    display:flex !important;
+    align-items:center !important;
+    gap:12px !important;
+    padding:14px 16px !important;
+  }
+
+  .track-grid .track-cover,
+  .track-grid.view-thumbnails .track-cover,
+  .track-grid.view-details .track-cover{
+    width:58px !important;
+    height:58px !important;
+    flex:0 0 58px !important;
+    aspect-ratio:auto !important;
+    border-radius:16px !important;
+    font-size:18px !important;
+  }
+
+  .track-grid .track-title,
+  .track-grid.view-thumbnails .track-title,
+  .track-grid.view-details .track-title{
+    font-size:16px !important;
+    -webkit-line-clamp:1 !important;
+    min-height:unset !important;
+  }
+
+  .track-grid .track-sub,
+  .track-grid.view-thumbnails .track-sub,
+  .track-grid.view-details .track-sub{
+    min-height:unset !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+  }
+
+  .track-grid .track-meta,
+  .track-grid.view-thumbnails .track-meta,
+  .track-grid.view-details .track-meta,
+  .track-grid .tag-wrap,
+  .track-grid.view-thumbnails .tag-wrap,
+  .track-grid.view-details .tag-wrap{
+    padding-left:16px !important;
+    padding-right:16px !important;
+  }
+
+  .track-grid .track-actions,
+  .track-grid.view-thumbnails .track-actions,
+  .track-grid.view-details .track-actions{
+    padding:0 16px 14px !important;
+    grid-template-columns:1fr repeat(4,44px) !important;
+    gap:8px !important;
+  }
+
+  .track-grid .track-actions .action-btn.primary{
+    grid-column:auto !important;
+  }
+}
+
+@media (max-width:420px){
+  .track-grid .track-actions,
+  .track-grid.view-thumbnails .track-actions,
+  .track-grid.view-details .track-actions{
+    grid-template-columns:1fr 44px 44px !important;
+  }
+
+  .track-grid .track-actions .setlist-btn,
+  .track-grid .track-actions .detail-btn{
+    grid-column:auto;
+  }
+}

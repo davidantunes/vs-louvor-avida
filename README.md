@@ -422,3 +422,10 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - usuários comuns podem adicionar músicas e reordenar repertórios
 - usuários comuns podem editar repertórios
 - apenas administradores/líderes configurados em `APPWRITE_ADMIN_EMAILS` podem excluir repertórios
+
+
+## V49
+
+- em smartphones, a Biblioteca usa somente a visualização por **Detalhes**
+- botão **Miniaturas** oculto no mobile
+- cards das músicas no celular ficam compactos, legíveis e mais rápidos de navegar
