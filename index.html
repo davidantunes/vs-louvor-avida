@@ -82,6 +82,7 @@
         <a href="#biblioteca"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a2.75 2.75 0 1 1-2.75-2.75A2.75 2.75 0 0 1 9 18Zm0 0V6l10-2v10"/><path d="M19 14a2.75 2.75 0 1 1-2.75 2.75A2.75 2.75 0 0 1 19 14Z"/></svg></span><span>Biblioteca</span></a>
         <a href="#escalaMensal"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v3"/><path d="M17 2v3"/><path d="M4 8h16"/><path d="M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/></svg></span><span>Escala</span></a>
         <a href="#repertorios"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><span>Repertórios</span></a>
+        <a href="#historico"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5l3 2"/><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></span><span>Histórico</span></a>
         <a href="#tutorialPage"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><span>Tutorial</span></a>
       </nav>
 
@@ -233,13 +234,50 @@
         <div id="setlistsGrid" class="setlist-grid"></div>
       </section>
 
+
+      <section class="section glass reveal history-section" id="historico" data-tour="history">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Inteligência do louvor</span>
+            <h2>Histórico e notificações</h2>
+          </div>
+          <button id="clearHistoryBtn" class="btn btn-secondary btn-compact" type="button">Limpar histórico local</button>
+        </div>
+
+        <div class="history-summary-grid">
+          <article class="history-stat glass-lite"><span>Reproduções registradas</span><strong id="historyTotalPlays">0</strong></article>
+          <article class="history-stat glass-lite"><span>Músicas diferentes</span><strong id="historyUniqueTracks">0</strong></article>
+          <article class="history-stat glass-lite"><span>Tons usados</span><strong id="historyKeysUsed">0</strong></article>
+          <article class="history-stat glass-lite"><span>Notificações</span><strong id="historyNotifications">0</strong></article>
+        </div>
+
+        <div class="history-grid">
+          <div class="history-card glass-lite">
+            <h3>Músicas mais tocadas</h3>
+            <div id="historyMostPlayed" class="history-list"></div>
+          </div>
+          <div class="history-card glass-lite">
+            <h3>Tons mais usados</h3>
+            <div id="historyTopKeys" class="history-list"></div>
+          </div>
+          <div class="history-card glass-lite">
+            <h3>Últimas atividades</h3>
+            <div id="historyRecent" class="history-list"></div>
+          </div>
+          <div class="history-card glass-lite">
+            <h3>Notificações da equipe</h3>
+            <div id="historyNotificationsList" class="history-list"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="section glass reveal" id="filters" data-tour="filters">
         <div class="section-head">
           <div>
             <span class="kicker">Refinamento</span>
             <h2>Filtros inteligentes</h2>
           </div>
-          <span id="status">Preparando filtros...</span>
+          <span id="status">Carregando...</span>
         </div>
         <div class="filters-grid">
           <label><span>Música</span><select id="musicFilter"><option value="">Todas as músicas</option></select></label>
@@ -322,13 +360,13 @@
       </div>
       <div class="player-center">
         <div class="player-controls" id="playerControls">
-          <button id="shuffleBtn" title="Reprodução aleatória" aria-label="Aleatório">⤨</button>
-          <button id="prevBtn" title="Música anterior" aria-label="Anterior">⏮</button>
+          <button id="shuffleBtn" title="Aleatório">⤨</button>
+          <button id="prevBtn" title="Anterior">⏮</button>
           <button id="playPauseBtn" class="play-main" title="Play/Pause" aria-label="Tocar">
             <span class="player-icon player-icon-play" aria-hidden="true"></span>
           </button>
-          <button id="nextBtn" title="Próxima música" aria-label="Próxima">⏭</button>
-          <button id="repeatBtn" title="Reiniciar música" aria-label="Reiniciar">↻</button>
+          <button id="nextBtn" title="Próxima">⏭</button>
+          <button id="repeatBtn" title="Reiniciar música">↻</button>
         </div>
         <div class="player-progress-row">
           <span id="currentTime">0:00</span>
@@ -341,10 +379,10 @@
       </div>
       <div class="player-side">
         <div class="volume-card">
-          <span class="volume-icon" aria-hidden="true">🔊</span><span class="sr-only">Volume</span>
+          <span>🔊</span>
           <input id="volumeBar" type="range" min="0" max="100" value="100">
         </div>
-        <div class="player-caption">Player da biblioteca</div>
+        <div class="player-caption">Modo Louvor Premium</div>
       </div>
     </div>
     <audio id="audioPlayer" preload="none"></audio>
@@ -352,9 +390,9 @@
 
   <nav class="mobile-dock">
     <a href="#inicio"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span><small>Início</small></a>
-    <a href="#biblioteca"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a2.75 2.75 0 1 1-2.75-2.75A2.75 2.75 0 0 1 9 18Zm0 0V6l10-2v10"/><path d="M19 14a2.75 2.75 0 1 1-2.75 2.75A2.75 2.75 0 0 1 19 14Z"/></svg></span><small>Biblioteca</small></a>
+    <a href="#biblioteca"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a2.75 2.75 0 1 1-2.75-2.75A2.75 2.75 0 0 1 9 18Zm0 0V6l10-2v10"/><path d="M19 14a2.75 2.75 0 1 1-2.75 2.75A2.75 2.75 0 0 1 19 14Z"/></svg></span><small>Músicas</small></a>
     <a href="#escalaMensal"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v3"/><path d="M17 2v3"/><path d="M4 8h16"/><path d="M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/></svg></span><small>Escala</small></a>
-    <a href="#repertorios"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><small>Repertórios</small></a>
+    <a href="#repertorios"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><small>Listas</small></a>
     <a href="#tutorialPage"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><small>Tutorial</small></a>
   </nav>
 
@@ -395,7 +433,7 @@
   <div id="setlistDetailModal" class="modal hidden">
     <div class="modal-card glass modal-wide">
       <button id="closeSetlistDetail" class="modal-close">×</button>
-      <span class="kicker">Repertório compartilhado</span>
+      <span class="kicker">Acabamento V9</span>
       <h3 id="setlistDetailTitle">Repertório</h3>
       <p>Arraste para reordenar as músicas, remova faixas ou toque o repertório inteiro.</p>
       <div class="modal-actions modal-actions-top">

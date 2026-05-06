@@ -22,6 +22,7 @@ let currentSetlistDetailId = null;
 let songModalTarget = null;
 let favorites = loadJSON('vs_favorites_v1', []);
 let setlists = loadJSON('vs_setlists_v1', []);
+let usageHistory = loadJSON('vs_usage_history_v51', []);
 let appwriteClient = null;
 let appwriteAccount = null;
 let authUser = null;
@@ -79,6 +80,7 @@ const TOUR_STEPS = [
   { hash: '#biblioteca', selector: '[data-tour="filters"]', title: 'Filtros inteligentes', description: 'Refine a biblioteca por música, tom, tag, tipo de arquivo e favoritas.' },
   { hash: '#biblioteca', selector: '[data-tour="library"]', title: 'Biblioteca de músicas', description: 'Alterne entre Miniaturas e Detalhes e role a tela para carregar mais músicas automaticamente.' },
   { hash: '#repertorios', selector: '[data-tour="setlists"]', title: 'Repertórios por culto', description: 'Crie repertórios, organize a ordem das músicas e compartilhe listas com a equipe.' },
+  { hash: '#historico', selector: '[data-tour="history"]', title: 'Histórico e notificações', description: 'Veja músicas mais tocadas, tons usados, atividades recentes e notificações de repertório.' },
   { hash: '#tutorialPage', selector: '[data-tour="tutorial"]', title: 'Guia de uso', description: 'Sempre que quiser, volte aqui para rever instruções e iniciar novamente o tour guiado.' }
 ];
 
@@ -113,6 +115,15 @@ const el = {
   loadStatus: document.getElementById('loadStatus'),
   trackList: document.getElementById('trackList'),
   setlistsGrid: document.getElementById('setlistsGrid'),
+  clearHistoryBtn: document.getElementById('clearHistoryBtn'),
+  historyTotalPlays: document.getElementById('historyTotalPlays'),
+  historyUniqueTracks: document.getElementById('historyUniqueTracks'),
+  historyKeysUsed: document.getElementById('historyKeysUsed'),
+  historyNotifications: document.getElementById('historyNotifications'),
+  historyMostPlayed: document.getElementById('historyMostPlayed'),
+  historyTopKeys: document.getElementById('historyTopKeys'),
+  historyRecent: document.getElementById('historyRecent'),
+  historyNotificationsList: document.getElementById('historyNotificationsList'),
   newSetlistBtn: document.getElementById('newSetlistBtn'),
   audio: document.getElementById('audioPlayer'),
   nowCover: document.getElementById('nowCover'),
@@ -267,6 +278,7 @@ function bindEvents(){
     isFavoritesFilter = !isFavoritesFilter;
     el.favoritesOnly.classList.toggle('favorites-active', isFavoritesFilter);
     render();
+    renderHistoryDashboard();
   });
   el.clearFilters.addEventListener('click', clearFilters);
   el.randomBtn.addEventListener('click', () => {
@@ -278,16 +290,7 @@ function bindEvents(){
     playTrack(list[Math.floor(Math.random() * list.length)], 0, list, { randomContinuous: true });
     toast('Reprodução aleatória contínua iniciada.');
   });
-  el.copyLinkBtn.addEventListener('click', () => {
-    const originalLabel = el.copyLinkBtn.textContent;
-    copyText(location.origin + location.pathname, 'Link do sistema copiado.');
-    el.copyLinkBtn.textContent = 'Link copiado!';
-    el.copyLinkBtn.classList.add('is-success');
-    setTimeout(() => {
-      el.copyLinkBtn.textContent = originalLabel;
-      el.copyLinkBtn.classList.remove('is-success');
-    }, 1800);
-  });
+  el.copyLinkBtn.addEventListener('click', () => copyText(location.origin + location.pathname, 'Link do sistema copiado.'));
 
   el.shuffleBtn.addEventListener('click', () => {
     shuffleMode = !shuffleMode;
@@ -396,6 +399,13 @@ function bindEvents(){
   if (el.scheduleSaveBtn) el.scheduleSaveBtn.addEventListener('click', () => saveScheduleState(true));
   if (el.scheduleClearBtn) el.scheduleClearBtn.addEventListener('click', clearScheduleFilters);
   if (el.schedulePrintBtn) el.schedulePrintBtn.addEventListener('click', () => window.print());
+  if (el.clearHistoryBtn) el.clearHistoryBtn.addEventListener('click', () => {
+    if (!confirm('Limpar histórico local deste dispositivo?')) return;
+    usageHistory = [];
+    saveJSON('vs_usage_history_v51', usageHistory);
+    renderHistoryDashboard();
+    toast('Histórico local limpo.');
+  });
 
   document.querySelectorAll('.tutorial-item').forEach(item => {
     item.addEventListener('toggle', () => {
@@ -431,6 +441,7 @@ function getPageFromHash(){
   if (hash === 'biblioteca' || hash === 'filters') return 'library';
   if (hash === 'escalaMensal' || hash === 'escala') return 'schedule';
   if (hash === 'repertorios') return 'setlists';
+  if (hash === 'historico' || hash === 'history') return 'history';
   if (hash === 'tutorialPage' || hash === 'tutorial' || hash === 'quickGuide') return 'tutorial';
   return 'home';
 }
@@ -440,7 +451,7 @@ function routeInternalPage(){
   const content = document.querySelector('.content');
   if (!content) return;
 
-  content.classList.remove('page-mode-home','page-mode-library','page-mode-schedule','page-mode-setlists','page-mode-tutorial','page-mode-player-removed');
+  content.classList.remove('page-mode-home','page-mode-library','page-mode-schedule','page-mode-setlists','page-mode-history','page-mode-tutorial','page-mode-player-removed');
   content.classList.add(`page-mode-${page}`);
 
   const activeHashByPage = {
@@ -448,6 +459,7 @@ function routeInternalPage(){
     library: '#biblioteca',
     schedule: '#escalaMensal',
     setlists: '#repertorios',
+    history: '#historico',
     tutorial: '#tutorialPage'
   };
   const activeHash = activeHashByPage[page];
@@ -463,6 +475,7 @@ function routeInternalPage(){
     library: document.querySelector('#biblioteca'),
     schedule: document.querySelector('#escalaMensal'),
     setlists: document.querySelector('#repertorios'),
+    history: document.querySelector('#historico'),
     tutorial: document.querySelector('#tutorialPage')
   };
 
@@ -726,20 +739,23 @@ async function logoutSession(){
 async function loadCloudState(){
   if (!authUser) return;
   try {
-    const [shared, userState, cloudMembers, cloudSchedule] = await Promise.all([
+    const [shared, userState, cloudMembers, cloudSchedule, cloudHistory] = await Promise.all([
       getSharedState('setlists'),
       getUserState('favorites'),
       getSharedState('members'),
-      getSharedState('monthlySchedule')
+      getSharedState('monthlySchedule'),
+      getSharedState('usageHistory')
     ]);
     if (Array.isArray(shared)) setlists = shared;
     if (Array.isArray(userState)) favorites = userState;
     if (Array.isArray(cloudMembers) && cloudMembers.length) members = normalizeMembers(cloudMembers);
     if (Array.isArray(cloudSchedule) && cloudSchedule.length) scheduleRows = normalizeScheduleRows(cloudSchedule);
+    if (Array.isArray(cloudHistory)) usageHistory = cloudHistory;
     saveJSON('vs_setlists_v1', setlists);
     saveJSON('vs_favorites_v1', favorites);
     saveJSON('vs_members_v1', members);
     saveJSON('vs_schedule_rows_v1', scheduleRows);
+    saveJSON('vs_usage_history_v51', usageHistory);
     await seedScheduleDataIfNeeded(cloudMembers, cloudSchedule);
     updateStats();
     updateFavoriteCount();
@@ -843,6 +859,7 @@ async function saveScheduleState(showToast = false){
     scheduleDirty = false;
     saveJSON('vs_members_v1', members);
     saveJSON('vs_schedule_rows_v1', scheduleRows);
+    saveJSON('vs_usage_history_v51', usageHistory);
     setScheduleEditStatus('Escala salva no banco de dados Appwrite.', 'admin');
     if (showToast) toast('Escala salva com sucesso.');
   } catch (error) {
@@ -881,6 +898,100 @@ function saveFavoritesState(){
 function saveSetlistsState(){
   saveJSON('vs_setlists_v1', setlists);
   setSharedState('setlists', setlists).catch(err => console.warn('Repertórios não sincronizados:', err));
+}
+
+function saveUsageHistoryState(){
+  const limited = usageHistory.slice(-300);
+  usageHistory = limited;
+  saveJSON('vs_usage_history_v51', usageHistory);
+  setSharedState('usageHistory', usageHistory).catch(err => console.warn('Histórico não sincronizado:', err));
+}
+
+function recordUsageEvent(event){
+  if (!event || !event.type) return;
+  const user = authUser ? { id: authUser.$id, name: authUser.name || authUser.email, email: authUser.email } : null;
+  const item = {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    at: new Date().toISOString(),
+    user,
+    ...event
+  };
+  usageHistory.push(item);
+  saveUsageHistoryState();
+  renderHistoryDashboard();
+}
+
+function notifySetlistDefined(setlist){
+  if (!setlist) return;
+  const tracks = mapSetlistTracks(setlist);
+  recordUsageEvent({
+    type: 'setlist_defined',
+    setlistId: setlist.id,
+    setlistName: setlist.name,
+    trackCount: tracks.length,
+    message: `Repertório "${setlist.name}" definido com ${tracks.length} música(s).`
+  });
+  if ('Notification' in window) {
+    if (Notification.permission === 'granted') {
+      new Notification('Repertório definido', { body: `O repertório "${setlist.name}" foi atualizado.` });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') new Notification('Repertório definido', { body: `O repertório "${setlist.name}" foi atualizado.` });
+      });
+    }
+  }
+  toast('Notificação registrada para a equipe.');
+}
+
+function groupCount(items, keyFn){
+  const map = new Map();
+  items.forEach(item => {
+    const key = keyFn(item);
+    if (!key) return;
+    map.set(key, (map.get(key) || 0) + 1);
+  });
+  return [...map.entries()].sort((a,b) => b[1] - a[1]);
+}
+
+function renderHistoryDashboard(){
+  if (!el.historyTotalPlays) return;
+  const plays = usageHistory.filter(e => e.type === 'play');
+  const notifications = usageHistory.filter(e => e.type === 'setlist_defined' || e.type === 'setlist_created' || e.type === 'setlist_updated');
+  const uniqueTracks = new Set(plays.map(e => e.trackId || e.trackName).filter(Boolean));
+  const usedKeys = new Set(plays.map(e => e.changedKey || e.originalKey).filter(Boolean));
+
+  el.historyTotalPlays.textContent = plays.length;
+  el.historyUniqueTracks.textContent = uniqueTracks.size;
+  el.historyKeysUsed.textContent = usedKeys.size;
+  el.historyNotifications.textContent = notifications.length;
+
+  const mostPlayed = groupCount(plays, e => e.trackName).slice(0, 8);
+  el.historyMostPlayed.innerHTML = mostPlayed.length ? mostPlayed.map(([name,count]) => `<div class="history-row"><strong>${esc(name)}</strong><span>${count} vez(es)</span></div>`).join('') : '<div class="empty small">Nenhuma reprodução registrada ainda.</div>';
+
+  const keys = groupCount(plays, e => e.changedKey || e.originalKey || 'Sem tom').slice(0, 8);
+  el.historyTopKeys.innerHTML = keys.length ? keys.map(([key,count]) => `<div class="history-row"><strong>${esc(key)}</strong><span>${count} uso(s)</span></div>`).join('') : '<div class="empty small">Nenhum tom registrado ainda.</div>';
+
+  const recent = usageHistory.slice(-10).reverse();
+  el.historyRecent.innerHTML = recent.length ? recent.map(e => `<div class="history-row"><strong>${esc(historyEventTitle(e))}</strong><span>${esc(formatHistoryDate(e.at))}</span></div>`).join('') : '<div class="empty small">Nenhuma atividade recente.</div>';
+
+  const latestNotifications = notifications.slice(-10).reverse();
+  el.historyNotificationsList.innerHTML = latestNotifications.length ? latestNotifications.map(e => `<div class="history-row"><strong>${esc(e.message || historyEventTitle(e))}</strong><span>${esc(formatHistoryDate(e.at))}</span></div>`).join('') : '<div class="empty small">Nenhuma notificação registrada.</div>';
+}
+
+function historyEventTitle(e){
+  if (e.type === 'play') return `Tocou: ${e.trackName || 'música'}`;
+  if (e.type === 'setlist_defined') return `Repertório definido: ${e.setlistName || 'repertório'}`;
+  if (e.type === 'setlist_created') return `Repertório criado: ${e.setlistName || 'repertório'}`;
+  if (e.type === 'setlist_updated') return `Repertório atualizado: ${e.setlistName || 'repertório'}`;
+  return e.type || 'Atividade';
+}
+
+function formatHistoryDate(value){
+  try {
+    return new Date(value).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+  } catch {
+    return '';
+  }
 }
 
 function maybeLaunchTour(){
@@ -1421,7 +1532,7 @@ async function loadLibrary(force = false){
   } catch (error) {
     console.error(error);
     hideLoading();
-    el.status.textContent = 'Não foi possível carregar os filtros da biblioteca';
+    el.status.textContent = 'Erro ao carregar a biblioteca';
     el.trackList.innerHTML = `<div class="empty">${esc(error.message || 'Erro ao carregar')}</div>`;
   }
 }
@@ -1432,11 +1543,6 @@ function afterLibraryLoaded(){
   updateStats();
   renderSetlists();
   render();
-  if (el.status) {
-    el.status.textContent = allTracks.length
-      ? `Filtros prontos • ${allTracks.length} música(s) disponíveis`
-      : 'Filtros prontos • aguardando músicas da biblioteca';
-  }
 }
 
 function populateFilters(){
@@ -1474,6 +1580,7 @@ function updateStats(){
   el.heroKeys.textContent = keys.length;
   el.heroCategories.textContent = tags.length;
   updateProfileModal();
+  renderHistoryDashboard();
 }
 
 function clearFilters(){
@@ -1603,11 +1710,11 @@ function renderTrackCard(t){
       </div>
       <div class="tag-wrap">${(t.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
       <div class="track-actions">
-        <button class="action-btn primary play-btn" data-id="${esc(t.id)}">▶ Tocar</button>
-        <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar" aria-label="Favoritar"><span class="action-icon-glyph">${fav ? '♥' : '♡'}</span><span class="action-icon-label">Favoritar</span></button>
-        <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom" aria-label="Alterar tom"><span class="action-icon-glyph">♬</span><span class="action-icon-label">Tom</span></button>
-        <button class="action-icon setlist-btn" data-id="${esc(t.id)}" title="Adicionar ao repertório" aria-label="Adicionar ao repertório"><span class="action-icon-glyph">+☷</span><span class="action-icon-label">Repertório</span></button>
-        <button class="action-icon detail-btn" data-id="${esc(t.id)}" title="Ver detalhes" aria-label="Ver detalhes"><span class="action-icon-glyph">⋯</span><span class="action-icon-label">Detalhes</span></button>
+        <button class="action-btn primary play-btn" data-id="${esc(t.id)}" aria-label="Tocar" title="Tocar">▶</button>
+        <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar">${fav ? '♥' : '♡'}</button>
+        <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom">♬</button>
+        <button class="action-icon setlist-btn" data-id="${esc(t.id)}" title="Adicionar ao repertório">+☷</button>
+        <button class="action-icon detail-btn" data-id="${esc(t.id)}" title="Ver detalhes">⋯</button>
       </div>
     </article>
   `;
@@ -1676,6 +1783,7 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   el.nowTitle.textContent = alteredToneLabel ? `${track.name} • Tom alterado ${alteredToneLabel}` : track.name;
   el.nowSinger.textContent = `${track.singer}${track.key && track.key !== '—' ? ' • Tom original ' + track.key : ''}${alteredToneLabel ? ' • Tom alterado ' + alteredToneLabel : ''}`;
   el.nowCover.src = track.coverUrl || 'assets/logo-avida.jpg';
+  recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: track.key, changedKey: alteredToneLabel || '', semitones });
   syncProgressUI();
 }
 
@@ -1854,6 +1962,7 @@ function createSetlistFromInput(){
   renderSetlists();
   renderSetlistOptions();
   el.newSetlistName.value = '';
+  recordUsageEvent({ type: 'setlist_created', setlistId: s.id, setlistName: s.name, trackCount: s.trackIds.length, message: `Repertório "${s.name}" criado.` });
   toast('Repertório criado.');
 }
 function renderSetlistOptions(){
@@ -1880,6 +1989,7 @@ function renderSetlistOptions(){
     updateStats();
     renderSetlists();
     closeSetlistModal();
+    recordUsageEvent({ type: 'setlist_updated', setlistId: setlist.id, setlistName: setlist.name, trackCount: setlist.trackIds.length, message: `Música adicionada ao repertório "${setlist.name}".` });
     toast('Música adicionada ao repertório.');
   }));
 }
@@ -1897,9 +2007,10 @@ function renderSetlists(){
       <strong>${esc(s.name)}</strong>
       <div class="muted">${s.trackIds.length} música(s)</div>
       <div class="setlist-actions">
-        <button class="mini-btn play-setlist" data-id="${esc(s.id)}">Tocar</button>
+        <button class="mini-btn play-setlist" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório">▶</button>
         <button class="mini-btn open-setlist" data-id="${esc(s.id)}">Abrir</button>
         <button class="mini-btn share-setlist" data-id="${esc(s.id)}">Compartilhar</button>
+        <button class="mini-btn notify-setlist" data-id="${esc(s.id)}">Notificar</button>
         ${canDeleteSetlists() ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>` : ''}
       </div>
     </article>
@@ -1909,6 +2020,10 @@ function renderSetlists(){
   el.setlistsGrid.querySelectorAll('.open-setlist').forEach(btn => btn.addEventListener('click', () => openSetlistDetail(btn.dataset.id)));
   el.setlistsGrid.querySelectorAll('.share-setlist').forEach(btn => btn.addEventListener('click', () => {
     copyText(`${location.origin}${location.pathname}?setlist=${encodeURIComponent(btn.dataset.id)}`, 'Link do repertório copiado.');
+  }));
+  el.setlistsGrid.querySelectorAll('.notify-setlist').forEach(btn => btn.addEventListener('click', () => {
+    const setlist = setlists.find(s => s.id === btn.dataset.id);
+    notifySetlistDefined(setlist);
   }));
   el.setlistsGrid.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
     if (!canDeleteSetlists()) {
@@ -1990,9 +2105,7 @@ function renderSetlistDetailTracks(){
         </div>
       </div>
       <div class="row-actions">
-        <button class="mini-btn move-up" data-index="${index}" aria-label="Mover para cima">↑</button>
-        <button class="mini-btn move-down" data-index="${index}" aria-label="Mover para baixo">↓</button>
-        <button class="mini-btn play-one" data-id="${esc(track.id)}">Tocar</button>
+        <button class="mini-btn play-one" data-id="${esc(track.id)}" aria-label="Tocar música" title="Tocar música">▶</button>
         <button class="mini-btn remove-one" data-id="${esc(track.id)}">Remover</button>
       </div>
     </div>
@@ -2010,20 +2123,6 @@ function renderSetlistDetailTracks(){
     renderSetlists();
     renderSetlistDetailTracks();
     updateStats();
-  }));
-  el.setlistDetailTracks.querySelectorAll('.move-up').forEach(btn => btn.addEventListener('click', () => {
-    const idx = Number(btn.dataset.index);
-    if (!Number.isInteger(idx) || idx <= 0) return;
-    reorderSetlist(currentSetlistDetailId, idx, idx - 1);
-    renderSetlistDetailTracks();
-    renderSetlists();
-  }));
-  el.setlistDetailTracks.querySelectorAll('.move-down').forEach(btn => btn.addEventListener('click', () => {
-    const idx = Number(btn.dataset.index);
-    if (!Number.isInteger(idx) || idx >= (setlist.trackIds.length - 1)) return;
-    reorderSetlist(currentSetlistDetailId, idx, idx + 1);
-    renderSetlistDetailTracks();
-    renderSetlists();
   }));
 }
 function bindReorderEvents(){

@@ -431,15 +431,52 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - cards das músicas no celular ficam compactos, legíveis e mais rápidos de navegar
 
 
-## V50
+## V51
 
-- player com miniatura e metadados centralizados verticalmente
-- labels visíveis nos botões do player em mobile
-- ações da biblioteca com rótulos visíveis no mobile
-- status dos filtros deixa de ficar preso em “Carregando...”
-- título técnico “Acabamento V9” removido do modal de repertório
-- texto “Modo Louvor Premium” substituído por “Player da biblioteca”
-- labels do menu mobile padronizados com o menu principal
-- botão “Copiar link do sistema” agora confirma visualmente no próprio botão
-- repertório com botões ↑ ↓ para reordenar em touch/mobile
-- player e dock com suporte a safe-area do iPhone/iOS
+- nova guia **Histórico**
+- registro de músicas tocadas
+- ranking de músicas mais tocadas
+- ranking de tons mais usados
+- últimas atividades
+- botão **Notificar** nos repertórios
+- notificações internas e tentativa de notificação do navegador quando permitida
+
+
+## V52
+
+- removido o ícone de play no hover da miniatura das músicas
+- botões de tocar passam a exibir apenas o ícone de play
+- acessibilidade mantida com aria-label e title nos botões de reprodução
+
+
+## V53
+
+- correção do layout dos botões das músicas no smartphone
+- labels centralizados e redimensionados
+- grid dos botões reorganizado para melhor leitura e toque
+
+
+## V54
+
+- refinamento premium dos botões das músicas no smartphone
+- centralização total dos ícones e labels
+- tamanhos e alturas padronizados
+- melhor leitura para labels como Favoritar, Tom, Repertório e Detalhes
+- botão principal de play mais limpo e equilibrado
+
+
+## V55
+
+- biblioteca mobile com visual mais parecido com app nativo
+- cards das músicas mais premium no smartphone
+- hero e estatísticas refinados no mobile
+- player mobile polido com melhor proporção, espaçamento e safe-area
+- dock inferior mobile com acabamento mais elegante
+
+
+## V56
+
+- login mobile refinado com melhor proporção, campos e ações
+- escala mobile mais nítida e organizada
+- repertórios mobile mais limpos e fáceis de editar
+- botões e listas com melhor toque e leitura no celular
