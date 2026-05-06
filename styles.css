@@ -3760,3 +3760,68 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
     font-size:18px !important;
   }
 }
+
+
+/* V58 — correção do artefato/transparência nas miniaturas ao passar o mouse */
+.filters,
+#filters,
+.filters-grid,
+.track-grid,
+.track-card,
+.track-head,
+.track-cover{
+  position:relative;
+}
+
+#filters,
+.filters,
+.filters-grid{
+  z-index:5;
+}
+
+.track-grid{
+  z-index:1;
+}
+
+.track-card{
+  isolation:isolate;
+  overflow:hidden;
+}
+
+.track-head,
+.track-meta,
+.tag-wrap,
+.track-actions{
+  position:relative;
+  z-index:2;
+}
+
+.track-cover,
+.track-cover.logo-cover{
+  z-index:3;
+  overflow:hidden;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  transform:translateZ(0);
+}
+
+/* remove o brilho translúcido que podia criar artefato visual */
+.track-card::after,
+.track-card:hover::after{
+  content:none !important;
+  display:none !important;
+}
+
+/* mantém o hover limpo sem fragmentos na miniatura */
+.track-card::before{
+  opacity:0 !important;
+}
+.track-card:hover::before{
+  opacity:.0 !important;
+}
+
+.view-thumbnails .track-cover,
+.view-thumbnails .track-cover.logo-cover{
+  box-shadow:0 10px 24px rgba(0,0,0,.20), inset 0 0 0 1px rgba(255,255,255,.06);
+  background-clip:padding-box;
+}

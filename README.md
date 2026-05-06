@@ -487,3 +487,10 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - corrigido erro Appwrite `Missing required attribute "user_id"` ao salvar favoritos
 - backend agora salva `user_state` usando os atributos corretos: `user_id`, `key`, `value`, `updated_at`
 - centralização reforçada dos ícones de play nos botões de música, repertório e player principal
+
+
+## V58
+
+- correção do artefato visual/transparência nas miniaturas ao passar o mouse nos filtros da biblioteca
+- remoção do brilho translúcido que interferia visualmente nas capas
+- isolamento de camadas entre filtros e cards de músicas
