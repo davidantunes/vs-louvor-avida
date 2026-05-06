@@ -3702,3 +3702,61 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
     grid-template-columns: 1fr 1fr !important;
   }
 }
+
+
+/* V57 — correção Appwrite user_state + centralização dos ícones de play */
+.play-btn,
+.action-btn.primary.play-btn,
+.mini-btn.play-setlist,
+.mini-btn.play-one,
+#playPauseBtn,
+.player-controls .play-main{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-align:center !important;
+  place-items:center !important;
+}
+
+.action-btn.primary.play-btn::before,
+.mini-btn.play-setlist::before,
+.mini-btn.play-one::before{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  width:1em;
+  height:1em;
+  line-height:1 !important;
+  margin:0 !important;
+  padding:0 !important;
+  transform:translateY(0);
+}
+
+.player-icon,
+.player-icon-play,
+.player-icon-pause{
+  margin:auto !important;
+  display:grid !important;
+  place-items:center !important;
+}
+
+#playPauseBtn{
+  line-height:1 !important;
+  padding:0 !important;
+}
+
+@media (max-width:760px){
+  .action-btn.primary.play-btn,
+  .mini-btn.play-setlist,
+  .mini-btn.play-one{
+    min-width:52px !important;
+    min-height:52px !important;
+    padding:0 !important;
+  }
+
+  .action-btn.primary.play-btn::before,
+  .mini-btn.play-setlist::before,
+  .mini-btn.play-one::before{
+    font-size:18px !important;
+  }
+}

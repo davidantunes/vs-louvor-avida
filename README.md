@@ -480,3 +480,10 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - escala mobile mais nítida e organizada
 - repertórios mobile mais limpos e fáceis de editar
 - botões e listas com melhor toque e leitura no celular
+
+
+## V57
+
+- corrigido erro Appwrite `Missing required attribute "user_id"` ao salvar favoritos
+- backend agora salva `user_state` usando os atributos corretos: `user_id`, `key`, `value`, `updated_at`
+- centralização reforçada dos ícones de play nos botões de música, repertório e player principal

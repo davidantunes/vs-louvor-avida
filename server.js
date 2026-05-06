@@ -159,11 +159,10 @@ app.put('/api/appwrite/user-state/:userId/:key', async (req, res) => {
   try {
     const updatedAt = new Date().toISOString();
     const doc = await upsertState(APPWRITE_USER_STATE_COLLECTION_ID, d => d.user_id === req.params.userId && d.key === req.params.key, {
-      userId: req.params.userId,
+      user_id: req.params.userId,
       key: req.params.key,
       value: JSON.stringify(req.body.value ?? null),
-      updatedAt,
-      userName: String(req.body.userName || 'Usuário')
+      updated_at: updatedAt
     });
     res.json({ ok: true, id: doc.$id, updatedAt });
   } catch (error) {
