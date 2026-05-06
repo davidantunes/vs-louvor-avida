@@ -429,3 +429,17 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - em smartphones, a Biblioteca usa somente a visualização por **Detalhes**
 - botão **Miniaturas** oculto no mobile
 - cards das músicas no celular ficam compactos, legíveis e mais rápidos de navegar
+
+
+## V50
+
+- player com miniatura e metadados centralizados verticalmente
+- labels visíveis nos botões do player em mobile
+- ações da biblioteca com rótulos visíveis no mobile
+- status dos filtros deixa de ficar preso em “Carregando...”
+- título técnico “Acabamento V9” removido do modal de repertório
+- texto “Modo Louvor Premium” substituído por “Player da biblioteca”
+- labels do menu mobile padronizados com o menu principal
+- botão “Copiar link do sistema” agora confirma visualmente no próprio botão
+- repertório com botões ↑ ↓ para reordenar em touch/mobile
+- player e dock com suporte a safe-area do iPhone/iOS

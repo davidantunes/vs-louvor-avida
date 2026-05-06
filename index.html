@@ -239,7 +239,7 @@
             <span class="kicker">Refinamento</span>
             <h2>Filtros inteligentes</h2>
           </div>
-          <span id="status">Carregando...</span>
+          <span id="status">Preparando filtros...</span>
         </div>
         <div class="filters-grid">
           <label><span>Música</span><select id="musicFilter"><option value="">Todas as músicas</option></select></label>
@@ -322,13 +322,13 @@
       </div>
       <div class="player-center">
         <div class="player-controls" id="playerControls">
-          <button id="shuffleBtn" title="Aleatório">⤨</button>
-          <button id="prevBtn" title="Anterior">⏮</button>
+          <button id="shuffleBtn" title="Reprodução aleatória" aria-label="Aleatório">⤨</button>
+          <button id="prevBtn" title="Música anterior" aria-label="Anterior">⏮</button>
           <button id="playPauseBtn" class="play-main" title="Play/Pause" aria-label="Tocar">
             <span class="player-icon player-icon-play" aria-hidden="true"></span>
           </button>
-          <button id="nextBtn" title="Próxima">⏭</button>
-          <button id="repeatBtn" title="Reiniciar música">↻</button>
+          <button id="nextBtn" title="Próxima música" aria-label="Próxima">⏭</button>
+          <button id="repeatBtn" title="Reiniciar música" aria-label="Reiniciar">↻</button>
         </div>
         <div class="player-progress-row">
           <span id="currentTime">0:00</span>
@@ -341,10 +341,10 @@
       </div>
       <div class="player-side">
         <div class="volume-card">
-          <span>🔊</span>
+          <span class="volume-icon" aria-hidden="true">🔊</span><span class="sr-only">Volume</span>
           <input id="volumeBar" type="range" min="0" max="100" value="100">
         </div>
-        <div class="player-caption">Modo Louvor Premium</div>
+        <div class="player-caption">Player da biblioteca</div>
       </div>
     </div>
     <audio id="audioPlayer" preload="none"></audio>
@@ -352,9 +352,9 @@
 
   <nav class="mobile-dock">
     <a href="#inicio"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span><small>Início</small></a>
-    <a href="#biblioteca"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a2.75 2.75 0 1 1-2.75-2.75A2.75 2.75 0 0 1 9 18Zm0 0V6l10-2v10"/><path d="M19 14a2.75 2.75 0 1 1-2.75 2.75A2.75 2.75 0 0 1 19 14Z"/></svg></span><small>Músicas</small></a>
+    <a href="#biblioteca"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a2.75 2.75 0 1 1-2.75-2.75A2.75 2.75 0 0 1 9 18Zm0 0V6l10-2v10"/><path d="M19 14a2.75 2.75 0 1 1-2.75 2.75A2.75 2.75 0 0 1 19 14Z"/></svg></span><small>Biblioteca</small></a>
     <a href="#escalaMensal"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v3"/><path d="M17 2v3"/><path d="M4 8h16"/><path d="M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/></svg></span><small>Escala</small></a>
-    <a href="#repertorios"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><small>Listas</small></a>
+    <a href="#repertorios"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><small>Repertórios</small></a>
     <a href="#tutorialPage"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><small>Tutorial</small></a>
   </nav>
 
@@ -395,7 +395,7 @@
   <div id="setlistDetailModal" class="modal hidden">
     <div class="modal-card glass modal-wide">
       <button id="closeSetlistDetail" class="modal-close">×</button>
-      <span class="kicker">Acabamento V9</span>
+      <span class="kicker">Repertório compartilhado</span>
       <h3 id="setlistDetailTitle">Repertório</h3>
       <p>Arraste para reordenar as músicas, remova faixas ou toque o repertório inteiro.</p>
       <div class="modal-actions modal-actions-top">

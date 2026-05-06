@@ -278,7 +278,16 @@ function bindEvents(){
     playTrack(list[Math.floor(Math.random() * list.length)], 0, list, { randomContinuous: true });
     toast('Reprodução aleatória contínua iniciada.');
   });
-  el.copyLinkBtn.addEventListener('click', () => copyText(location.origin + location.pathname, 'Link do sistema copiado.'));
+  el.copyLinkBtn.addEventListener('click', () => {
+    const originalLabel = el.copyLinkBtn.textContent;
+    copyText(location.origin + location.pathname, 'Link do sistema copiado.');
+    el.copyLinkBtn.textContent = 'Link copiado!';
+    el.copyLinkBtn.classList.add('is-success');
+    setTimeout(() => {
+      el.copyLinkBtn.textContent = originalLabel;
+      el.copyLinkBtn.classList.remove('is-success');
+    }, 1800);
+  });
 
   el.shuffleBtn.addEventListener('click', () => {
     shuffleMode = !shuffleMode;
@@ -1412,7 +1421,7 @@ async function loadLibrary(force = false){
   } catch (error) {
     console.error(error);
     hideLoading();
-    el.status.textContent = 'Erro ao carregar a biblioteca';
+    el.status.textContent = 'Não foi possível carregar os filtros da biblioteca';
     el.trackList.innerHTML = `<div class="empty">${esc(error.message || 'Erro ao carregar')}</div>`;
   }
 }
@@ -1423,6 +1432,11 @@ function afterLibraryLoaded(){
   updateStats();
   renderSetlists();
   render();
+  if (el.status) {
+    el.status.textContent = allTracks.length
+      ? `Filtros prontos • ${allTracks.length} música(s) disponíveis`
+      : 'Filtros prontos • aguardando músicas da biblioteca';
+  }
 }
 
 function populateFilters(){
@@ -1590,10 +1604,10 @@ function renderTrackCard(t){
       <div class="tag-wrap">${(t.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
       <div class="track-actions">
         <button class="action-btn primary play-btn" data-id="${esc(t.id)}">▶ Tocar</button>
-        <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar">${fav ? '♥' : '♡'}</button>
-        <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom">♬</button>
-        <button class="action-icon setlist-btn" data-id="${esc(t.id)}" title="Adicionar ao repertório">+☷</button>
-        <button class="action-icon detail-btn" data-id="${esc(t.id)}" title="Ver detalhes">⋯</button>
+        <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar" aria-label="Favoritar"><span class="action-icon-glyph">${fav ? '♥' : '♡'}</span><span class="action-icon-label">Favoritar</span></button>
+        <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom" aria-label="Alterar tom"><span class="action-icon-glyph">♬</span><span class="action-icon-label">Tom</span></button>
+        <button class="action-icon setlist-btn" data-id="${esc(t.id)}" title="Adicionar ao repertório" aria-label="Adicionar ao repertório"><span class="action-icon-glyph">+☷</span><span class="action-icon-label">Repertório</span></button>
+        <button class="action-icon detail-btn" data-id="${esc(t.id)}" title="Ver detalhes" aria-label="Ver detalhes"><span class="action-icon-glyph">⋯</span><span class="action-icon-label">Detalhes</span></button>
       </div>
     </article>
   `;
@@ -1976,6 +1990,8 @@ function renderSetlistDetailTracks(){
         </div>
       </div>
       <div class="row-actions">
+        <button class="mini-btn move-up" data-index="${index}" aria-label="Mover para cima">↑</button>
+        <button class="mini-btn move-down" data-index="${index}" aria-label="Mover para baixo">↓</button>
         <button class="mini-btn play-one" data-id="${esc(track.id)}">Tocar</button>
         <button class="mini-btn remove-one" data-id="${esc(track.id)}">Remover</button>
       </div>
@@ -1994,6 +2010,20 @@ function renderSetlistDetailTracks(){
     renderSetlists();
     renderSetlistDetailTracks();
     updateStats();
+  }));
+  el.setlistDetailTracks.querySelectorAll('.move-up').forEach(btn => btn.addEventListener('click', () => {
+    const idx = Number(btn.dataset.index);
+    if (!Number.isInteger(idx) || idx <= 0) return;
+    reorderSetlist(currentSetlistDetailId, idx, idx - 1);
+    renderSetlistDetailTracks();
+    renderSetlists();
+  }));
+  el.setlistDetailTracks.querySelectorAll('.move-down').forEach(btn => btn.addEventListener('click', () => {
+    const idx = Number(btn.dataset.index);
+    if (!Number.isInteger(idx) || idx >= (setlist.trackIds.length - 1)) return;
+    reorderSetlist(currentSetlistDetailId, idx, idx + 1);
+    renderSetlistDetailTracks();
+    renderSetlists();
   }));
 }
 function bindReorderEvents(){

@@ -2776,3 +2776,155 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
     grid-column:auto;
   }
 }
+
+
+/* V50 — polimentos de player, filtros e mobile */
+.sr-only{
+  position:absolute !important;
+  width:1px !important;
+  height:1px !important;
+  padding:0 !important;
+  margin:-1px !important;
+  overflow:hidden !important;
+  clip:rect(0,0,0,0) !important;
+  white-space:nowrap !important;
+  border:0 !important;
+}
+.now-playing{
+  min-height:100%;
+  display:flex !important;
+  align-items:center !important;
+}
+.now-meta{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.player-main-row{
+  align-items:center !important;
+}
+.player-center{
+  align-self:center !important;
+}
+.player-side{
+  align-self:center !important;
+}
+.player-caption{
+  font-size:12px;
+  color:var(--muted);
+  text-align:right;
+}
+.btn.is-success{
+  background:linear-gradient(135deg,var(--teal),var(--teal-2)) !important;
+  color:#001312 !important;
+  border-color:transparent !important;
+}
+#status{
+  color:var(--muted);
+  font-weight:800;
+}
+.action-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+}
+.action-icon-label{
+  display:none;
+  font-size:10px;
+  font-weight:900;
+}
+.player-controls button{
+  position:relative;
+  min-width:46px;
+  min-height:46px;
+}
+.row-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+@supports (padding: max(0px)){
+  .player{
+    bottom:max(14px, calc(14px + env(safe-area-inset-bottom))) !important;
+    padding-bottom:max(16px, calc(16px + env(safe-area-inset-bottom))) !important;
+  }
+  .mobile-dock{
+    bottom:max(10px, calc(10px + env(safe-area-inset-bottom))) !important;
+    padding-bottom:max(8px, calc(8px + env(safe-area-inset-bottom))) !important;
+  }
+}
+
+@media (max-width:760px){
+  body.player-visible{
+    padding-bottom:calc(250px + env(safe-area-inset-bottom)) !important;
+  }
+  .player-main-row{
+    gap:18px !important;
+  }
+  .now-playing{
+    justify-content:flex-start !important;
+    align-items:center !important;
+  }
+  .player-controls{
+    gap:12px !important;
+    padding-bottom:18px;
+  }
+  .player-controls button{
+    width:48px !important;
+    height:48px !important;
+  }
+  .player-controls .play-main{
+    width:58px !important;
+    height:58px !important;
+  }
+  .player-controls button::after{
+    content:attr(aria-label);
+    position:absolute;
+    left:50%;
+    transform:translateX(-50%);
+    bottom:-16px;
+    font-size:10px;
+    line-height:1;
+    font-weight:900;
+    color:var(--muted);
+    white-space:nowrap;
+    pointer-events:none;
+  }
+  .track-actions{
+    grid-template-columns:1fr 1fr !important;
+    gap:10px !important;
+  }
+  .track-actions .action-btn.primary{
+    grid-column:1 / -1 !important;
+  }
+  .action-icon{
+    min-height:54px !important;
+    height:auto !important;
+    padding:8px 10px !important;
+    display:flex !important;
+    flex-direction:column;
+    gap:4px;
+  }
+  .action-icon-label{
+    display:block;
+  }
+  .action-icon-glyph{
+    font-size:16px;
+    line-height:1;
+  }
+  .mobile-dock a small{
+    font-size:10px !important;
+  }
+}
+
+@media (max-width:480px){
+  .player-controls{
+    gap:10px !important;
+  }
+  .player-controls button::after{
+    font-size:9px;
+    bottom:-14px;
+  }
+}
