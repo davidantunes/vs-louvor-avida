@@ -494,3 +494,20 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - correção do artefato visual/transparência nas miniaturas ao passar o mouse nos filtros da biblioteca
 - remoção do brilho translúcido que interferia visualmente nas capas
 - isolamento de camadas entre filtros e cards de músicas
+
+
+## V59
+
+- corrigida a detecção do tom original das músicas
+- o sistema agora prioriza o tom indicado ao final do nome do arquivo, como `Nome da música - D.mp3`
+- evita falso positivo com títulos que começam com A, B, C etc.
+- cache da biblioteca foi atualizado para forçar nova leitura dos tons
+
+
+## V60
+
+- repertórios ficam disponíveis para todos os usuários
+- somente o usuário que criou o repertório pode editá-lo ou excluí-lo
+- repertórios exibem o criador
+- repertórios de outros usuários abrem em modo leitura
+- tons exibidos com nome por extenso: `C (dó)`, `D# (ré sustenido)`, etc.

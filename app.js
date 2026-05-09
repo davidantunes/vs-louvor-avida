@@ -793,10 +793,36 @@ function isScheduleAdmin(){
   const email = String(authUser?.email || '').toLowerCase();
   return Boolean(email && cloudAdminEmails.includes(email));
 }
-function canDeleteSetlists(){
-  return isScheduleAdmin();
+function currentUserIdentity(){
+  return {
+    id: authUser?.$id || '',
+    email: String(authUser?.email || '').toLowerCase(),
+    name: authUser?.name || authUser?.email || ''
+  };
 }
-function canEditSetlists(){
+function getSetlistCreatorId(setlist){
+  return setlist?.createdById || setlist?.creatorId || setlist?.created_by || '';
+}
+function getSetlistCreatorEmail(setlist){
+  return String(setlist?.createdByEmail || setlist?.creatorEmail || setlist?.created_by_email || '').toLowerCase();
+}
+function getSetlistCreatorName(setlist){
+  return setlist?.createdByName || setlist?.creatorName || setlist?.created_by_name || 'Criador não identificado';
+}
+function isSetlistOwner(setlist){
+  if (!authUser || !setlist) return false;
+  const user = currentUserIdentity();
+  const creatorId = getSetlistCreatorId(setlist);
+  const creatorEmail = getSetlistCreatorEmail(setlist);
+  return Boolean((creatorId && creatorId === user.id) || (creatorEmail && creatorEmail === user.email));
+}
+function canDeleteSetlist(setlist){
+  return isSetlistOwner(setlist);
+}
+function canEditSetlist(setlist){
+  return isSetlistOwner(setlist);
+}
+function canCreateSetlists(){
   return Boolean(authUser);
 }
 async function setAdminSharedState(key, value){
@@ -1292,10 +1318,81 @@ function loadJSON(key, fallback){ try { const x = localStorage.getItem(key); ret
 function saveJSON(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
 function esc(str){ return String(str).replace(/[&<>'"]/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[ch])); }
 
+function normalizeKeyToken(token){
+  if (!token) return '';
+  let key = String(token).trim().replace('♯','#').replace('♭','b');
+  const minor = /m$/i.test(key);
+  key = key.replace(/m$/i,'');
+  const flatMap = { Db:'C#', Eb:'D#', Gb:'F#', Ab:'G#', Bb:'A#' };
+  const proper = key.charAt(0).toUpperCase() + key.slice(1);
+  const normalized = flatMap[proper] || proper.toUpperCase();
+  return normalized + (minor ? 'm' : '');
+}
+
+function formatKeyLabel(key){
+  if (!key || key === '—') return '—';
+  const normalized = normalizeKeyToken(key);
+  const minor = /m$/.test(normalized);
+  const base = normalized.replace(/m$/,'');
+  const names = {
+    'C':'dó',
+    'C#':'dó sustenido',
+    'D':'ré',
+    'D#':'ré sustenido',
+    'E':'mi',
+    'F':'fá',
+    'F#':'fá sustenido',
+    'G':'sol',
+    'G#':'sol sustenido',
+    'A':'lá',
+    'A#':'lá sustenido',
+    'B':'si'
+  };
+  const name = names[base] || '';
+  if (!name) return normalized;
+  return `${normalized} (${name}${minor ? ' menor' : ''})`;
+}
+
 function detectKey(text){
-  const s = String(text).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const m = s.match(/(?:^|[\s_\-\(\[])((?:A|B|C|D|E|F|G)(?:#|b)?m?)(?:$|[\s_\-\)\]])/i);
-  return m ? m[1].toUpperCase().replace('M','m') : '—';
+  const raw = String(text || '')
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[♯]/g, '#')
+    .replace(/[♭]/g, 'b')
+    .trim();
+
+  const s = raw.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+  const token = '(?:C#|Db|D#|Eb|F#|Gb|G#|Ab|A#|Bb|A|B|C|D|E|F|G)(?:m)?';
+
+  const explicit = new RegExp(`(?:tom|tone|key)\\s*[:=\\-]?\\s*(${token})(?=$|[\\s_\\-\\)\\]\\}])`, 'i');
+  const explicitMatch = s.match(explicit);
+  if (explicitMatch) return normalizeKeyToken(explicitMatch[1]);
+
+  const matches = [];
+  const re = new RegExp(`(^|[\\s_\\-\\(\\[\\{])(${token})(?=$|[\\s_\\-\\)\\]\\}])`, 'gi');
+  let match;
+  while ((match = re.exec(s)) !== null) {
+    const sep = match[1] || '';
+    const key = match[2];
+    const index = match.index + sep.length;
+    const end = index + key.length;
+    const after = s.slice(end);
+    const nextNonSpace = after.trimStart().charAt(0);
+
+    // Evita falso positivo em títulos como "A Ele a Glória", onde "A" é artigo/palavra inicial.
+    const startsAtBeginning = index === 0;
+    const nextIsOnlyWhitespaceThenWord = /^\s+[A-Za-z]/.test(after);
+    const nextIsSeparator = /^\s*[-_)\]\}]/.test(after) || after.length === 0;
+
+    if (startsAtBeginning && nextIsOnlyWhitespaceThenWord && !nextIsSeparator) continue;
+
+    matches.push({ key, index });
+  }
+
+  if (!matches.length) return '—';
+
+  // Prioriza o último tom encontrado, pois normalmente o arquivo vem como "Nome da música - D".
+  return normalizeKeyToken(matches[matches.length - 1].key);
 }
 function suggestTags(t){
   const text = normalize(`${t.name} ${t.singer} ${t.fileName}`);
@@ -1481,7 +1578,7 @@ async function refreshLibraryInBackground(){
     freshTracks.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
     if (freshTracks.length) {
       allTracks = freshTracks;
-      saveJSON('vs_drive_cache_v10', { updatedAt: Date.now(), tracks: allTracks });
+      saveJSON('vs_drive_cache_v59', { updatedAt: Date.now(), tracks: allTracks });
       afterLibraryLoaded();
       el.status.textContent = 'Biblioteca sincronizada em segundo plano.';
     }
@@ -1498,7 +1595,7 @@ async function loadLibrary(force = false){
     resetProgressCounters();
     el.status.textContent = 'Preparando biblioteca...';
 
-    const cacheKey = 'vs_drive_cache_v10';
+    const cacheKey = 'vs_drive_cache_v59';
     if (!force) {
       const cached = loadJSON(cacheKey, null);
       if (cached && Array.isArray(cached.tracks) && cached.tracks.length) {
@@ -1705,7 +1802,7 @@ function renderTrackCard(t){
         </div>
       </div>
       <div class="track-meta">
-        <span class="meta key">Tom ${esc(t.key || '—')}</span>
+        <span class="meta key">Tom ${esc(formatKeyLabel(t.key || '—'))}</span>
         <span class="meta">${esc(t.ext.toUpperCase())}</span>
       </div>
       <div class="tag-wrap">${(t.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
@@ -1780,10 +1877,10 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   const p = el.audio.play();
   if (p && typeof p.catch === 'function') p.catch(err => console.warn('Falha ao tocar automaticamente:', err));
   const alteredToneLabel = track.repertoireTone || (semitones ? calculateToneLabel(track.key, semitones) : '');
-  el.nowTitle.textContent = alteredToneLabel ? `${track.name} • Tom alterado ${alteredToneLabel}` : track.name;
-  el.nowSinger.textContent = `${track.singer}${track.key && track.key !== '—' ? ' • Tom original ' + track.key : ''}${alteredToneLabel ? ' • Tom alterado ' + alteredToneLabel : ''}`;
+  el.nowTitle.textContent = alteredToneLabel ? `${track.name} • Tom alterado ${formatKeyLabel(alteredToneLabel)}` : track.name;
+  el.nowSinger.textContent = `${track.singer}${track.key && track.key !== '—' ? ' • Tom original ' + formatKeyLabel(track.key) : ''}${alteredToneLabel ? ' • Tom alterado ' + formatKeyLabel(alteredToneLabel) : ''}`;
   el.nowCover.src = track.coverUrl || 'assets/logo-avida.jpg';
-  recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: track.key, changedKey: alteredToneLabel || '', semitones });
+  recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: formatKeyLabel(track.key), changedKey: alteredToneLabel || '', semitones });
   syncProgressUI();
 }
 
@@ -1858,8 +1955,8 @@ function openToneModal(track){
   selectedToneLabel = parsed.base ? `${originalBase}${suffix}` : '';
 
   el.toneTrackName.textContent = track.name;
-  el.toneCurrent.textContent = parsed.base ? `${originalBase}${suffix}` : 'Não detectado';
-  if (el.toneSelected) el.toneSelected.textContent = parsed.base ? `${originalBase}${suffix}` : 'Escolha o tom';
+  el.toneCurrent.textContent = parsed.base ? formatKeyLabel(`${originalBase}${suffix}`) : 'Não detectado';
+  if (el.toneSelected) el.toneSelected.textContent = parsed.base ? formatKeyLabel(`${originalBase}${suffix}`) : 'Escolha o tom';
 
   const helper = parsed.base
     ? '<div class="tone-help">Escolha o novo tom desejado. O sistema calcula automaticamente a transposição.</div>'
@@ -1871,7 +1968,7 @@ function openToneModal(track){
     const isOriginal = parsed.base && key === originalBase;
     return `
       <button class="tone-btn ${isOriginal ? 'active original' : ''}" data-key="${key}" data-step="${semitone}">
-        ${label}
+        ${formatKeyLabel(label)}
         <small>${semitone === 0 ? 'original' : `${semitone > 0 ? '+' : ''}${semitone}`}</small>
       </button>
     `;
@@ -1888,7 +1985,7 @@ function openToneModal(track){
     el.downloadToneBtn.href = downloadUrl(track.id, track.name, selectedSemitone);
     el.playToneBtn.textContent = selectedSemitone === 0 ? '▶ Ouvir no tom original' : `▶ Ouvir em ${selectedToneLabel}`;
     el.downloadToneBtn.textContent = selectedSemitone === 0 ? 'Baixar tom original' : `Baixar em ${selectedToneLabel}`;
-    if (el.addToneToSetlistBtn) el.addToneToSetlistBtn.textContent = selectedSemitone === 0 ? '+ Adicionar ao repertório' : `+ Adicionar ao repertório em ${selectedToneLabel}`;
+    if (el.addToneToSetlistBtn) el.addToneToSetlistBtn.textContent = selectedSemitone === 0 ? '+ Adicionar ao repertório' : `+ Adicionar ao repertório em ${formatKeyLabel(selectedToneLabel)}`;
   }));
 
   el.downloadToneBtn.href = downloadUrl(track.id, track.name, 0);
@@ -1949,13 +2046,23 @@ function openSetlistModal(track, toneInfo = { semitones: 0, tone: '' }){
 }
 function closeSetlistModal(){ el.setlistModal.classList.add('hidden'); }
 function createSetlistFromInput(){
-  if (!canEditSetlists()) {
+  if (!canCreateSetlists()) {
     toast('Faça login para criar repertórios.');
     return;
   }
   const name = el.newSetlistName.value.trim();
   if (!name) return;
-  const s = { id: String(Date.now()), name, trackIds: setlistTarget ? [makeSetlistEntry(setlistTarget, setlistTargetTone)] : [] };
+  const creator = currentUserIdentity();
+  const s = {
+    id: String(Date.now()),
+    name,
+    trackIds: setlistTarget ? [makeSetlistEntry(setlistTarget, setlistTargetTone)] : [],
+    createdById: creator.id,
+    createdByEmail: creator.email,
+    createdByName: creator.name,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
   setlists.push(s);
   saveSetlistsState();
   updateStats();
@@ -1970,19 +2077,22 @@ function renderSetlistOptions(){
     el.setlistOptions.innerHTML = '<div class="empty">Nenhum repertório criado ainda.</div>';
     return;
   }
-  el.setlistOptions.innerHTML = setlists.map(s => `
-    <div class="stack-item">
-      <div><strong>${esc(s.name)}</strong><span>${s.trackIds.length} música(s)</span></div>
-      <button class="mini-btn add-to-setlist" data-id="${esc(s.id)}">Adicionar</button>
-    </div>
-  `).join('');
+  el.setlistOptions.innerHTML = setlists.map(s => {
+    const owner = isSetlistOwner(s);
+    return `
+      <div class="stack-item ${owner ? '' : 'is-readonly'}">
+        <div><strong>${esc(s.name)}</strong><span>${s.trackIds.length} música(s) • Criado por ${esc(getSetlistCreatorName(s))}</span></div>
+        ${owner ? `<button class="mini-btn add-to-setlist" data-id="${esc(s.id)}">Adicionar</button>` : `<span class="setlist-readonly-note">Somente o criador pode editar</span>`}
+      </div>
+    `;
+  }).join('');
   el.setlistOptions.querySelectorAll('.add-to-setlist').forEach(btn => btn.addEventListener('click', () => {
-    if (!canEditSetlists()) {
-      toast('Faça login para alterar repertórios.');
-      return;
-    }
     const setlist = setlists.find(s => s.id === btn.dataset.id);
     if (!setlist || !setlistTarget) return;
+    if (!canEditSetlist(setlist)) {
+      toast('Somente quem criou este repertório pode editá-lo.');
+      return;
+    }
     const entry = makeSetlistEntry(setlistTarget, setlistTargetTone);
     if (!setlistHasEntry(setlist, entry)) setlist.trackIds.push(entry);
     saveSetlistsState();
@@ -1996,25 +2106,28 @@ function renderSetlistOptions(){
 
 function renderSetlists(){
   const permissionNotice = authUser
-    ? (canDeleteSetlists() ? 'Modo líder: você pode criar, editar e excluir repertórios.' : 'Usuário comum: você pode criar e editar repertórios; excluir é restrito aos líderes.')
-    : 'Faça login para criar ou editar repertórios.';
+    ? 'Todos podem ver e tocar os repertórios. Somente quem criou um repertório pode editá-lo ou excluí-lo.'
+    : 'Faça login para criar repertórios. Repertórios publicados ficam visíveis para todos.';
   if (!setlists.length) {
     el.setlistsGrid.innerHTML = `<div class="empty">Nenhum repertório criado ainda. ${permissionNotice}</div>`;
     return;
   }
-  el.setlistsGrid.innerHTML = `<div class="setlist-permission-note">${permissionNotice}</div>` + setlists.map(s => `
-    <article class="setlist-card">
-      <strong>${esc(s.name)}</strong>
-      <div class="muted">${s.trackIds.length} música(s)</div>
-      <div class="setlist-actions">
-        <button class="mini-btn play-setlist" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório">▶</button>
-        <button class="mini-btn open-setlist" data-id="${esc(s.id)}">Abrir</button>
-        <button class="mini-btn share-setlist" data-id="${esc(s.id)}">Compartilhar</button>
-        <button class="mini-btn notify-setlist" data-id="${esc(s.id)}">Notificar</button>
-        ${canDeleteSetlists() ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>` : ''}
-      </div>
-    </article>
-  `).join('');
+  el.setlistsGrid.innerHTML = `<div class="setlist-permission-note">${permissionNotice}</div>` + setlists.map(s => {
+    const owner = isSetlistOwner(s);
+    return `
+      <article class="setlist-card ${owner ? 'is-owner' : 'is-readonly'}">
+        <strong>${esc(s.name)}</strong>
+        <div class="muted">${s.trackIds.length} música(s) • Criado por ${esc(getSetlistCreatorName(s))}</div>
+        <div class="setlist-actions">
+          <button class="mini-btn play-setlist" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório">▶</button>
+          <button class="mini-btn open-setlist" data-id="${esc(s.id)}">${owner ? 'Editar' : 'Ver'}</button>
+          <button class="mini-btn share-setlist" data-id="${esc(s.id)}">Compartilhar</button>
+          <button class="mini-btn notify-setlist" data-id="${esc(s.id)}">Notificar</button>
+          ${owner ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>` : ''}
+        </div>
+      </article>
+    `;
+  }).join('');
 
   el.setlistsGrid.querySelectorAll('.play-setlist').forEach(btn => btn.addEventListener('click', () => playSetlistById(btn.dataset.id)));
   el.setlistsGrid.querySelectorAll('.open-setlist').forEach(btn => btn.addEventListener('click', () => openSetlistDetail(btn.dataset.id)));
@@ -2026,8 +2139,9 @@ function renderSetlists(){
     notifySetlistDefined(setlist);
   }));
   el.setlistsGrid.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
-    if (!canDeleteSetlists()) {
-      toast('Somente administradores podem excluir repertórios.');
+    const setlist = setlists.find(s => s.id === btn.dataset.id);
+    if (!canDeleteSetlist(setlist)) {
+      toast('Somente quem criou este repertório pode excluí-lo.');
       return;
     }
     if (!confirm('Excluir este repertório?')) return;
@@ -2083,6 +2197,10 @@ function openSetlistDetail(id){
   const setlist = setlists.find(s => s.id === id);
   if (!setlist) return;
   el.setlistDetailTitle.textContent = setlist.name;
+  const detailIntro = el.setlistDetailModal?.querySelector('p');
+  if (detailIntro) detailIntro.textContent = isSetlistOwner(setlist)
+    ? 'Você é o criador deste repertório. Pode reordenar, remover faixas ou tocar o repertório inteiro.'
+    : 'Repertório em modo leitura. Somente quem criou pode editar.';
   renderSetlistDetailTracks();
   el.setlistDetailModal.classList.remove('hidden');
 }
@@ -2095,18 +2213,19 @@ function renderSetlistDetailTracks(){
     el.setlistDetailTracks.innerHTML = '<div class="empty">Este repertório ainda não possui músicas.</div>';
     return;
   }
+  const owner = isSetlistOwner(setlist);
   el.setlistDetailTracks.innerHTML = tracks.map((track, index) => `
-    <div class="reorder-item" draggable="true" data-id="${esc(track.id)}" data-index="${index}">
+    <div class="reorder-item ${owner ? '' : 'is-readonly'}" draggable="${owner ? 'true' : 'false'}" data-id="${esc(track.id)}" data-index="${index}">
       <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1">
-        <span class="drag-handle">⋮⋮</span>
+        ${owner ? '<span class="drag-handle">⋮⋮</span>' : ''}
         <div>
           <strong>${index + 1}. ${esc(track.name)}</strong>
-          <span>${esc(track.singer)} • Tom original ${esc(track.key || '—')} ${track.repertoireTone ? ` • <span class="repertoire-tone-badge">Tom alterado: ${esc(track.repertoireTone)}</span>` : ''}</span>
+          <span>${esc(track.singer)} • Tom original ${esc(formatKeyLabel(track.key || '—'))} ${track.repertoireTone ? ` • <span class="repertoire-tone-badge">Tom alterado: ${esc(formatKeyLabel(track.repertoireTone))}</span>` : ''}</span>
         </div>
       </div>
       <div class="row-actions">
         <button class="mini-btn play-one" data-id="${esc(track.id)}" aria-label="Tocar música" title="Tocar música">▶</button>
-        <button class="mini-btn remove-one" data-id="${esc(track.id)}">Remover</button>
+        ${owner ? `<button class="mini-btn remove-one" data-id="${esc(track.id)}">Remover</button>` : ''}
       </div>
     </div>
   `).join('');
@@ -2117,6 +2236,10 @@ function renderSetlistDetailTracks(){
     if (track) playTrack(track, null, tracks);
   }));
   el.setlistDetailTracks.querySelectorAll('.remove-one').forEach(btn => btn.addEventListener('click', () => {
+    if (!isSetlistOwner(setlist)) {
+      toast('Somente quem criou este repertório pode editá-lo.');
+      return;
+    }
     const idx = Number(btn.closest('.reorder-item')?.dataset.index);
     if (Number.isInteger(idx) && idx >= 0) setlist.trackIds.splice(idx, 1);
     saveSetlistsState();
@@ -2126,6 +2249,8 @@ function renderSetlistDetailTracks(){
   }));
 }
 function bindReorderEvents(){
+  const setlist = setlists.find(s => s.id === currentSetlistDetailId);
+  if (!isSetlistOwner(setlist)) return;
   const items = [...el.setlistDetailTracks.querySelectorAll('.reorder-item')];
   let draggedIndex = null;
   items.forEach(item => {
@@ -2159,7 +2284,7 @@ function openSongModal(track){
   el.songModalSubtitle.textContent = `${track.singer} • ${track.fileName}`;
   const alteredTone = track.repertoireTone || '';
   el.songModalMeta.innerHTML = `
-    <span class="meta key">Tom original: ${esc(track.key || '—')}</span>
+    <span class="meta key">Tom original: ${esc(formatKeyLabel(track.key || '—'))}</span>
     <span class="meta altered-tone">Tom alterado: ${alteredTone ? esc(alteredTone) : '—'}</span>
     <span class="meta">Arquivo: ${esc(track.ext.toUpperCase())}</span>
     <span class="meta">Origem: Google Drive</span>

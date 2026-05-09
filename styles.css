@@ -3825,3 +3825,43 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
   box-shadow:0 10px 24px rgba(0,0,0,.20), inset 0 0 0 1px rgba(255,255,255,.06);
   background-clip:padding-box;
 }
+
+
+/* V60 — repertórios compartilhados com edição apenas do criador + tons por extenso */
+.setlist-card.is-readonly{
+  opacity:.96;
+}
+.setlist-card.is-owner{
+  box-shadow:0 0 0 1px rgba(41,217,208,.18), 0 18px 45px rgba(0,0,0,.20);
+}
+.setlist-card .muted{
+  line-height:1.45;
+}
+.stack-item.is-readonly{
+  opacity:.85;
+}
+.setlist-readonly-note{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:38px;
+  padding:8px 10px;
+  border-radius:12px;
+  border:1px solid var(--line-soft);
+  background:rgba(255,255,255,.035);
+  color:var(--muted);
+  font-size:12px;
+  font-weight:900;
+  text-align:center;
+}
+.reorder-item.is-readonly{
+  cursor:default;
+}
+.reorder-item.is-readonly .row-actions{
+  justify-content:flex-end;
+}
+@media (max-width:760px){
+  .setlist-readonly-note{
+    width:100%;
+  }
+}
