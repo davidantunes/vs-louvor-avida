@@ -338,6 +338,18 @@
           </div>
         </div>
 
+        <div id="activeSetlistBanner" class="active-setlist-banner hidden">
+          <div class="active-setlist-copy">
+            <span class="active-setlist-kicker">Repertório ativo</span>
+            <strong id="activeSetlistName">—</strong>
+            <small id="activeSetlistMeta">Selecione músicas na biblioteca para adicionar diretamente.</small>
+          </div>
+          <div class="active-setlist-actions">
+            <button id="activeSetlistViewBtn" class="btn btn-secondary" type="button">Ver repertório</button>
+            <button id="activeSetlistDoneBtn" class="btn btn-primary" type="button">Concluir repertório</button>
+          </div>
+        </div>
+
         <div id="trackList" class="track-grid view-thumbnails"></div>
         <div id="loadSentinel" class="load-sentinel">
           <span id="loadStatus">Role para carregar mais músicas</span>
@@ -433,9 +445,9 @@
   <div id="setlistDetailModal" class="modal hidden">
     <div class="modal-card glass modal-wide">
       <button id="closeSetlistDetail" class="modal-close">×</button>
-      <span class="kicker">Acabamento V9</span>
+      <span class="kicker">Playlist do repertório</span>
       <h3 id="setlistDetailTitle">Repertório</h3>
-      <p>Arraste para reordenar as músicas, remova faixas ou toque o repertório inteiro.</p>
+      <p>Veja todas as músicas deste repertório em uma visualização de playlist. Quem criou pode editar e reorganizar.</p>
       <div class="modal-actions modal-actions-top">
         <button id="playSetlistDetail" class="btn btn-primary">▶ Tocar repertório</button>
         <button id="shareSetlistDetail" class="btn btn-secondary">Compartilhar</button>

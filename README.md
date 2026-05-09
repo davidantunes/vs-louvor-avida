@@ -511,3 +511,20 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - repertórios exibem o criador
 - repertórios de outros usuários abrem em modo leitura
 - tons exibidos com nome por extenso: `C (dó)`, `D# (ré sustenido)`, etc.
+
+
+## V61
+
+- ao clicar no card do repertório, abre a janela do repertório em formato de playlist
+- modal do repertório com texto e apresentação mais claros
+- botão do card usa a linguagem Playlist
+
+
+## V62
+
+- após criar um repertório, o sistema redireciona automaticamente para a Biblioteca
+- novo banner “Repertório ativo” na Biblioteca
+- cards de música passam a mostrar o botão “+ Adicionar a este repertório” quando houver repertório ativo
+- botão “Ver repertório” no banner
+- botão “Concluir repertório” no banner
+- repertório ativo salvo temporariamente no navegador até o usuário concluir

@@ -3865,3 +3865,27 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
     width:100%;
   }
 }
+
+
+/* V61 — clicar no repertório abre playlist */
+.setlist-card{cursor:pointer;}
+.setlist-card:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(0,0,0,.18);}
+.setlist-card .setlist-actions{position:relative;z-index:2;}
+#setlistDetailModal .modal-card{max-width:960px;}
+#setlistDetailModal .reorder-list{gap:12px;}
+#setlistDetailModal .reorder-item{border-radius:16px;background:linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.025));}
+#setlistDetailModal .reorder-item strong{font-size:15px;line-height:1.35;}
+#setlistDetailModal .reorder-item span{display:block;margin-top:4px;line-height:1.45;}
+@media (max-width:760px){.setlist-card{border-radius:22px !important;}#setlistDetailModal .modal-card{width:min(100%, calc(100% - 20px));padding:18px 14px 16px;border-radius:24px;}}
+
+
+/* V62 — fluxo de repertório ativo na biblioteca */
+.active-setlist-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0 18px;padding:16px 18px;border-radius:22px;border:1px solid rgba(41,217,208,.22);background:linear-gradient(135deg, rgba(41,217,208,.16), rgba(255,255,255,.04));box-shadow:0 12px 30px rgba(0,0,0,.16);}
+.active-setlist-banner.hidden{display:none !important;}
+.active-setlist-copy{display:grid;gap:4px;min-width:0}.active-setlist-kicker{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--teal);font-weight:900}.active-setlist-copy strong{font-size:20px;line-height:1.15}.active-setlist-copy small{color:var(--muted);line-height:1.45}.active-setlist-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.active-setlist-actions .btn{min-height:46px;border-radius:14px;}
+.track-actions.has-active-setlist .setlist-btn{min-width:142px;padding:0 10px;background:rgba(41,217,208,.12);border-color:rgba(41,217,208,.28);color:var(--text);display:flex;align-items:center;justify-content:center;gap:8px;text-align:center;}
+.track-actions .setlist-btn .action-icon-glyph{display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1;}
+.track-actions .setlist-btn .action-icon-label{display:inline-flex;align-items:center;justify-content:center;font-size:11px;line-height:1.15;font-weight:900;}
+.track-actions .setlist-btn.is-active-target{box-shadow:0 0 0 1px rgba(41,217,208,.18), inset 0 1px 0 rgba(255,255,255,.06);}
+@media (max-width:760px){.active-setlist-banner{flex-direction:column;align-items:stretch;padding:14px;border-radius:20px;}.active-setlist-copy strong{font-size:18px;}.active-setlist-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;}.active-setlist-actions .btn{width:100%;justify-content:center;}.track-actions.has-active-setlist{grid-template-columns:1fr 1fr !important;}.track-actions.has-active-setlist .play-btn{grid-column:1 / -1 !important;}.track-actions.has-active-setlist .setlist-btn{grid-column:1 / -1;min-height:54px;border-radius:16px;}.track-actions .setlist-btn .action-icon-label{font-size:10px;}}
+@media (max-width:420px){.active-setlist-actions{grid-template-columns:1fr;}.track-actions .setlist-btn .action-icon-label{font-size:9.5px;}}

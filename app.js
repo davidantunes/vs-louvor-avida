@@ -18,6 +18,8 @@ let selectedToneLabel = '';
 let toneTarget = null;
 let setlistTarget = null;
 let setlistTargetTone = { semitones: 0, tone: '' };
+const ACTIVE_SETLIST_KEY = 'vs_active_setlist_v62';
+let activeSetlistId = loadJSON(ACTIVE_SETLIST_KEY, '');
 let currentSetlistDetailId = null;
 let songModalTarget = null;
 let favorites = loadJSON('vs_favorites_v1', []);
@@ -157,6 +159,11 @@ const el = {
   newSetlistName: document.getElementById('newSetlistName'),
   createSetlistBtn: document.getElementById('createSetlistBtn'),
   setlistOptions: document.getElementById('setlistOptions'),
+  activeSetlistBanner: document.getElementById('activeSetlistBanner'),
+  activeSetlistName: document.getElementById('activeSetlistName'),
+  activeSetlistMeta: document.getElementById('activeSetlistMeta'),
+  activeSetlistViewBtn: document.getElementById('activeSetlistViewBtn'),
+  activeSetlistDoneBtn: document.getElementById('activeSetlistDoneBtn'),
 
   setlistDetailModal: document.getElementById('setlistDetailModal'),
   closeSetlistDetail: document.getElementById('closeSetlistDetail'),
@@ -324,7 +331,13 @@ function bindEvents(){
   if (el.addToneToSetlistBtn) {
     el.addToneToSetlistBtn.addEventListener('click', () => {
       if (!toneTarget) return;
-      const tone = selectedToneLabel || el.toneSelected?.textContent || '';
+      const tone = selectedToneLabel || '';
+      const active = getActiveEditableSetlist();
+      if (active) {
+        closeToneModal();
+        addTrackToSetlist(active, toneTarget, { semitones: selectedSemitone, tone }, { toastMessage: `Música adicionada ao repertório ativo: ${active.name}.` });
+        return;
+      }
       closeToneModal();
       openSetlistModal(toneTarget, { semitones: selectedSemitone, tone });
     });
@@ -334,6 +347,16 @@ function bindEvents(){
   el.closeSetlist.addEventListener('click', closeSetlistModal);
   el.setlistModal.addEventListener('click', e => { if (e.target === el.setlistModal) closeSetlistModal(); });
   el.createSetlistBtn.addEventListener('click', createSetlistFromInput);
+  if (el.activeSetlistViewBtn) el.activeSetlistViewBtn.addEventListener('click', () => {
+    const active = getActiveSetlist();
+    if (!active) {
+      toast('Nenhum repertório ativo.');
+      clearActiveSetlist();
+      return;
+    }
+    openSetlistDetail(active.id);
+  });
+  if (el.activeSetlistDoneBtn) el.activeSetlistDoneBtn.addEventListener('click', () => concludeActiveSetlist());
 
   el.closeSetlistDetail.addEventListener('click', closeSetlistDetail);
   el.setlistDetailModal.addEventListener('click', e => { if (e.target === el.setlistDetailModal) closeSetlistDetail(); });
@@ -822,8 +845,92 @@ function canDeleteSetlist(setlist){
 function canEditSetlist(setlist){
   return isSetlistOwner(setlist);
 }
+
 function canCreateSetlists(){
   return Boolean(authUser);
+}
+function persistActiveSetlist(){
+  saveJSON(ACTIVE_SETLIST_KEY, activeSetlistId || '');
+}
+function getActiveSetlist(){
+  return setlists.find(s => s.id === activeSetlistId) || null;
+}
+function getActiveEditableSetlist(){
+  const setlist = getActiveSetlist();
+  return canEditSetlist(setlist) ? setlist : null;
+}
+function setActiveSetlist(id){
+  activeSetlistId = id || '';
+  persistActiveSetlist();
+  renderActiveSetlistBanner();
+}
+function clearActiveSetlist(){
+  activeSetlistId = '';
+  persistActiveSetlist();
+  renderActiveSetlistBanner();
+}
+function concludeActiveSetlist(){
+  const active = getActiveSetlist();
+  const name = active?.name || '';
+  clearActiveSetlist();
+  render();
+  if (name) toast(`Repertório "${name}" concluído.`);
+}
+function reconcileActiveSetlist(){
+  const active = getActiveSetlist();
+  if (!active) {
+    if (activeSetlistId) clearActiveSetlist();
+    return null;
+  }
+  if (!canEditSetlist(active)) {
+    clearActiveSetlist();
+    return null;
+  }
+  return active;
+}
+function renderActiveSetlistBanner(){
+  if (!el.activeSetlistBanner) return;
+  const active = reconcileActiveSetlist();
+  if (!active) {
+    el.activeSetlistBanner.classList.add('hidden');
+    return;
+  }
+  el.activeSetlistBanner.classList.remove('hidden');
+  el.activeSetlistName.textContent = active.name;
+  el.activeSetlistMeta.textContent = `${active.trackIds.length} música(s) • Clique em “Adicionar a este repertório” nos cards para montar sua playlist.`;
+}
+function activateSetlistAndOpenLibrary(setlist){
+  if (!setlist) return;
+  setActiveSetlist(setlist.id);
+  closeSetlistModal();
+  location.hash = '#biblioteca';
+  routeInternalPage();
+  render();
+  recordUsageEvent({ type: 'setlist_active', setlistId: setlist.id, setlistName: setlist.name, message: `Repertório ativo: "${setlist.name}".` });
+  toast(`Repertório ativo: ${setlist.name}. Agora escolha as músicas na biblioteca.`);
+}
+function addTrackToSetlist(setlist, track, toneInfo = { semitones: 0, tone: '' }, options = {}){
+  if (!setlist || !track) return false;
+  if (!canEditSetlist(setlist)) {
+    toast('Somente quem criou este repertório pode editá-lo.');
+    return false;
+  }
+  const entry = makeSetlistEntry(track, toneInfo);
+  if (setlistHasEntry(setlist, entry)) {
+    toast('Esta música já está neste repertório neste mesmo tom.');
+    return false;
+  }
+  setlist.trackIds.push(entry);
+  setlist.updatedAt = new Date().toISOString();
+  saveSetlistsState();
+  updateStats();
+  renderSetlists();
+  renderSetlistOptions();
+  renderActiveSetlistBanner();
+  if (options.closeModal) closeSetlistModal();
+  recordUsageEvent({ type: 'setlist_updated', setlistId: setlist.id, setlistName: setlist.name, trackCount: setlist.trackIds.length, message: `Música adicionada ao repertório "${setlist.name}".` });
+  toast(options.toastMessage || 'Música adicionada ao repertório.');
+  return true;
 }
 async function setAdminSharedState(key, value){
   if (!authUser) throw new Error('Faça login para salvar.');
@@ -1747,6 +1854,7 @@ function setupInfiniteScroll(){
 
 function render(){
   applyViewMode();
+  renderActiveSetlistBanner();
 
   filteredTracksCache = getFiltered();
   renderedCount = 0;
@@ -1792,6 +1900,9 @@ function loadMoreTracks(amount = LOAD_MORE_SIZE[getEffectiveViewMode()], initial
 function renderTrackCard(t){
   const fav = favorites.includes(t.id);
   const coverStyle = `style="background-image:url('${esc(t.coverUrl || 'assets/logo-avida.jpg')}')"`;
+  const activeSetlist = getActiveEditableSetlist();
+  const setlistTitle = activeSetlist ? `Adicionar ao repertório ativo: ${activeSetlist.name}` : 'Adicionar ao repertório';
+  const setlistLabel = activeSetlist ? '+ Adicionar a este repertório' : '+ Repertório';
   return `
     <article class="track-card" data-id="${esc(t.id)}">
       <div class="track-head">
@@ -1806,11 +1917,11 @@ function renderTrackCard(t){
         <span class="meta">${esc(t.ext.toUpperCase())}</span>
       </div>
       <div class="tag-wrap">${(t.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
-      <div class="track-actions">
+      <div class="track-actions ${activeSetlist ? 'has-active-setlist' : ''}">
         <button class="action-btn primary play-btn" data-id="${esc(t.id)}" aria-label="Tocar" title="Tocar">▶</button>
         <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar">${fav ? '♥' : '♡'}</button>
         <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom">♬</button>
-        <button class="action-icon setlist-btn" data-id="${esc(t.id)}" title="Adicionar ao repertório">+☷</button>
+        <button class="action-icon setlist-btn ${activeSetlist ? 'is-active-target' : ''}" data-id="${esc(t.id)}" title="${esc(setlistTitle)}"><span class="action-icon-glyph">+☷</span><span class="action-icon-label">${esc(setlistLabel)}</span></button>
         <button class="action-icon detail-btn" data-id="${esc(t.id)}" title="Ver detalhes">⋯</button>
       </div>
     </article>
@@ -1835,7 +1946,15 @@ function bindTrackCardEvents(container){
 
   container.querySelectorAll('.setlist-btn:not([data-bound])').forEach(btn => {
     btn.dataset.bound = '1';
-    btn.addEventListener('click', () => openSetlistModal(findTrack(btn.dataset.id)));
+    btn.addEventListener('click', () => {
+      const track = findTrack(btn.dataset.id);
+      const active = getActiveEditableSetlist();
+      if (active && track) {
+        addTrackToSetlist(active, track, { semitones: 0, tone: '' }, { toastMessage: `Música adicionada ao repertório ativo: ${active.name}.` });
+        return;
+      }
+      openSetlistModal(track);
+    });
   });
 
   container.querySelectorAll('.detail-btn:not([data-bound])').forEach(btn => {
@@ -2070,7 +2189,7 @@ function createSetlistFromInput(){
   renderSetlistOptions();
   el.newSetlistName.value = '';
   recordUsageEvent({ type: 'setlist_created', setlistId: s.id, setlistName: s.name, trackCount: s.trackIds.length, message: `Repertório "${s.name}" criado.` });
-  toast('Repertório criado.');
+  activateSetlistAndOpenLibrary(s);
 }
 function renderSetlistOptions(){
   if (!setlists.length) {
@@ -2093,14 +2212,7 @@ function renderSetlistOptions(){
       toast('Somente quem criou este repertório pode editá-lo.');
       return;
     }
-    const entry = makeSetlistEntry(setlistTarget, setlistTargetTone);
-    if (!setlistHasEntry(setlist, entry)) setlist.trackIds.push(entry);
-    saveSetlistsState();
-    updateStats();
-    renderSetlists();
-    closeSetlistModal();
-    recordUsageEvent({ type: 'setlist_updated', setlistId: setlist.id, setlistName: setlist.name, trackCount: setlist.trackIds.length, message: `Música adicionada ao repertório "${setlist.name}".` });
-    toast('Música adicionada ao repertório.');
+    addTrackToSetlist(setlist, setlistTarget, setlistTargetTone, { closeModal: true });
   }));
 }
 
@@ -2120,7 +2232,7 @@ function renderSetlists(){
         <div class="muted">${s.trackIds.length} música(s) • Criado por ${esc(getSetlistCreatorName(s))}</div>
         <div class="setlist-actions">
           <button class="mini-btn play-setlist" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório">▶</button>
-          <button class="mini-btn open-setlist" data-id="${esc(s.id)}">${owner ? 'Editar' : 'Ver'}</button>
+          <button class="mini-btn open-setlist" data-id="${esc(s.id)}">Playlist</button>
           <button class="mini-btn share-setlist" data-id="${esc(s.id)}">Compartilhar</button>
           <button class="mini-btn notify-setlist" data-id="${esc(s.id)}">Notificar</button>
           ${owner ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>` : ''}
@@ -2145,10 +2257,18 @@ function renderSetlists(){
       return;
     }
     if (!confirm('Excluir este repertório?')) return;
-    setlists = setlists.filter(s => s.id !== btn.dataset.id);
+    const deletedId = btn.dataset.id;
+    setlists = setlists.filter(s => s.id !== deletedId);
+    if (activeSetlistId === deletedId) clearActiveSetlist();
     saveSetlistsState();
     updateStats();
     renderSetlists();
+    render();
+  }));
+  el.setlistsGrid.querySelectorAll('.setlist-card').forEach(card => card.addEventListener('click', e => {
+    if (e.target.closest('button')) return;
+    const openBtn = card.querySelector('.open-setlist');
+    if (openBtn?.dataset?.id) openSetlistDetail(openBtn.dataset.id);
   }));
 }
 function playSetlistById(id){
@@ -2198,9 +2318,11 @@ function openSetlistDetail(id){
   if (!setlist) return;
   el.setlistDetailTitle.textContent = setlist.name;
   const detailIntro = el.setlistDetailModal?.querySelector('p');
+  const trackCount = (setlist.trackIds || []).length;
+  const creatorName = getSetlistCreatorName(setlist);
   if (detailIntro) detailIntro.textContent = isSetlistOwner(setlist)
-    ? 'Você é o criador deste repertório. Pode reordenar, remover faixas ou tocar o repertório inteiro.'
-    : 'Repertório em modo leitura. Somente quem criou pode editar.';
+    ? `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Você pode tocar, reordenar e editar este repertório.`
+    : `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Repertório em modo leitura para você.`;
   renderSetlistDetailTracks();
   el.setlistDetailModal.classList.remove('hidden');
 }
