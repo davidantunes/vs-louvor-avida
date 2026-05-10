@@ -245,26 +245,7 @@
             <div id="paletteSelectionTarget" class="palette-selection-target hidden"></div>
           </div>
         </div>
-        <div class="palette-links glass-lite">
-          <strong>Links rápidos das artes</strong>
-          <div class="palette-link-list">
-            <a href="assets/palette-1.png" target="_blank" rel="noopener">Paleta 1</a>
-            <a href="assets/palette-2.png" target="_blank" rel="noopener">Paleta 2</a>
-            <a href="assets/palette-3.png" target="_blank" rel="noopener">Paleta 3</a>
-            <a href="assets/palette-4.png" target="_blank" rel="noopener">Paleta 4</a>
-            <a href="assets/palette-5.png" target="_blank" rel="noopener">Paleta 5</a>
-            <a href="assets/palette-6.png" target="_blank" rel="noopener">Paleta 6</a>
-            <a href="assets/palette-7.png" target="_blank" rel="noopener">Paleta 7</a>
-            <a href="assets/palette-8.png" target="_blank" rel="noopener">Paleta 8</a>
-            <a href="assets/palette-9.png" target="_blank" rel="noopener">Paleta 9</a>
-            <a href="assets/palette-10.png" target="_blank" rel="noopener">Paleta 10</a>
-            <a href="assets/palette-11.png" target="_blank" rel="noopener">Paleta 11</a>
-            <a href="assets/palette-12.png" target="_blank" rel="noopener">Paleta 12</a>
-            <a href="assets/palette-13.png" target="_blank" rel="noopener">Paleta 13</a>
-            <a href="assets/palette-14.png" target="_blank" rel="noopener">Paleta 14</a>
-          </div>
-        </div>
-        <div class="palette-grid">
+<div class="palette-grid">
           <article class="palette-card glass-lite" data-palette-id="1" data-palette-title="Paleta 1" data-palette-image="assets/palette-1.png">
             <div class="palette-thumb-wrap">
               <img class="palette-thumb" src="assets/palette-1.png" alt="Paleta 1 - uniforme do culto">
@@ -734,6 +715,17 @@
     </div>
   </div>
 
+
+  <div id="paletteChooseSetlistModal" class="modal hidden">
+    <div class="modal-card glass modal-wide palette-choose-setlist-card">
+      <button id="closePaletteChooseSetlist" class="modal-close">×</button>
+      <span class="kicker">Selecionar repertório</span>
+      <h3 id="paletteChooseTitle">Usar paleta no repertório</h3>
+      <p id="paletteChooseDescription">Escolha em qual repertório esta paleta será aplicada.</p>
+      <div id="paletteChoosePreview" class="palette-choose-preview"></div>
+      <div id="paletteChooseList" class="stack-list palette-choose-list"></div>
+    </div>
+  </div>
   <div id="songModal" class="modal hidden">
     <div class="modal-card glass modal-wide song-modal">
       <button id="closeSongModal" class="modal-close">×</button>

@@ -4270,3 +4270,17 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
   .setlist-shared-actions{display:grid;grid-template-columns:1fr; width:100%}
   .setlist-shared-actions .btn{width:100%}
 }
+
+
+/* V78 — escolher repertório ao aplicar paleta */
+.palette-links{display:none !important;}
+.palette-choose-setlist-card{max-width:min(760px,94vw)}
+.palette-choose-preview{display:flex;align-items:center;gap:14px;padding:12px;border-radius:18px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);margin:12px 0 16px}
+.palette-choose-preview img{width:76px;height:104px;border-radius:14px;object-fit:cover;border:1px solid rgba(255,255,255,.08)}
+.palette-choose-preview strong{display:block;font-size:18px;line-height:1.2}
+.palette-choose-preview span{display:block;color:var(--muted);margin-top:4px;line-height:1.45}
+.palette-target-item span{display:block;color:var(--muted);margin-top:4px;line-height:1.45}
+@media (max-width:640px){
+  .palette-choose-preview{align-items:flex-start}
+  .palette-choose-preview img{width:68px;height:92px}
+}

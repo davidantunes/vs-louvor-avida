@@ -23,6 +23,8 @@ const PENDING_PALETTE_SETLIST_KEY = 'vs_pending_palette_setlist_v67';
 let activeSetlistId = loadJSON(ACTIVE_SETLIST_KEY, '');
 let pendingPaletteSetlistId = loadJSON(PENDING_PALETTE_SETLIST_KEY, '');
 let pendingPaletteReturnTarget = '';
+let pendingPaletteChoice = null;
+let pendingPaletteShareSetlistId = '';
 let currentSetlistDetailId = null;
 let sharedSetlistContextId = null;
 let songModalTarget = null;
@@ -194,6 +196,12 @@ const el = {
   paletteModalUseBtn: document.getElementById('paletteModalUseBtn'),
   paletteModalCloseBtn: document.getElementById('paletteModalCloseBtn'),
   paletteSelectionTarget: document.getElementById('paletteSelectionTarget'),
+  paletteChooseSetlistModal: document.getElementById('paletteChooseSetlistModal'),
+  closePaletteChooseSetlist: document.getElementById('closePaletteChooseSetlist'),
+  paletteChooseTitle: document.getElementById('paletteChooseTitle'),
+  paletteChooseDescription: document.getElementById('paletteChooseDescription'),
+  paletteChoosePreview: document.getElementById('paletteChoosePreview'),
+  paletteChooseList: document.getElementById('paletteChooseList'),
 
   songModal: document.getElementById('songModal'),
   closeSongModal: document.getElementById('closeSongModal'),
@@ -429,24 +437,28 @@ function bindEvents(){
   });
   el.shareSetlistDetail.addEventListener('click', () => {
     const s = setlists.find(x => x.id === currentSetlistDetailId);
-    if (s) copyText(buildSetlistShareUrl(s.id), 'Link do repertório copiado.');
+    if (s) shareSetlistWithPaletteCheck(s);
   });
 
   if (el.closePaletteModal) el.closePaletteModal.addEventListener('click', closePaletteModal);
   if (el.paletteModalCloseBtn) el.paletteModalCloseBtn.addEventListener('click', closePaletteModal);
   if (el.paletteModalUseBtn) el.paletteModalUseBtn.addEventListener('click', () => {
-    const img = el.paletteModal?.dataset?.paletteImage;
-    const title = el.paletteModal?.dataset?.paletteTitle;
-    const id = el.paletteModal?.dataset?.paletteId;
-    if (img && title) applyPaletteToPendingSetlist({ id, title, image: img });
+    const palette = {
+      id: el.paletteModal?.dataset?.paletteId,
+      title: el.paletteModal?.dataset?.paletteTitle,
+      image: el.paletteModal?.dataset?.paletteImage
+    };
+    if (palette.image && palette.title) handlePaletteUse(palette);
   });
   if (el.paletteModal) el.paletteModal.addEventListener('click', e => { if (e.target === el.paletteModal) closePaletteModal(); });
+  if (el.closePaletteChooseSetlist) el.closePaletteChooseSetlist.addEventListener('click', closePaletteChooseSetlistModal);
+  if (el.paletteChooseSetlistModal) el.paletteChooseSetlistModal.addEventListener('click', e => { if (e.target === el.paletteChooseSetlistModal) closePaletteChooseSetlistModal(); });
   document.querySelectorAll('.palette-card').forEach(card => {
     const openBtn = card.querySelector('.palette-open-btn');
     const applyBtn = card.querySelector('.palette-apply-btn');
     const palette = { id: card.dataset.paletteId, title: card.dataset.paletteTitle, image: card.dataset.paletteImage };
     if (openBtn) openBtn.addEventListener('click', ev => { ev.stopPropagation(); openPaletteModal(palette.title || 'Paleta de cores', palette.image, palette.id); });
-    if (applyBtn) applyBtn.addEventListener('click', ev => { ev.stopPropagation(); applyPaletteToPendingSetlist(palette); });
+    if (applyBtn) applyBtn.addEventListener('click', ev => { ev.stopPropagation(); handlePaletteUse(palette); });
     card.addEventListener('click', () => openPaletteModal(palette.title || 'Paleta de cores', palette.image, palette.id));
   });
 
@@ -1091,22 +1103,67 @@ function openPaletteModal(title, imagePath, paletteId=''){
   el.paletteModal.dataset.paletteTitle = title || 'Paleta de cores';
   el.paletteModal.dataset.paletteImage = imagePath || '';
   if (el.paletteModalUseBtn) {
-    const hasTarget = Boolean(getPendingPaletteSetlist());
-    el.paletteModalUseBtn.disabled = !hasTarget;
-    el.paletteModalUseBtn.textContent = hasTarget ? 'Usar esta paleta' : 'Selecione um repertório primeiro';
+    el.paletteModalUseBtn.disabled = false;
+    el.paletteModalUseBtn.textContent = getPendingPaletteSetlist() ? 'Usar esta paleta' : 'Escolher repertório';
   }
   el.paletteModal.classList.remove('hidden');
 }
-function applyPaletteToPendingSetlist(palette){
-  const setlist = getPendingPaletteSetlist() || getActiveEditableSetlist();
-  if (!setlist) {
-    toast('Nenhum repertório aguardando escolha de paleta.');
+function handlePaletteUse(palette){
+  if (!palette || !palette.image || !palette.title) return;
+  const target = getPendingPaletteSetlist() || getActiveEditableSetlist();
+  if (target) {
+    applyPaletteToSetlist(target, palette);
     return;
   }
+  openPaletteChooseSetlistModal(palette);
+}
+
+function openPaletteChooseSetlistModal(palette, mode = 'apply'){
+  if (!el.paletteChooseSetlistModal) return;
+  pendingPaletteChoice = palette;
+  const editable = setlists.filter(s => canEditSetlist(s));
+  el.paletteChooseTitle.textContent = mode === 'share' ? 'Escolha uma paleta antes de compartilhar' : `Usar ${palette.title || 'paleta'} no repertório`;
+  el.paletteChooseDescription.textContent = editable.length
+    ? 'Selecione o repertório que receberá esta paleta. Cada repertório pode ter somente uma paleta ativa.'
+    : 'Você ainda não possui repertórios editáveis. Crie um repertório ou peça ao criador para alterar a paleta.';
+  el.paletteChoosePreview.innerHTML = `<img src="${esc(palette.image)}" alt="${esc(palette.title || 'Paleta')}"><div><strong>${esc(palette.title || 'Paleta')}</strong><span>Selecione abaixo o repertório de destino.</span></div>`;
+  if (!editable.length) {
+    el.paletteChooseList.innerHTML = '<div class="empty">Nenhum repertório editável disponível para sua conta.</div>';
+  } else {
+    el.paletteChooseList.innerHTML = editable.map(s => {
+      const current = s.paletteTitle ? `<span>Paleta atual: ${esc(s.paletteTitle)}</span>` : '<span>Sem paleta definida</span>';
+      return `<div class="stack-item palette-target-item">
+        <div><strong>${esc(s.name)}</strong>${current}</div>
+        <button class="mini-btn choose-palette-setlist" data-id="${esc(s.id)}">Selecionar</button>
+      </div>`;
+    }).join('');
+  }
+  el.paletteChooseList.querySelectorAll('.choose-palette-setlist').forEach(btn => btn.addEventListener('click', () => {
+    const setlist = setlists.find(s => s.id === btn.dataset.id);
+    if (setlist && pendingPaletteChoice) applyPaletteToSetlist(setlist, pendingPaletteChoice);
+  }));
+  closePaletteModal();
+  el.paletteChooseSetlistModal.classList.remove('hidden');
+}
+
+function closePaletteChooseSetlistModal(){
+  el.paletteChooseSetlistModal?.classList.add('hidden');
+  pendingPaletteChoice = null;
+}
+
+function confirmPaletteReplaceIfNeeded(setlist, palette){
+  if (!setlist?.paletteTitle) return true;
+  if (String(setlist.paletteId || '') === String(palette.id || '')) return true;
+  return confirm(`O repertório "${setlist.name}" já possui a paleta "${setlist.paletteTitle}". Deseja trocar para "${palette.title}"?`);
+}
+
+function applyPaletteToSetlist(setlist, palette){
+  if (!setlist || !palette) return;
   if (!canEditSetlist(setlist)) {
-    toast('Somente quem criou este repertório pode definir a paleta.');
+    toast('Somente quem criou este repertório pode definir ou trocar a paleta.');
     return;
   }
+  if (!confirmPaletteReplaceIfNeeded(setlist, palette)) return;
   setlist.paletteId = String(palette.id || '');
   setlist.paletteTitle = palette.title || '';
   setlist.paletteImage = palette.image || '';
@@ -1115,19 +1172,49 @@ function applyPaletteToPendingSetlist(palette){
   updateStats();
   renderSetlists();
   render();
-  const returnTarget = pendingPaletteReturnTarget || 'repertorios';
+  const shareAfter = pendingPaletteShareSetlistId && String(pendingPaletteShareSetlistId) === String(setlist.id);
   closePaletteModal();
+  closePaletteChooseSetlistModal();
   clearPendingPaletteSetlist();
   clearActiveSetlist();
   pendingPaletteReturnTarget = '';
-  location.hash = '#repertorios';
-  routeInternalPage();
-  render();
-  if (returnTarget === 'setlist-detail') {
-    openSetlistDetail(setlist.id);
+  const setlistName = setlist.name;
+  if (shareAfter) {
+    pendingPaletteShareSetlistId = '';
+    copyText(buildSetlistShareUrl(setlist.id), 'Paleta definida e link do repertório copiado.');
+  } else {
+    toast(`Paleta "${palette.title}" definida para o repertório "${setlistName}".`);
   }
-  toast(`Paleta definida para o repertório "${setlist.name}".`);
+  if (currentSetlistDetailId && String(currentSetlistDetailId) === String(setlist.id)) openSetlistDetail(setlist.id);
 }
+
+function shareSetlistWithPaletteCheck(setlist){
+  if (!setlist) return;
+  if (!setlist.paletteTitle || !setlist.paletteImage) {
+    if (!canEditSetlist(setlist)) {
+      toast('Este repertório ainda não possui paleta. Peça ao criador para definir antes de compartilhar.');
+      return;
+    }
+    pendingPaletteShareSetlistId = setlist.id;
+    pendingPaletteReturnTarget = 'share';
+    closeSetlistDetail();
+    location.hash = '#paletas';
+    routeInternalPage();
+    toast('Escolha uma paleta antes de compartilhar o repertório.');
+    return;
+  }
+  copyText(buildSetlistShareUrl(setlist.id), 'Link do repertório copiado.');
+}
+
+function applyPaletteToPendingSetlist(palette){
+  const setlist = getPendingPaletteSetlist() || getActiveEditableSetlist();
+  if (!setlist) {
+    handlePaletteUse(palette);
+    return;
+  }
+  applyPaletteToSetlist(setlist, palette);
+}
+
 function closePaletteModal(){
   el.paletteModal?.classList.add('hidden');
 }
@@ -2499,7 +2586,8 @@ function renderSetlists(){
   el.setlistsGrid.querySelectorAll('.play-setlist').forEach(btn => btn.addEventListener('click', () => playSetlistById(btn.dataset.id)));
   el.setlistsGrid.querySelectorAll('.open-setlist').forEach(btn => btn.addEventListener('click', () => { sharedSetlistContextId = null; openSetlistDetail(btn.dataset.id); }));
   el.setlistsGrid.querySelectorAll('.share-setlist').forEach(btn => btn.addEventListener('click', () => {
-    copyText(`${location.origin}${location.pathname}?setlist=${encodeURIComponent(btn.dataset.id)}`, 'Link do repertório copiado.');
+    const setlist = setlists.find(s => s.id === btn.dataset.id);
+    if (setlist) shareSetlistWithPaletteCheck(setlist);
   }));
   el.setlistsGrid.querySelectorAll('.notify-setlist').forEach(btn => btn.addEventListener('click', () => {
     const setlist = setlists.find(s => s.id === btn.dataset.id);
