@@ -81,6 +81,7 @@
         <a class="is-active" href="#inicio"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span><span>Início</span></a>
         <a href="#biblioteca"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a2.75 2.75 0 1 1-2.75-2.75A2.75 2.75 0 0 1 9 18Zm0 0V6l10-2v10"/><path d="M19 14a2.75 2.75 0 1 1-2.75 2.75A2.75 2.75 0 0 1 19 14Z"/></svg></span><span>Biblioteca</span></a>
         <a href="#escalaMensal"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v3"/><path d="M17 2v3"/><path d="M4 8h16"/><path d="M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/></svg></span><span>Escala</span></a>
+        <a href="#paletas"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="3"/><circle cx="14.5" cy="8" r="3"/><circle cx="16.5" cy="15.5" r="3"/><path d="M4 19c2.5-2.3 5.8-3.7 9.2-3.8 1.8 0 3.6.4 5.3 1.2"/></svg></span><span>Paleta de Cores</span></a>
         <a href="#repertorios"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><span>Repertórios</span></a>
         <a href="#historico"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5l3 2"/><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></span><span>Histórico</span></a>
         <a href="#tutorialPage"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><span>Tutorial</span></a>
@@ -221,6 +222,83 @@
             </li>
           </ol>
         </div>
+      </section>
+
+      <section class="section glass reveal palette-section" id="paletas">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Uniforme do culto</span>
+            <h2>Paleta de Cores</h2>
+            <p class="section-subtitle">Sugestões visuais para o ministrante definir o uniforme do culto com unidade, organização e identidade da Igreja Amor e Vida.</p>
+          </div>
+        </div>
+        <div class="palette-intro glass-lite">
+          <div class="palette-intro-brand">
+            <img src="assets/logo-avida.jpg" alt="Igreja Amor e Vida">
+            <div>
+              <strong>Igreja Amor e Vida</strong>
+              <span>Escolha uma paleta e compartilhe com a equipe como referência visual do culto.</span>
+            </div>
+          </div>
+          <div class="palette-intro-side">
+            <small>Preto e branco podem ser usados como alternativa em todas as paletas.</small>
+            <div id="paletteSelectionTarget" class="palette-selection-target hidden"></div>
+          </div>
+        </div>
+        <div class="palette-grid">
+          <article class="palette-card glass-lite" data-palette-id="1" data-palette-title="Paleta 1" data-palette-image="assets/palette-1.png">
+            <div class="palette-thumb-wrap">
+              <img class="palette-thumb" src="assets/palette-1.png" alt="Paleta 1 - uniforme do culto">
+            </div>
+            <div class="palette-card-body">
+              <strong>Paleta 1</strong>
+              <span>Branco, off-white, bege, terracota, marrom e preto.</span>
+              <div class="palette-card-actions">
+                <button class="btn btn-secondary btn-compact palette-open-btn" type="button">Ver paleta</button>
+                <button class="btn btn-primary btn-compact palette-apply-btn" type="button">Usar no repertório</button>
+              </div>
+            </div>
+          </article>
+          <article class="palette-card glass-lite" data-palette-id="2" data-palette-title="Paleta 2" data-palette-image="assets/palette-2.png">
+            <div class="palette-thumb-wrap">
+              <img class="palette-thumb" src="assets/palette-2.png" alt="Paleta 2 - uniforme do culto">
+            </div>
+            <div class="palette-card-body">
+              <strong>Paleta 2</strong>
+              <span>Off-white, bege, verde claro, verde militar e preto.</span>
+              <div class="palette-card-actions">
+                <button class="btn btn-secondary btn-compact palette-open-btn" type="button">Ver paleta</button>
+                <button class="btn btn-primary btn-compact palette-apply-btn" type="button">Usar no repertório</button>
+              </div>
+            </div>
+          </article>
+          <article class="palette-card glass-lite" data-palette-id="3" data-palette-title="Paleta 3" data-palette-image="assets/palette-3.png">
+            <div class="palette-thumb-wrap">
+              <img class="palette-thumb" src="assets/palette-3.png" alt="Paleta 3 - uniforme do culto">
+            </div>
+            <div class="palette-card-body">
+              <strong>Paleta 3</strong>
+              <span>Off-white, bege, azul claro, jeans azul e preto.</span>
+              <div class="palette-card-actions">
+                <button class="btn btn-secondary btn-compact palette-open-btn" type="button">Ver paleta</button>
+                <button class="btn btn-primary btn-compact palette-apply-btn" type="button">Usar no repertório</button>
+              </div>
+            </div>
+          </article>
+          <article class="palette-card glass-lite" data-palette-id="4" data-palette-title="Paleta 4" data-palette-image="assets/palette-4.png">
+            <div class="palette-thumb-wrap">
+              <img class="palette-thumb" src="assets/palette-4.png" alt="Paleta 4 - uniforme do culto">
+            </div>
+            <div class="palette-card-body">
+              <strong>Paleta 4</strong>
+              <span>Cinza escuro, all black, jeans azul claro e jeans azul.</span>
+              <div class="palette-card-actions">
+                <button class="btn btn-secondary btn-compact palette-open-btn" type="button">Ver paleta</button>
+                <button class="btn btn-primary btn-compact palette-apply-btn" type="button">Usar no repertório</button>
+              </div>
+            </div>
+          </article>
+        </div>        </div>
       </section>
 
       <section class="section glass reveal" id="repertorios" data-tour="setlists">
@@ -404,6 +482,7 @@
     <a href="#inicio"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M9.5 20v-6h5v6"/></svg></span><small>Início</small></a>
     <a href="#biblioteca"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18a2.75 2.75 0 1 1-2.75-2.75A2.75 2.75 0 0 1 9 18Zm0 0V6l10-2v10"/><path d="M19 14a2.75 2.75 0 1 1-2.75 2.75A2.75 2.75 0 0 1 19 14Z"/></svg></span><small>Músicas</small></a>
     <a href="#escalaMensal"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v3"/><path d="M17 2v3"/><path d="M4 8h16"/><path d="M5 5h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/></svg></span><small>Escala</small></a>
+    <a href="#paletas"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="3"/><circle cx="14.5" cy="8" r="3"/><circle cx="16.5" cy="15.5" r="3"/><path d="M4 19c2.5-2.3 5.8-3.7 9.2-3.8 1.8 0 3.6.4 5.3 1.2"/></svg></span><small>Paletas</small></a>
     <a href="#repertorios"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><small>Listas</small></a>
     <a href="#tutorialPage"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><small>Tutorial</small></a>
   </nav>
@@ -451,9 +530,43 @@
       <div class="modal-actions modal-actions-top">
         <button id="playSetlistDetail" class="btn btn-primary">▶ Tocar repertório</button>
         <button id="addMusicSetlistDetail" class="btn btn-secondary" type="button">+ Adicionar música</button>
+        <button id="changeSetlistPaletteBtn" class="btn btn-secondary" type="button">Trocar paleta</button>
         <button id="shareSetlistDetail" class="btn btn-secondary">Compartilhar</button>
+        <button id="exportSetlistArtBtn" class="btn btn-secondary" type="button">Exportar arte</button>
       </div>
+      <div id="setlistDetailPalette" class="setlist-detail-palette"></div>
       <div id="setlistDetailTracks" class="reorder-list"></div>
+    </div>
+  </div>
+
+  <div id="setlistReviewModal" class="modal hidden">
+    <div class="modal-card glass modal-wide">
+      <button id="closeSetlistReview" class="modal-close">×</button>
+      <span class="kicker">Conferência final</span>
+      <h3 id="setlistReviewTitle">Repertório criado</h3>
+      <p>Confira abaixo as músicas adicionadas ao repertório antes de concluir.</p>
+      <div id="setlistReviewMeta" class="info-strip">0 música(s)</div>
+      <div id="setlistReviewTracks" class="reorder-list"></div>
+      <div class="modal-actions">
+        <button id="setlistReviewBackBtn" class="btn btn-secondary" type="button">Voltar para editar</button>
+        <button id="setlistReviewConfirmBtn" class="btn btn-primary" type="button">OK, concluir repertório</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="paletteModal" class="modal hidden">
+    <div class="modal-card glass modal-xwide palette-modal-card">
+      <button id="closePaletteModal" class="modal-close">×</button>
+      <span class="kicker">Paleta de cores</span>
+      <h3 id="paletteModalTitle">Paleta</h3>
+      <p>Use esta arte como referência visual do uniforme para o culto.</p>
+      <div class="palette-modal-preview">
+        <img id="paletteModalImage" src="assets/palette-1.png" alt="Prévia da paleta">
+      </div>
+      <div class="modal-actions">
+        <button id="paletteModalUseBtn" class="btn btn-primary" type="button">Usar esta paleta</button>
+        <button id="paletteModalCloseBtn" class="btn btn-secondary" type="button">Fechar</button>
+      </div>
     </div>
   </div>
 

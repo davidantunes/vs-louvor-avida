@@ -19,7 +19,10 @@ let toneTarget = null;
 let setlistTarget = null;
 let setlistTargetTone = { semitones: 0, tone: '' };
 const ACTIVE_SETLIST_KEY = 'vs_active_setlist_v62';
+const PENDING_PALETTE_SETLIST_KEY = 'vs_pending_palette_setlist_v67';
 let activeSetlistId = loadJSON(ACTIVE_SETLIST_KEY, '');
+let pendingPaletteSetlistId = loadJSON(PENDING_PALETTE_SETLIST_KEY, '');
+let pendingPaletteReturnTarget = '';
 let currentSetlistDetailId = null;
 let songModalTarget = null;
 let favorites = loadJSON('vs_favorites_v1', []);
@@ -169,9 +172,25 @@ const el = {
   closeSetlistDetail: document.getElementById('closeSetlistDetail'),
   setlistDetailTitle: document.getElementById('setlistDetailTitle'),
   setlistDetailTracks: document.getElementById('setlistDetailTracks'),
+  setlistDetailPalette: document.getElementById('setlistDetailPalette'),
   playSetlistDetail: document.getElementById('playSetlistDetail'),
   addMusicSetlistDetail: document.getElementById('addMusicSetlistDetail'),
+  changeSetlistPaletteBtn: document.getElementById('changeSetlistPaletteBtn'),
   shareSetlistDetail: document.getElementById('shareSetlistDetail'),
+  setlistReviewModal: document.getElementById('setlistReviewModal'),
+  closeSetlistReview: document.getElementById('closeSetlistReview'),
+  setlistReviewTitle: document.getElementById('setlistReviewTitle'),
+  setlistReviewMeta: document.getElementById('setlistReviewMeta'),
+  setlistReviewTracks: document.getElementById('setlistReviewTracks'),
+  setlistReviewBackBtn: document.getElementById('setlistReviewBackBtn'),
+  setlistReviewConfirmBtn: document.getElementById('setlistReviewConfirmBtn'),
+  paletteModal: document.getElementById('paletteModal'),
+  closePaletteModal: document.getElementById('closePaletteModal'),
+  paletteModalTitle: document.getElementById('paletteModalTitle'),
+  paletteModalImage: document.getElementById('paletteModalImage'),
+  paletteModalUseBtn: document.getElementById('paletteModalUseBtn'),
+  paletteModalCloseBtn: document.getElementById('paletteModalCloseBtn'),
+  paletteSelectionTarget: document.getElementById('paletteSelectionTarget'),
 
   songModal: document.getElementById('songModal'),
   closeSongModal: document.getElementById('closeSongModal'),
@@ -359,6 +378,21 @@ function bindEvents(){
   });
   if (el.activeSetlistDoneBtn) el.activeSetlistDoneBtn.addEventListener('click', () => concludeActiveSetlist());
 
+  if (el.closeSetlistReview) el.closeSetlistReview.addEventListener('click', closeSetlistReviewModal);
+  if (el.setlistReviewModal) el.setlistReviewModal.addEventListener('click', e => { if (e.target === el.setlistReviewModal) closeSetlistReviewModal(); });
+  if (el.setlistReviewBackBtn) el.setlistReviewBackBtn.addEventListener('click', () => {
+    const active = getActiveSetlist();
+    closeSetlistReviewModal();
+    if (active) {
+      openSetlistDetail(active.id);
+      return;
+    }
+    location.hash = '#biblioteca';
+    routeInternalPage();
+    render();
+  });
+  if (el.setlistReviewConfirmBtn) el.setlistReviewConfirmBtn.addEventListener('click', confirmActiveSetlistConclusion);
+
   el.closeSetlistDetail.addEventListener('click', closeSetlistDetail);
   el.setlistDetailModal.addEventListener('click', e => { if (e.target === el.setlistDetailModal) closeSetlistDetail(); });
   el.playSetlistDetail.addEventListener('click', () => {
@@ -381,9 +415,36 @@ function bindEvents(){
     render();
     toast(`Repertório ativo: ${s.name}. Escolha as músicas na biblioteca.`);
   });
+  if (el.changeSetlistPaletteBtn) el.changeSetlistPaletteBtn.addEventListener('click', () => {
+    const s = setlists.find(x => x.id === currentSetlistDetailId);
+    if (!s) return;
+    if (!canEditSetlist(s)) {
+      toast('Somente quem criou este repertório pode alterar a paleta.');
+      return;
+    }
+    startPaletteSelectionForSetlist(s, 'setlist-detail');
+  });
   el.shareSetlistDetail.addEventListener('click', () => {
     const s = setlists.find(x => x.id === currentSetlistDetailId);
     if (s) copyText(`${location.origin}${location.pathname}?setlist=${encodeURIComponent(s.id)}`, 'Link do repertório copiado.');
+  });
+
+  if (el.closePaletteModal) el.closePaletteModal.addEventListener('click', closePaletteModal);
+  if (el.paletteModalCloseBtn) el.paletteModalCloseBtn.addEventListener('click', closePaletteModal);
+  if (el.paletteModalUseBtn) el.paletteModalUseBtn.addEventListener('click', () => {
+    const img = el.paletteModal?.dataset?.paletteImage;
+    const title = el.paletteModal?.dataset?.paletteTitle;
+    const id = el.paletteModal?.dataset?.paletteId;
+    if (img && title) applyPaletteToPendingSetlist({ id, title, image: img });
+  });
+  if (el.paletteModal) el.paletteModal.addEventListener('click', e => { if (e.target === el.paletteModal) closePaletteModal(); });
+  document.querySelectorAll('.palette-card').forEach(card => {
+    const openBtn = card.querySelector('.palette-open-btn');
+    const applyBtn = card.querySelector('.palette-apply-btn');
+    const palette = { id: card.dataset.paletteId, title: card.dataset.paletteTitle, image: card.dataset.paletteImage };
+    if (openBtn) openBtn.addEventListener('click', ev => { ev.stopPropagation(); openPaletteModal(palette.title || 'Paleta de cores', palette.image, palette.id); });
+    if (applyBtn) applyBtn.addEventListener('click', ev => { ev.stopPropagation(); applyPaletteToPendingSetlist(palette); });
+    card.addEventListener('click', () => openPaletteModal(palette.title || 'Paleta de cores', palette.image, palette.id));
   });
 
   el.closeSongModal.addEventListener('click', closeSongModal);
@@ -479,6 +540,7 @@ function getPageFromHash(){
   if (hash === 'biblioteca' || hash === 'filters') return 'library';
   if (hash === 'escalaMensal' || hash === 'escala') return 'schedule';
   if (hash === 'repertorios') return 'setlists';
+  if (hash === 'paletas' || hash === 'paletaCores') return 'palettes';
   if (hash === 'historico' || hash === 'history') return 'history';
   if (hash === 'tutorialPage' || hash === 'tutorial' || hash === 'quickGuide') return 'tutorial';
   return 'home';
@@ -489,13 +551,14 @@ function routeInternalPage(){
   const content = document.querySelector('.content');
   if (!content) return;
 
-  content.classList.remove('page-mode-home','page-mode-library','page-mode-schedule','page-mode-setlists','page-mode-history','page-mode-tutorial','page-mode-player-removed');
+  content.classList.remove('page-mode-home','page-mode-library','page-mode-schedule','page-mode-setlists','page-mode-palettes','page-mode-history','page-mode-tutorial','page-mode-player-removed');
   content.classList.add(`page-mode-${page}`);
 
   const activeHashByPage = {
     home: '#inicio',
     library: '#biblioteca',
     schedule: '#escalaMensal',
+    palettes: '#paletas',
     setlists: '#repertorios',
     history: '#historico',
     tutorial: '#tutorialPage'
@@ -512,6 +575,7 @@ function routeInternalPage(){
     home: document.querySelector('.hero') || document.querySelector('#inicio'),
     library: document.querySelector('#biblioteca'),
     schedule: document.querySelector('#escalaMensal'),
+    palettes: document.querySelector('#paletas'),
     setlists: document.querySelector('#repertorios'),
     history: document.querySelector('#historico'),
     tutorial: document.querySelector('#tutorialPage')
@@ -867,6 +931,33 @@ function canCreateSetlists(){
 function persistActiveSetlist(){
   saveJSON(ACTIVE_SETLIST_KEY, activeSetlistId || '');
 }
+function persistPendingPaletteSetlist(){
+  saveJSON(PENDING_PALETTE_SETLIST_KEY, pendingPaletteSetlistId || '');
+}
+function getPendingPaletteSetlist(){
+  return setlists.find(s => s.id === pendingPaletteSetlistId) || null;
+}
+function setPendingPaletteSetlist(id){
+  pendingPaletteSetlistId = id || '';
+  persistPendingPaletteSetlist();
+  renderPaletteSelectionTarget();
+}
+function clearPendingPaletteSetlist(){
+  pendingPaletteSetlistId = '';
+  persistPendingPaletteSetlist();
+  renderPaletteSelectionTarget();
+}
+function startPaletteSelectionForSetlist(setlist, returnTarget='repertorios'){
+  if (!setlist) return;
+  setPendingPaletteSetlist(setlist.id);
+  pendingPaletteReturnTarget = returnTarget || 'repertorios';
+  closeSetlistDetail();
+  closeSetlistReviewModal();
+  location.hash = '#paletas';
+  routeInternalPage();
+  render();
+  toast(`Escolha a paleta para o repertório "${setlist.name}".`);
+}
 function getActiveSetlist(){
   return setlists.find(s => s.id === activeSetlistId) || null;
 }
@@ -886,10 +977,12 @@ function clearActiveSetlist(){
 }
 function concludeActiveSetlist(){
   const active = getActiveSetlist();
-  const name = active?.name || '';
-  clearActiveSetlist();
-  render();
-  if (name) toast(`Repertório "${name}" concluído.`);
+  if (!active) {
+    toast('Nenhum repertório ativo para concluir.');
+    clearActiveSetlist();
+    return;
+  }
+  openSetlistReviewModal(active);
 }
 function reconcileActiveSetlist(){
   const active = getActiveSetlist();
@@ -932,6 +1025,108 @@ function renderActiveSetlistBanner(){
   el.activeSetlistName.textContent = active.name;
   const count = (active.trackIds || []).length;
   el.activeSetlistMeta.textContent = `${count} música(s) adicionada(s) • Use o ícone do repertório nos cards para montar sua playlist e clique em “Ver repertório” quando quiser revisar.`;
+}
+
+function renderPaletteSelectionTarget(){
+  if (!el.paletteSelectionTarget) return;
+  const target = getPendingPaletteSetlist();
+  if (!target) {
+    el.paletteSelectionTarget.classList.add('hidden');
+    el.paletteSelectionTarget.innerHTML = '';
+    return;
+  }
+  el.paletteSelectionTarget.classList.remove('hidden');
+  el.paletteSelectionTarget.innerHTML = `<strong>Escolha a paleta do repertório:</strong> <span>${esc(target.name)}</span>`;
+}
+
+function renderSetlistReviewTracks(setlist){
+  if (!el.setlistReviewTracks) return;
+  const tracks = mapSetlistTracks(setlist);
+  if (!tracks.length) {
+    el.setlistReviewTracks.innerHTML = '<div class="empty">Este repertório ainda não possui músicas.</div>';
+    return;
+  }
+  el.setlistReviewTracks.innerHTML = tracks.map((track, index) => `
+    <div class="reorder-item is-readonly">
+      <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1">
+        <div>
+          <strong>${index + 1}. ${esc(track.name)}</strong>
+          <span>${esc(track.singer)} • Tom original ${esc(formatKeyLabel(track.key || '—'))}${track.repertoireTone ? ` • <span class="repertoire-tone-badge">Tom do repertório: ${esc(formatKeyLabel(track.repertoireTone))}</span>` : ''}</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function openSetlistReviewModal(setlist){
+  if (!setlist || !el.setlistReviewModal) return;
+  el.setlistReviewTitle.textContent = setlist.name;
+  const count = (setlist.trackIds || []).length;
+  el.setlistReviewMeta.textContent = `${count} música(s) • Confira a ordem e clique em OK para concluir.`;
+  renderSetlistReviewTracks(setlist);
+  el.setlistReviewModal.classList.remove('hidden');
+}
+function closeSetlistReviewModal(){
+  el.setlistReviewModal?.classList.add('hidden');
+}
+function confirmActiveSetlistConclusion(){
+  const active = getActiveSetlist();
+  const name = active?.name || '';
+  closeSetlistReviewModal();
+  if (!active) {
+    clearActiveSetlist();
+    return;
+  }
+  startPaletteSelectionForSetlist(active, 'repertorios');
+  if (name) toast(`Repertório "${name}" concluído. Agora escolha a paleta de cores.`);
+}
+function openPaletteModal(title, imagePath, paletteId=''){
+  if (!el.paletteModal) return;
+  el.paletteModalTitle.textContent = title || 'Paleta de cores';
+  el.paletteModalImage.src = imagePath;
+  el.paletteModalImage.alt = title || 'Paleta de cores';
+  el.paletteModal.dataset.paletteId = paletteId || '';
+  el.paletteModal.dataset.paletteTitle = title || 'Paleta de cores';
+  el.paletteModal.dataset.paletteImage = imagePath || '';
+  if (el.paletteModalUseBtn) {
+    const hasTarget = Boolean(getPendingPaletteSetlist());
+    el.paletteModalUseBtn.disabled = !hasTarget;
+    el.paletteModalUseBtn.textContent = hasTarget ? 'Usar esta paleta' : 'Selecione um repertório primeiro';
+  }
+  el.paletteModal.classList.remove('hidden');
+}
+function applyPaletteToPendingSetlist(palette){
+  const setlist = getPendingPaletteSetlist() || getActiveEditableSetlist();
+  if (!setlist) {
+    toast('Nenhum repertório aguardando escolha de paleta.');
+    return;
+  }
+  if (!canEditSetlist(setlist)) {
+    toast('Somente quem criou este repertório pode definir a paleta.');
+    return;
+  }
+  setlist.paletteId = String(palette.id || '');
+  setlist.paletteTitle = palette.title || '';
+  setlist.paletteImage = palette.image || '';
+  setlist.updatedAt = new Date().toISOString();
+  saveSetlistsState();
+  updateStats();
+  renderSetlists();
+  render();
+  const returnTarget = pendingPaletteReturnTarget || 'repertorios';
+  closePaletteModal();
+  clearPendingPaletteSetlist();
+  clearActiveSetlist();
+  pendingPaletteReturnTarget = '';
+  location.hash = '#repertorios';
+  routeInternalPage();
+  render();
+  if (returnTarget === 'setlist-detail') {
+    openSetlistDetail(setlist.id);
+  }
+  toast(`Paleta definida para o repertório "${setlist.name}".`);
+}
+function closePaletteModal(){
+  el.paletteModal?.classList.add('hidden');
 }
 function activateSetlistAndOpenLibrary(setlist){
   if (!setlist) return;
@@ -1890,6 +2085,7 @@ function setupInfiniteScroll(){
 function render(){
   applyViewMode();
   renderActiveSetlistBanner();
+  renderPaletteSelectionTarget();
 
   filteredTracksCache = getFiltered();
   renderedCount = 0;
@@ -2263,10 +2459,26 @@ function renderSetlists(){
   }
   el.setlistsGrid.innerHTML = `<div class="setlist-permission-note">${permissionNotice}</div>` + setlists.map(s => {
     const owner = isSetlistOwner(s);
+    const paletteMarkup = s.paletteTitle ? `
+      <div class="setlist-palette">
+        <img src="${esc(s.paletteImage || 'assets/logo-avida.jpg')}" alt="${esc(s.paletteTitle)}">
+        <div class="setlist-palette-copy">
+          <span class="setlist-palette-label">Paleta do culto</span>
+          <strong>${esc(s.paletteTitle)}</strong>
+        </div>
+      </div>` : `
+      <div class="setlist-palette is-empty">
+        <img src="assets/logo-avida.jpg" alt="Paleta ainda não definida">
+        <div class="setlist-palette-copy">
+          <span class="setlist-palette-label">Paleta do culto</span>
+          <strong>Não definida</strong>
+        </div>
+      </div>`;
     return `
       <article class="setlist-card ${owner ? 'is-owner' : 'is-readonly'}">
         <strong>${esc(s.name)}</strong>
         <div class="muted">${s.trackIds.length} música(s) • Criado por ${esc(getSetlistCreatorName(s))}</div>
+        ${paletteMarkup}
         <div class="setlist-actions">
           <button class="mini-btn play-setlist" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório">▶</button>
           <button class="mini-btn open-setlist" data-id="${esc(s.id)}">Playlist</button>
@@ -2364,10 +2576,35 @@ function openSetlistDetail(id){
   if (el.addMusicSetlistDetail) {
     el.addMusicSetlistDetail.classList.toggle('hidden', !owner);
   }
+  if (el.changeSetlistPaletteBtn) {
+    el.changeSetlistPaletteBtn.classList.toggle('hidden', !owner);
+  }
+  renderSetlistDetailPalette(setlist, owner);
   renderSetlistDetailTracks();
   el.setlistDetailModal.classList.remove('hidden');
 }
 function closeSetlistDetail(){ el.setlistDetailModal.classList.add('hidden'); }
+function renderSetlistDetailPalette(setlist, owner=false){
+  if (!el.setlistDetailPalette) return;
+  const hasPalette = Boolean(setlist?.paletteTitle);
+  const img = setlist?.paletteImage || 'assets/logo-avida.jpg';
+  const title = setlist?.paletteTitle || 'Paleta ainda não definida';
+  const helper = hasPalette
+    ? 'Esta é a paleta vinculada a este repertório.'
+    : (owner ? 'Escolha uma paleta para definir o uniforme visual do culto.' : 'O criador ainda não definiu uma paleta para este repertório.');
+  el.setlistDetailPalette.innerHTML = `
+    <div class="setlist-detail-palette-card ${hasPalette ? '' : 'is-empty'}">
+      <img src="${esc(img)}" alt="${esc(title)}">
+      <div class="setlist-detail-palette-copy">
+        <span class="setlist-palette-label">Paleta do culto</span>
+        <strong>${esc(title)}</strong>
+        <small>${esc(helper)}</small>
+      </div>
+      ${owner ? '<button class="btn btn-secondary btn-compact inline-change-palette" type="button">Trocar paleta</button>' : ''}
+    </div>`;
+  const inlineBtn = el.setlistDetailPalette.querySelector('.inline-change-palette');
+  if (inlineBtn) inlineBtn.addEventListener('click', () => startPaletteSelectionForSetlist(setlist, 'setlist-detail'));
+}
 function renderSetlistDetailTracks(){
   const setlist = setlists.find(s => s.id === currentSetlistDetailId);
   if (!setlist) return;
