@@ -3889,3 +3889,126 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
 .track-actions .setlist-btn.is-active-target{box-shadow:0 0 0 1px rgba(41,217,208,.18), inset 0 1px 0 rgba(255,255,255,.06);}
 @media (max-width:760px){.active-setlist-banner{flex-direction:column;align-items:stretch;padding:14px;border-radius:20px;}.active-setlist-copy strong{font-size:18px;}.active-setlist-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;}.active-setlist-actions .btn{width:100%;justify-content:center;}.track-actions.has-active-setlist{grid-template-columns:1fr 1fr !important;}.track-actions.has-active-setlist .play-btn{grid-column:1 / -1 !important;}.track-actions.has-active-setlist .setlist-btn{grid-column:1 / -1;min-height:54px;border-radius:16px;}.track-actions .setlist-btn .action-icon-label{font-size:10px;}}
 @media (max-width:420px){.active-setlist-actions{grid-template-columns:1fr;}.track-actions .setlist-btn .action-icon-label{font-size:9.5px;}}
+
+
+/* V63 — botão adicionar música no playlist + tooltip do repertório */
+.sr-only{position:absolute !important;width:1px !important;height:1px !important;padding:0 !important;margin:-1px !important;overflow:hidden !important;clip:rect(0,0,0,0) !important;white-space:nowrap !important;border:0 !important;}
+.track-actions.has-active-setlist .setlist-btn,
+.track-actions .setlist-btn{
+  min-width:44px !important;
+  width:44px;
+  padding:0 !important;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  overflow:visible;
+}
+.track-actions .setlist-btn .action-icon-glyph{
+  font-size:14px;
+  line-height:1;
+}
+.track-actions .setlist-btn .action-icon-label{
+  display:none !important;
+}
+.track-actions .setlist-btn::after{
+  content:attr(data-tooltip);
+  position:absolute;
+  left:50%;
+  bottom:calc(100% + 10px);
+  transform:translateX(-50%) translateY(4px);
+  background:rgba(6,10,13,.96);
+  color:var(--text);
+  border:1px solid rgba(41,217,208,.22);
+  border-radius:12px;
+  padding:8px 10px;
+  font-size:11px;
+  line-height:1.2;
+  font-weight:800;
+  white-space:nowrap;
+  opacity:0;
+  pointer-events:none;
+  box-shadow:0 12px 28px rgba(0,0,0,.25);
+  transition:opacity .18s ease, transform .18s ease;
+  z-index:30;
+}
+.track-actions .setlist-btn:hover::after,
+.track-actions .setlist-btn:focus-visible::after{
+  opacity:1;
+  transform:translateX(-50%) translateY(0);
+}
+@media (max-width:760px){
+  .track-actions.has-active-setlist{
+    grid-template-columns:1fr 1fr !important;
+  }
+  .track-actions.has-active-setlist .play-btn{grid-column:1 / -1 !important;}
+  .track-actions.has-active-setlist .setlist-btn,
+  .track-actions .setlist-btn{
+    grid-column:auto;
+    min-height:44px;
+  }
+  .track-actions .setlist-btn::after{display:none;}
+}
+
+
+/* V64 — repertório ativo com destaque visual, contador e feedback de adição */
+.meta.in-setlist{
+  color:var(--teal);
+  border-color:rgba(41,217,208,.24);
+  background:rgba(41,217,208,.10);
+}
+.track-card.track-in-active-setlist{
+  border-color:rgba(41,217,208,.26);
+  box-shadow:0 18px 48px rgba(0,0,0,.18), 0 0 0 1px rgba(41,217,208,.10);
+}
+.track-card.track-in-active-setlist .track-cover{
+  box-shadow:0 0 0 1px rgba(255,255,255,.10), 0 0 0 4px rgba(41,217,208,.10);
+}
+.track-card.track-in-active-setlist::before{
+  opacity:1 !important;
+  background:linear-gradient(135deg, rgba(41,217,208,.16), transparent 42%, transparent 60%, rgba(255,255,255,.05));
+}
+.track-actions .setlist-btn.is-already-added{
+  border-color:rgba(41,217,208,.28);
+  background:rgba(41,217,208,.12);
+  color:var(--teal);
+}
+.track-card.added-pulse{
+  animation:trackAddedPulse 1.25s ease;
+}
+.track-card.added-pulse .track-cover{
+  animation:coverPop .7s ease;
+}
+@keyframes trackAddedPulse{
+  0%{transform:translateY(0) scale(1); box-shadow:0 18px 48px rgba(0,0,0,.18), 0 0 0 0 rgba(41,217,208,.0)}
+  20%{transform:translateY(-2px) scale(1.01); box-shadow:0 24px 60px rgba(0,0,0,.24), 0 0 0 8px rgba(41,217,208,.14)}
+  70%{transform:translateY(-1px) scale(1.005); box-shadow:0 22px 56px rgba(0,0,0,.22), 0 0 0 4px rgba(41,217,208,.08)}
+  100%{transform:translateY(0) scale(1); box-shadow:0 18px 48px rgba(0,0,0,.18), 0 0 0 0 rgba(41,217,208,.0)}
+}
+@keyframes coverPop{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.06)}
+  100%{transform:scale(1)}
+}
+.active-setlist-banner{
+  position:relative;
+  overflow:hidden;
+}
+.active-setlist-banner::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(120deg, transparent 0%, rgba(255,255,255,.06) 18%, transparent 36%);
+  transform:translateX(-120%);
+  animation:activeBannerSweep 5.8s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes activeBannerSweep{
+  0%, 72%, 100%{transform:translateX(-120%)}
+  24%{transform:translateX(120%)}
+}
+.active-setlist-copy,
+.active-setlist-actions{
+  position:relative;
+  z-index:1;
+}

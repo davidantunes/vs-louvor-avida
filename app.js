@@ -170,6 +170,7 @@ const el = {
   setlistDetailTitle: document.getElementById('setlistDetailTitle'),
   setlistDetailTracks: document.getElementById('setlistDetailTracks'),
   playSetlistDetail: document.getElementById('playSetlistDetail'),
+  addMusicSetlistDetail: document.getElementById('addMusicSetlistDetail'),
   shareSetlistDetail: document.getElementById('shareSetlistDetail'),
 
   songModal: document.getElementById('songModal'),
@@ -365,6 +366,20 @@ function bindEvents(){
     if (!s) return;
     const tracks = mapSetlistTracks(s);
     if (tracks.length) playTrack(tracks[0], null, tracks);
+  });
+  if (el.addMusicSetlistDetail) el.addMusicSetlistDetail.addEventListener('click', () => {
+    const s = setlists.find(x => x.id === currentSetlistDetailId);
+    if (!s) return;
+    if (!canEditSetlist(s)) {
+      toast('Somente quem criou este repertório pode adicionar músicas.');
+      return;
+    }
+    setActiveSetlist(s.id);
+    closeSetlistDetail();
+    location.hash = '#biblioteca';
+    routeInternalPage();
+    render();
+    toast(`Repertório ativo: ${s.name}. Escolha as músicas na biblioteca.`);
   });
   el.shareSetlistDetail.addEventListener('click', () => {
     const s = setlists.find(x => x.id === currentSetlistDetailId);
@@ -888,6 +903,24 @@ function reconcileActiveSetlist(){
   }
   return active;
 }
+function isTrackPresentInSetlist(setlist, trackId){
+  if (!setlist || !trackId) return false;
+  return (setlist.trackIds || []).some(entry => getSetlistEntryTrackId(entry) === trackId);
+}
+function pulseAddedTrack(trackId){
+  document.querySelectorAll(`.track-card[data-id="${CSS.escape(String(trackId))}"]`).forEach(card => {
+    card.classList.remove('added-pulse');
+    void card.offsetWidth;
+    card.classList.add('added-pulse');
+    const btn = card.querySelector('.setlist-btn .action-icon-glyph');
+    if (btn) {
+      const previous = btn.textContent;
+      btn.textContent = '✓';
+      setTimeout(() => { btn.textContent = previous; }, 1000);
+    }
+    setTimeout(() => card.classList.remove('added-pulse'), 1400);
+  });
+}
 function renderActiveSetlistBanner(){
   if (!el.activeSetlistBanner) return;
   const active = reconcileActiveSetlist();
@@ -897,7 +930,8 @@ function renderActiveSetlistBanner(){
   }
   el.activeSetlistBanner.classList.remove('hidden');
   el.activeSetlistName.textContent = active.name;
-  el.activeSetlistMeta.textContent = `${active.trackIds.length} música(s) • Clique em “Adicionar a este repertório” nos cards para montar sua playlist.`;
+  const count = (active.trackIds || []).length;
+  el.activeSetlistMeta.textContent = `${count} música(s) adicionada(s) • Use o ícone do repertório nos cards para montar sua playlist e clique em “Ver repertório” quando quiser revisar.`;
 }
 function activateSetlistAndOpenLibrary(setlist){
   if (!setlist) return;
@@ -926,7 +960,8 @@ function addTrackToSetlist(setlist, track, toneInfo = { semitones: 0, tone: '' }
   updateStats();
   renderSetlists();
   renderSetlistOptions();
-  renderActiveSetlistBanner();
+  render();
+  pulseAddedTrack(track.id);
   if (options.closeModal) closeSetlistModal();
   recordUsageEvent({ type: 'setlist_updated', setlistId: setlist.id, setlistName: setlist.name, trackCount: setlist.trackIds.length, message: `Música adicionada ao repertório "${setlist.name}".` });
   toast(options.toastMessage || 'Música adicionada ao repertório.');
@@ -1901,10 +1936,11 @@ function renderTrackCard(t){
   const fav = favorites.includes(t.id);
   const coverStyle = `style="background-image:url('${esc(t.coverUrl || 'assets/logo-avida.jpg')}')"`;
   const activeSetlist = getActiveEditableSetlist();
-  const setlistTitle = activeSetlist ? `Adicionar ao repertório ativo: ${activeSetlist.name}` : 'Adicionar ao repertório';
-  const setlistLabel = activeSetlist ? '+ Adicionar a este repertório' : '+ Repertório';
+  const isInActiveSetlist = activeSetlist ? isTrackPresentInSetlist(activeSetlist, t.id) : false;
+  const setlistTitle = activeSetlist ? `Adicionar a este repertório: ${activeSetlist.name}` : 'Adicionar ao repertório';
+  const setlistLabel = activeSetlist ? 'Adicionar a este repertório' : 'Adicionar ao repertório';
   return `
-    <article class="track-card" data-id="${esc(t.id)}">
+    <article class="track-card ${isInActiveSetlist ? 'track-in-active-setlist' : ''}" data-id="${esc(t.id)}">
       <div class="track-head">
         <div class="track-cover logo-cover" ${coverStyle}></div>
         <div class="track-main">
@@ -1915,13 +1951,14 @@ function renderTrackCard(t){
       <div class="track-meta">
         <span class="meta key">Tom ${esc(formatKeyLabel(t.key || '—'))}</span>
         <span class="meta">${esc(t.ext.toUpperCase())}</span>
+        ${isInActiveSetlist ? `<span class="meta in-setlist">No repertório ativo</span>` : ''}
       </div>
       <div class="tag-wrap">${(t.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
       <div class="track-actions ${activeSetlist ? 'has-active-setlist' : ''}">
         <button class="action-btn primary play-btn" data-id="${esc(t.id)}" aria-label="Tocar" title="Tocar">▶</button>
         <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar">${fav ? '♥' : '♡'}</button>
         <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom">♬</button>
-        <button class="action-icon setlist-btn ${activeSetlist ? 'is-active-target' : ''}" data-id="${esc(t.id)}" title="${esc(setlistTitle)}"><span class="action-icon-glyph">+☷</span><span class="action-icon-label">${esc(setlistLabel)}</span></button>
+        <button class="action-icon setlist-btn ${activeSetlist ? 'is-active-target' : ''} ${isInActiveSetlist ? 'is-already-added' : ''}" data-id="${esc(t.id)}" title="${esc(setlistTitle)}" data-tooltip="${esc(setlistLabel)}" aria-label="${esc(setlistTitle)}"><span class="action-icon-glyph">${isInActiveSetlist ? '✓' : '+☷'}</span><span class="action-icon-label sr-only">${esc(setlistLabel)}</span></button>
         <button class="action-icon detail-btn" data-id="${esc(t.id)}" title="Ver detalhes">⋯</button>
       </div>
     </article>
@@ -2316,13 +2353,17 @@ function openSetlistDetail(id){
   currentSetlistDetailId = id;
   const setlist = setlists.find(s => s.id === id);
   if (!setlist) return;
+  const owner = isSetlistOwner(setlist);
   el.setlistDetailTitle.textContent = setlist.name;
   const detailIntro = el.setlistDetailModal?.querySelector('p');
   const trackCount = (setlist.trackIds || []).length;
   const creatorName = getSetlistCreatorName(setlist);
-  if (detailIntro) detailIntro.textContent = isSetlistOwner(setlist)
+  if (detailIntro) detailIntro.textContent = owner
     ? `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Você pode tocar, reordenar e editar este repertório.`
     : `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Repertório em modo leitura para você.`;
+  if (el.addMusicSetlistDetail) {
+    el.addMusicSetlistDetail.classList.toggle('hidden', !owner);
+  }
   renderSetlistDetailTracks();
   el.setlistDetailModal.classList.remove('hidden');
 }

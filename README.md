@@ -528,3 +528,18 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - botão “Ver repertório” no banner
 - botão “Concluir repertório” no banner
 - repertório ativo salvo temporariamente no navegador até o usuário concluir
+
+
+## V63
+
+- na janela da playlist, novo botão “Adicionar música” que ativa o repertório e leva de volta à Biblioteca
+- botão de repertório nos cards fica apenas com ícone
+- texto “Adicionar ao repertório” aparece somente como efeito/tooltip ao passar o mouse ou focar o botão
+
+
+## V64
+
+- destaque visual para músicas que já estão no repertório ativo
+- banner do repertório ativo com contador mais claro
+- feedback visual com animação ao adicionar música ao repertório
+- ícone do repertório mostra check quando a música já faz parte do repertório ativo
