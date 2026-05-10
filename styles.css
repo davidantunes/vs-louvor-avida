@@ -4086,6 +4086,11 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
 .palette-selection-target strong{color:var(--teal);font-size:12px;text-transform:uppercase;letter-spacing:.12em}
 .palette-card-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
 .palette-card-actions .btn{min-height:42px}
+
+.setlist-inline-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.setlist-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;border:1px solid rgba(41,217,208,.26);background:rgba(41,217,208,.08);color:#dffefe;font-size:12px;font-weight:700;line-height:1.2}
+.setlist-chip.is-empty{border-color:rgba(255,255,255,.10);background:rgba(255,255,255,.04);color:var(--muted)}
+.setlist-detail-palette-card.is-shared{background:linear-gradient(145deg, rgba(41,217,208,.13), rgba(255,255,255,.04));box-shadow:0 18px 42px rgba(0,0,0,.26)}
 .setlist-palette{display:flex;align-items:center;gap:12px;margin-top:14px;padding:10px;border:1px solid rgba(255,255,255,.07);border-radius:16px;background:rgba(255,255,255,.03)}
 .setlist-palette img{width:54px;height:54px;border-radius:12px;object-fit:cover;border:1px solid rgba(255,255,255,.08);flex-shrink:0}
 .setlist-palette-copy{display:grid;gap:2px;min-width:0}
@@ -4229,4 +4234,39 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
   .palette-card{grid-template-columns:1fr !important;}
   .palette-thumb{aspect-ratio:4/5;object-fit:cover;}
   .palette-links,.palette-intro{width:100%;}
+}
+
+
+#setlistDetailIntro{margin-bottom:12px}
+.setlist-shared-hero{margin:18px 0 8px}
+.setlist-shared-hero.hidden{display:none}
+.setlist-shared-hero-card{border:1px solid rgba(41,217,208,.18);border-radius:24px;padding:18px 20px;background:linear-gradient(135deg, rgba(8,20,24,.95), rgba(13,42,48,.86));box-shadow:0 22px 48px rgba(0,0,0,.28);overflow:hidden;position:relative}
+.setlist-shared-hero-card::after{content:'';position:absolute;inset:auto -40px -80px auto;width:240px;height:240px;border-radius:50%;background:radial-gradient(circle, rgba(41,217,208,.22), transparent 65%);pointer-events:none}
+.setlist-shared-brand{display:flex;align-items:center;gap:14px;margin-bottom:18px;position:relative;z-index:1}
+.setlist-shared-brand img{width:58px;height:58px;border-radius:18px;object-fit:cover;border:1px solid rgba(41,217,208,.28);box-shadow:0 10px 24px rgba(0,0,0,.24)}
+.setlist-shared-brand strong{display:block;font-size:20px;color:var(--text)}
+.setlist-shared-brand small{display:block;margin-top:4px;color:var(--muted)}
+.setlist-shared-label{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:var(--brand)}
+.setlist-shared-main{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;position:relative;z-index:1}
+.setlist-shared-copy{flex:1;min-width:0}
+.setlist-shared-copy h4{margin:0 0 10px;font-size:clamp(22px, 2vw, 32px);line-height:1.05}
+.setlist-shared-meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.shared-meta-pill{display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:var(--text);font-size:12px;font-weight:700}
+.setlist-shared-palette-line{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.shared-palette-chip{display:inline-flex;align-items:center;padding:9px 14px;border-radius:999px;background:rgba(41,217,208,.12);border:1px solid rgba(41,217,208,.28);color:#ddffff;font-size:13px;font-weight:800}
+.setlist-shared-palette-line small{color:var(--muted)}
+.setlist-shared-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
+.is-shared-setlist-view .modal-actions-top{margin-top:10px}
+.is-shared-setlist-view #setlistDetailTracks{margin-top:18px}
+@media (max-width: 920px){
+  .setlist-shared-main{flex-direction:column;align-items:flex-start}
+  .setlist-shared-actions{justify-content:flex-start;width:100%}
+}
+@media (max-width: 640px){
+  .setlist-shared-hero-card{padding:16px}
+  .setlist-shared-brand{align-items:flex-start}
+  .setlist-shared-brand img{width:52px;height:52px}
+  .setlist-shared-copy h4{font-size:24px}
+  .setlist-shared-actions{display:grid;grid-template-columns:1fr; width:100%}
+  .setlist-shared-actions .btn{width:100%}
 }

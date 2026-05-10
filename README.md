@@ -556,3 +556,18 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - cada guia exibe somente seu próprio conteúdo
 - correção de overflow para impedir seções saindo do painel central
 - nova guia Paleta de Cores isolada de Repertórios e Histórico
+
+
+## V72
+
+- link compartilhado de repertório abre somente o modal/playlist do repertório
+- não inicia mais o player automaticamente ao abrir `?setlist=...`
+- a guia Início permanece ao fundo quando o repertório é aberto por link compartilhado
+
+
+## V76
+
+- correção da exportação de arte do repertório em PNG
+- botão Exportar arte agora gera o arquivo para download
+- fallback de download quando o compartilhamento nativo do navegador não estiver disponível
+- a arte inclui nome do repertório, músicas, tons, paleta e identidade Igreja Amor e Vida

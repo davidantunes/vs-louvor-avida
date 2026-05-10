@@ -24,6 +24,7 @@ let activeSetlistId = loadJSON(ACTIVE_SETLIST_KEY, '');
 let pendingPaletteSetlistId = loadJSON(PENDING_PALETTE_SETLIST_KEY, '');
 let pendingPaletteReturnTarget = '';
 let currentSetlistDetailId = null;
+let sharedSetlistContextId = null;
 let songModalTarget = null;
 let favorites = loadJSON('vs_favorites_v1', []);
 let setlists = loadJSON('vs_setlists_v1', []);
@@ -171,6 +172,8 @@ const el = {
   setlistDetailModal: document.getElementById('setlistDetailModal'),
   closeSetlistDetail: document.getElementById('closeSetlistDetail'),
   setlistDetailTitle: document.getElementById('setlistDetailTitle'),
+  setlistDetailIntro: document.getElementById('setlistDetailIntro'),
+  setlistSharedHero: document.getElementById('setlistSharedHero'),
   setlistDetailTracks: document.getElementById('setlistDetailTracks'),
   setlistDetailPalette: document.getElementById('setlistDetailPalette'),
   playSetlistDetail: document.getElementById('playSetlistDetail'),
@@ -426,7 +429,7 @@ function bindEvents(){
   });
   el.shareSetlistDetail.addEventListener('click', () => {
     const s = setlists.find(x => x.id === currentSetlistDetailId);
-    if (s) copyText(`${location.origin}${location.pathname}?setlist=${encodeURIComponent(s.id)}`, 'Link do repertório copiado.');
+    if (s) copyText(buildSetlistShareUrl(s.id), 'Link do repertório copiado.');
   });
 
   if (el.closePaletteModal) el.closePaletteModal.addEventListener('click', closePaletteModal);
@@ -2478,6 +2481,9 @@ function renderSetlists(){
       <article class="setlist-card ${owner ? 'is-owner' : 'is-readonly'}">
         <strong>${esc(s.name)}</strong>
         <div class="muted">${s.trackIds.length} música(s) • Criado por ${esc(getSetlistCreatorName(s))}</div>
+        <div class="setlist-inline-meta">
+          <span class="setlist-chip ${s.paletteTitle ? '' : 'is-empty'}">${s.paletteTitle ? `Paleta: ${esc(s.paletteTitle)}` : 'Paleta pendente'}</span>
+        </div>
         ${paletteMarkup}
         <div class="setlist-actions">
           <button class="mini-btn play-setlist" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório">▶</button>
@@ -2491,7 +2497,7 @@ function renderSetlists(){
   }).join('');
 
   el.setlistsGrid.querySelectorAll('.play-setlist').forEach(btn => btn.addEventListener('click', () => playSetlistById(btn.dataset.id)));
-  el.setlistsGrid.querySelectorAll('.open-setlist').forEach(btn => btn.addEventListener('click', () => openSetlistDetail(btn.dataset.id)));
+  el.setlistsGrid.querySelectorAll('.open-setlist').forEach(btn => btn.addEventListener('click', () => { sharedSetlistContextId = null; openSetlistDetail(btn.dataset.id); }));
   el.setlistsGrid.querySelectorAll('.share-setlist').forEach(btn => btn.addEventListener('click', () => {
     copyText(`${location.origin}${location.pathname}?setlist=${encodeURIComponent(btn.dataset.id)}`, 'Link do repertório copiado.');
   }));
@@ -2561,42 +2567,112 @@ function setlistHasEntry(setlist, newEntry){
   );
 }
 
+function buildSetlistShareUrl(setlistId){
+  return `${location.origin}${location.pathname}?setlist=${encodeURIComponent(setlistId)}`;
+}
+function formatSetlistDate(value){
+  if (!value) return 'Data não informada';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Data não informada';
+  return date.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+function renderSharedSetlistHero(setlist){
+  if (!el.setlistSharedHero) return;
+  const isSharedView = String(sharedSetlistContextId || '') === String(setlist?.id || '');
+  if (!isSharedView || !setlist) {
+    el.setlistSharedHero.classList.add('hidden');
+    el.setlistSharedHero.innerHTML = '';
+    return;
+  }
+  const trackCount = (setlist.trackIds || []).length;
+  const creatorName = getSetlistCreatorName(setlist);
+  const paletteTitle = setlist.paletteTitle || 'Paleta ainda não definida';
+  const createdAt = formatSetlistDate(setlist.createdAt);
+  el.setlistSharedHero.classList.remove('hidden');
+  el.setlistSharedHero.innerHTML = `
+    <div class="setlist-shared-hero-card glass-lite">
+      <div class="setlist-shared-brand">
+        <img src="assets/logo-avida.jpg" alt="Igreja Amor e Vida">
+        <div>
+          <span class="setlist-shared-label">Igreja Amor e Vida</span>
+          <strong>Repertório compartilhado</strong>
+          <small>Confira as músicas e a paleta definida para este culto.</small>
+        </div>
+      </div>
+      <div class="setlist-shared-main">
+        <div class="setlist-shared-copy">
+          <h4>${esc(setlist.name || 'Repertório')}</h4>
+          <div class="setlist-shared-meta">
+            <span class="shared-meta-pill">${trackCount} música(s)</span>
+            <span class="shared-meta-pill">Criado por ${esc(creatorName)}</span>
+            <span class="shared-meta-pill">${esc(createdAt)}</span>
+          </div>
+          <div class="setlist-shared-palette-line">
+            <span class="shared-palette-chip">${esc(paletteTitle)}</span>
+            <small>Use esta paleta como referência de uniforme para o culto.</small>
+          </div>
+        </div>
+        <div class="setlist-shared-actions">
+          <button type="button" class="btn btn-primary hero-open-palette">Ver paleta do culto</button>
+          <button type="button" class="btn btn-secondary hero-copy-link">Copiar link</button>
+        </div>
+      </div>
+    </div>`;
+  const openPaletteBtn = el.setlistSharedHero.querySelector('.hero-open-palette');
+  if (openPaletteBtn) openPaletteBtn.addEventListener('click', () => {
+    if (setlist.paletteImage) openPaletteModal(setlist.paletteTitle || 'Paleta do culto', setlist.paletteImage, setlist.paletteId || '');
+    else toast('Este repertório ainda não possui paleta definida.');
+  });
+  const copyLinkBtn = el.setlistSharedHero.querySelector('.hero-copy-link');
+  if (copyLinkBtn) copyLinkBtn.addEventListener('click', () => copyText(buildSetlistShareUrl(setlist.id), 'Link do repertório copiado.'));
+}
+
 function openSetlistDetail(id){
   currentSetlistDetailId = id;
   const setlist = setlists.find(s => s.id === id);
   if (!setlist) return;
   const owner = isSetlistOwner(setlist);
+  const isSharedView = String(sharedSetlistContextId || '') === String(id);
   el.setlistDetailTitle.textContent = setlist.name;
-  const detailIntro = el.setlistDetailModal?.querySelector('p');
+  const detailIntro = el.setlistDetailIntro;
   const trackCount = (setlist.trackIds || []).length;
   const creatorName = getSetlistCreatorName(setlist);
-  if (detailIntro) detailIntro.textContent = owner
-    ? `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Você pode tocar, reordenar e editar este repertório.`
-    : `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Repertório em modo leitura para você.`;
+  if (detailIntro) {
+    if (isSharedView) {
+      detailIntro.textContent = `Repertório compartilhado com ${trackCount} música(s) • Criado por ${creatorName}. Confira também a paleta escolhida para este culto.`;
+    } else {
+      detailIntro.textContent = owner
+        ? `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Você pode tocar, reordenar e editar este repertório.`
+        : `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Repertório em modo leitura para você.`;
+    }
+  }
   if (el.addMusicSetlistDetail) {
     el.addMusicSetlistDetail.classList.toggle('hidden', !owner);
   }
   if (el.changeSetlistPaletteBtn) {
     el.changeSetlistPaletteBtn.classList.toggle('hidden', !owner);
   }
+  renderSharedSetlistHero(setlist);
   renderSetlistDetailPalette(setlist, owner);
   renderSetlistDetailTracks();
   el.setlistDetailModal.classList.remove('hidden');
+  el.setlistDetailModal.querySelector('.modal-card')?.classList.toggle('is-shared-setlist-view', isSharedView);
 }
-function closeSetlistDetail(){ el.setlistDetailModal.classList.add('hidden'); }
+function closeSetlistDetail(){ el.setlistDetailModal.classList.add('hidden'); el.setlistSharedHero?.classList.add('hidden'); if (el.setlistSharedHero) el.setlistSharedHero.innerHTML=''; el.setlistDetailModal.querySelector('.modal-card')?.classList.remove('is-shared-setlist-view'); sharedSetlistContextId = null; }
 function renderSetlistDetailPalette(setlist, owner=false){
   if (!el.setlistDetailPalette) return;
   const hasPalette = Boolean(setlist?.paletteTitle);
   const img = setlist?.paletteImage || 'assets/logo-avida.jpg';
   const title = setlist?.paletteTitle || 'Paleta ainda não definida';
+  const isSharedView = String(sharedSetlistContextId || '') === String(setlist?.id || '');
   const helper = hasPalette
-    ? 'Esta é a paleta vinculada a este repertório.'
+    ? (isSharedView ? 'Esta paleta acompanha o link compartilhado para orientar o uniforme do culto.' : 'Esta é a paleta vinculada a este repertório.')
     : (owner ? 'Escolha uma paleta para definir o uniforme visual do culto.' : 'O criador ainda não definiu uma paleta para este repertório.');
   el.setlistDetailPalette.innerHTML = `
-    <div class="setlist-detail-palette-card ${hasPalette ? '' : 'is-empty'}">
+    <div class="setlist-detail-palette-card ${hasPalette ? '' : 'is-empty'} ${isSharedView ? 'is-shared' : ''}">
       <img src="${esc(img)}" alt="${esc(title)}">
       <div class="setlist-detail-palette-copy">
-        <span class="setlist-palette-label">Paleta do culto</span>
+        <span class="setlist-palette-label">${isSharedView ? 'Paleta compartilhada do culto' : 'Paleta do culto'}</span>
         <strong>${esc(title)}</strong>
         <small>${esc(helper)}</small>
       </div>
@@ -2704,20 +2780,37 @@ function readDeepLinks(){
   const params = new URLSearchParams(location.search);
   const trackId = params.get('track');
   const setlistId = params.get('setlist');
+
   if (trackId) {
     const track = findTrack(trackId);
     if (track) {
+      location.hash = '#biblioteca';
+      routeInternalPage();
       el.search.value = track.name;
       render();
       setTimeout(() => playTrack(track, 0, [track]), 200);
     }
   }
+
   if (setlistId) {
-    const setlist = setlists.find(s => s.id === setlistId);
-    if (setlist) {
-      const tracks = mapSetlistTracks(setlist);
-      if (tracks.length) setTimeout(() => playTrack(tracks[0], 0, tracks), 250);
-      setTimeout(() => openSetlistDetail(setlist.id), 350);
+    const openSharedSetlist = () => {
+      const setlist = setlists.find(s => String(s.id) === String(setlistId));
+      if (!setlist) return false;
+
+      // Links compartilhados de repertório devem abrir a playlist,
+      // sem iniciar o player automaticamente.
+      location.hash = '#inicio';
+      routeInternalPage();
+      document.body.classList.remove('player-visible');
+      document.getElementById('playerArea')?.classList.add('player-hidden');
+
+      sharedSetlistContextId = setlist.id;
+      setTimeout(() => openSetlistDetail(setlist.id), 250);
+      return true;
+    };
+
+    if (!openSharedSetlist()) {
+      setTimeout(openSharedSetlist, 900);
     }
   }
 }
