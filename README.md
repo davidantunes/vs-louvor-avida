@@ -543,3 +543,8 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - banner do repertório ativo com contador mais claro
 - feedback visual com animação ao adicionar música ao repertório
 - ícone do repertório mostra check quando a música já faz parte do repertório ativo
+
+
+## V65
+
+- removida a escrita “Modo Louvor Premium” do player de música.

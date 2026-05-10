@@ -4012,3 +4012,9 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
   position:relative;
   z-index:1;
 }
+
+
+/* V65 — remover texto do player */
+.player-caption{
+  display:none !important;
+}
