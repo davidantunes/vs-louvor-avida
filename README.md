@@ -548,3 +548,11 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 ## V65
 
 - removida a escrita “Modo Louvor Premium” do player de música.
+
+
+## V71
+
+- correção robusta da navegação por guias
+- cada guia exibe somente seu próprio conteúdo
+- correção de overflow para impedir seções saindo do painel central
+- nova guia Paleta de Cores isolada de Repertórios e Histórico
