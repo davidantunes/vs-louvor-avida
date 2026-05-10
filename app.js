@@ -306,7 +306,7 @@ function bindEvents(){
   el.keyFilter.addEventListener('change', render);
   el.tagFilter.addEventListener('change', render);
   el.typeFilter.addEventListener('change', render);
-  el.refresh.addEventListener('click', () => loadLibrary(true));
+  el.refresh.addEventListener('click', () => forceRefreshDriveLibrary());
   if (el.loadingSkipBtn) el.loadingSkipBtn.addEventListener('click', () => {
     hideLoading();
     toast('Acesso liberado. As músicas continuam carregando em segundo plano.');
@@ -1743,6 +1743,23 @@ function sortName(a,b){ return a.name.localeCompare(b.name, 'pt-BR', { sensitivi
 function safeFileName(name){ return String(name).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\w\s.-]/g,'').trim().replace(/\s+/g,'_') || 'audio'; }
 function loadJSON(key, fallback){ try { const x = localStorage.getItem(key); return x ? JSON.parse(x) : fallback; } catch { return fallback; } }
 function saveJSON(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
+
+function clearDriveLibraryCache(){
+  Object.keys(localStorage)
+    .filter(key => key.startsWith('vs_drive_cache_'))
+    .forEach(key => localStorage.removeItem(key));
+}
+
+async function forceRefreshDriveLibrary(){
+  clearDriveLibraryCache();
+  allTracks = [];
+  indexedTrackCount = 0;
+  discoveredFolderCount = 0;
+  indexedFolderCount = 0;
+  render();
+  toast('Atualizando biblioteca do Google Drive...');
+  await loadLibrary(true);
+}
 function esc(str){ return String(str).replace(/[&<>'"]/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[ch])); }
 
 function normalizeKeyToken(token){
@@ -2005,7 +2022,7 @@ async function refreshLibraryInBackground(){
     freshTracks.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
     if (freshTracks.length) {
       allTracks = freshTracks;
-      saveJSON('vs_drive_cache_v59', { updatedAt: Date.now(), tracks: allTracks });
+      saveJSON('vs_drive_cache_v79', { updatedAt: Date.now(), tracks: allTracks });
       afterLibraryLoaded();
       el.status.textContent = 'Biblioteca sincronizada em segundo plano.';
     }
@@ -2022,7 +2039,7 @@ async function loadLibrary(force = false){
     resetProgressCounters();
     el.status.textContent = 'Preparando biblioteca...';
 
-    const cacheKey = 'vs_drive_cache_v59';
+    const cacheKey = 'vs_drive_cache_v79';
     if (!force) {
       const cached = loadJSON(cacheKey, null);
       if (cached && Array.isArray(cached.tracks) && cached.tracks.length) {

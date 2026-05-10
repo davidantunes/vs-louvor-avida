@@ -571,3 +571,10 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - botão Exportar arte agora gera o arquivo para download
 - fallback de download quando o compartilhamento nativo do navegador não estiver disponível
 - a arte inclui nome do repertório, músicas, tons, paleta e identidade Igreja Amor e Vida
+
+
+## V79
+
+- botão de atualizar agora força uma nova leitura do Google Drive
+- limpeza automática de caches antigos da biblioteca (`vs_drive_cache_*`)
+- útil quando novas músicas são adicionadas ao Drive e ainda não aparecem no sistema
