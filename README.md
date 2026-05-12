@@ -578,3 +578,12 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - botão de atualizar agora força uma nova leitura do Google Drive
 - limpeza automática de caches antigos da biblioteca (`vs_drive_cache_*`)
 - útil quando novas músicas são adicionadas ao Drive e ainda não aparecem no sistema
+
+
+## V80
+
+- login mais rápido, principalmente em smartphone
+- carregamento da biblioteca passa a iniciar depois da sessão do usuário, evitando bloquear a tela de login
+- tela de loading começa oculta e aparece apenas quando necessário
+- recuperação de senha corrigida com fluxo de confirmação usando `userId` e `secret` do Appwrite
+- nova área para redefinir senha quando o usuário abre o link enviado por e-mail

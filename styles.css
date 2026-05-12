@@ -4284,3 +4284,35 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
   .palette-choose-preview{align-items:flex-start}
   .palette-choose-preview img{width:68px;height:92px}
 }
+
+
+/* V80 — login rápido e recuperação de senha */
+.loading-screen.hidden,
+.reset-password-box.hidden,
+.auth-mode-switch.hidden,
+.login-options-row.hidden,
+.auth-actions.hidden,
+.auth-grid.hidden{
+  display:none !important;
+}
+.reset-password-box{
+  display:grid;
+  gap:14px;
+  margin-top:14px;
+}
+#resetPasswordBox .auth-grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+}
+@media (max-width:760px){
+  .login-screen{
+    align-items:start !important;
+    overflow:auto !important;
+    padding:12px !important;
+  }
+  .login-card{
+    margin:8px 0 80px !important;
+    max-width:100% !important;
+  }
+}

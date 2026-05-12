@@ -12,7 +12,7 @@
   <div class="bg-blur bg-blur-b"></div>
   <div class="bg-blur bg-blur-c"></div>
 
-  <div id="loadingScreen" class="loading-screen">
+  <div id="loadingScreen" class="loading-screen hidden">
     <div class="loading-card loading-card-impact glass">
       <div class="loading-orbit" aria-hidden="true">
         <span></span><span></span><span></span>
@@ -59,6 +59,19 @@
         <button id="recoverPasswordBtn" class="link-button" type="button">Esqueci minha senha</button>
       </div>
       <div id="authStatus" class="auth-status"></div>
+
+      <div id="resetPasswordBox" class="reset-password-box hidden">
+        <div class="auth-mode-hint">Defina uma nova senha para concluir a recuperação da sua conta.</div>
+        <div class="login-grid auth-grid auth-grid-clean">
+          <label id="resetPasswordField"><span>Nova senha</span><div class="input-wrap password-wrap"><input id="resetPassword" type="password" placeholder="Nova senha" autocomplete="new-password" /><button id="toggleResetPasswordBtn" class="field-toggle" type="button" aria-label="Mostrar nova senha">Mostrar</button></div><small class="field-hint">Use pelo menos 6 caracteres.</small></label>
+          <label id="resetPasswordConfirmField"><span>Confirmar nova senha</span><div class="input-wrap password-wrap"><input id="resetPasswordConfirm" type="password" placeholder="Repita a nova senha" autocomplete="new-password" /><button id="toggleResetPasswordConfirmBtn" class="field-toggle" type="button" aria-label="Mostrar confirmação">Mostrar</button></div><small class="field-hint">Repita a mesma senha.</small></label>
+        </div>
+        <div class="login-actions auth-actions">
+          <button id="confirmPasswordRecoveryBtn" class="btn btn-primary" type="button">Atualizar senha</button>
+          <button id="cancelPasswordRecoveryBtn" class="btn btn-secondary" type="button">Voltar ao login</button>
+        </div>
+      </div>
+
       <div class="login-actions auth-actions">
         <button id="enterSystemBtn" class="btn btn-primary" type="button">Entrar na conta</button>
         <button id="createAccountBtn" class="btn btn-secondary" type="button">Criar cadastro</button>

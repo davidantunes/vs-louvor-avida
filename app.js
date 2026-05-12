@@ -82,6 +82,7 @@ const TOUR_DISABLE_KEY = "vs_guided_tour_disabled_v16";
 const TOUR_STORAGE_KEY = "vs_guided_tour_done_v16";
 const SESSION_KEY = "vs_user_session_v16";
 let libraryLoaded = false;
+let libraryLoadStarted = false;
 const TOUR_STEPS = [
   { hash: '#inicio', selector: '[data-tour="search"]', title: 'Busca inteligente', description: 'Comece por aqui para encontrar músicas por nome, cantor/pasta, tom, tag ou arquivo.' },
   { hash: '#inicio', selector: '[data-tour="hero"]', title: 'Área principal', description: 'Aqui estão os atalhos mais importantes, indicadores rápidos e acesso ao player aleatório.' },
@@ -246,6 +247,15 @@ const el = {
   togglePasswordBtn: document.getElementById('togglePasswordBtn'),
   rememberSession: document.getElementById('rememberSession'),
   recoverPasswordBtn: document.getElementById('recoverPasswordBtn'),
+  resetPasswordBox: document.getElementById('resetPasswordBox'),
+  resetPassword: document.getElementById('resetPassword'),
+  resetPasswordConfirm: document.getElementById('resetPasswordConfirm'),
+  resetPasswordField: document.getElementById('resetPasswordField'),
+  resetPasswordConfirmField: document.getElementById('resetPasswordConfirmField'),
+  toggleResetPasswordBtn: document.getElementById('toggleResetPasswordBtn'),
+  toggleResetPasswordConfirmBtn: document.getElementById('toggleResetPasswordConfirmBtn'),
+  confirmPasswordRecoveryBtn: document.getElementById('confirmPasswordRecoveryBtn'),
+  cancelPasswordRecoveryBtn: document.getElementById('cancelPasswordRecoveryBtn'),
   modeLoginBtn: document.getElementById('modeLoginBtn'),
   modeRegisterBtn: document.getElementById('modeRegisterBtn'),
   authModeHint: document.getElementById('authModeHint'),
@@ -286,8 +296,7 @@ loadAppwriteServerConfig().finally(initSessionUI);
 bindEvents();
 initSchedule();
 applyTheme(loadJSON('vs_theme_v1', 'dark'));
-showLoading('Carregando biblioteca e organizando o ambiente...');
-loadLibrary().then(() => { readDeepLinks(); routeInternalPage(); if (loadJSON(SESSION_KEY, null)?.name) maybeLaunchTour(); });
+routeInternalPage();
 
 function setPlayButtonState(isPlaying){
   if (!el.playPauseBtn) return;
@@ -494,6 +503,12 @@ function bindEvents(){
   if (el.modeRegisterBtn) el.modeRegisterBtn.addEventListener('click', () => setAuthMode('register'));
   if (el.togglePasswordBtn) el.togglePasswordBtn.addEventListener('click', () => togglePasswordVisibility('loginPassword', 'togglePasswordBtn'));
   if (el.recoverPasswordBtn) el.recoverPasswordBtn.addEventListener('click', recoverPassword);
+  if (el.toggleResetPasswordBtn) el.toggleResetPasswordBtn.addEventListener('click', () => togglePasswordVisibility('resetPassword', 'toggleResetPasswordBtn'));
+  if (el.toggleResetPasswordConfirmBtn) el.toggleResetPasswordConfirmBtn.addEventListener('click', () => togglePasswordVisibility('resetPasswordConfirm', 'toggleResetPasswordConfirmBtn'));
+  if (el.confirmPasswordRecoveryBtn) el.confirmPasswordRecoveryBtn.addEventListener('click', confirmPasswordRecovery);
+  if (el.cancelPasswordRecoveryBtn) el.cancelPasswordRecoveryBtn.addEventListener('click', showLoginMode);
+  if (el.resetPassword) el.resetPassword.addEventListener('keydown', e => { if (e.key === 'Enter') confirmPasswordRecovery(); });
+  if (el.resetPasswordConfirm) el.resetPasswordConfirm.addEventListener('keydown', e => { if (e.key === 'Enter') confirmPasswordRecovery(); });
   if (el.userBadge) el.userBadge.addEventListener('click', openProfileModal);
   if (el.closeProfileModal) el.closeProfileModal.addEventListener('click', closeProfileModal);
   if (el.profileModal) el.profileModal.addEventListener('click', e => { if (e.target === el.profileModal) closeProfileModal(); });
@@ -711,7 +726,86 @@ function validateAuthForm(mode = authMode){
   return emailOk && passwordOk && nameOk;
 }
 
+
+function startLibraryLoadIfNeeded(force = false){
+  if (libraryLoadStarted && !force) return;
+  libraryLoadStarted = true;
+  showLoading(force ? 'Atualizando biblioteca do Google Drive...' : 'Preparando biblioteca em segundo plano...');
+  loadLibrary(force).then(() => {
+    readDeepLinks();
+    routeInternalPage();
+    if (loadJSON(SESSION_KEY, null)?.name) maybeLaunchTour();
+  }).catch(error => {
+    console.warn('Biblioteca não carregada:', error);
+    hideLoading();
+  });
+}
+
+function isRecoveryRoute(){
+  const params = new URLSearchParams(location.search);
+  return Boolean(params.get('userId') && params.get('secret'));
+}
+
+function showLoginMode(){
+  el.resetPasswordBox?.classList.add('hidden');
+  document.querySelector('.auth-mode-switch')?.classList.remove('hidden');
+  document.querySelector('.login-options-row')?.classList.remove('hidden');
+  document.querySelector('.auth-actions')?.classList.remove('hidden');
+  document.querySelector('.auth-grid')?.classList.remove('hidden');
+  setAuthStatus('', false);
+  setAuthMode('login');
+  showLogin();
+}
+
+function showPasswordRecoveryMode(){
+  authMode = 'recovery';
+  el.loginScreen?.classList.remove('hidden');
+  el.loginScreen?.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('app-locked');
+  document.querySelector('.auth-mode-switch')?.classList.add('hidden');
+  document.querySelector('.login-options-row')?.classList.add('hidden');
+  document.querySelector('.auth-actions')?.classList.add('hidden');
+  document.querySelector('.auth-grid')?.classList.add('hidden');
+  el.resetPasswordBox?.classList.remove('hidden');
+  setAuthStatus('Informe e confirme sua nova senha para concluir a recuperação.', false);
+  setTimeout(() => el.resetPassword?.focus(), 80);
+}
+
+function validateRecoveryPassword(){
+  const password = String(el.resetPassword?.value || '');
+  const confirm = String(el.resetPasswordConfirm?.value || '');
+  setFieldState(el.resetPasswordField, password.length >= 6 ? 'valid' : 'invalid', password.length >= 6 ? 'Senha válida.' : 'A senha deve ter pelo menos 6 caracteres.');
+  setFieldState(el.resetPasswordConfirmField, confirm && confirm === password ? 'valid' : 'invalid', confirm && confirm === password ? 'As senhas conferem.' : 'As senhas não conferem.');
+  return password.length >= 6 && confirm === password;
+}
+
+async function confirmPasswordRecovery(){
+  if (!validateRecoveryPassword()) return setAuthStatus('Revise os campos destacados para atualizar a senha.', true);
+  if (!appwriteAccount) return setAuthStatus('Appwrite não inicializado.', true);
+  const params = new URLSearchParams(location.search);
+  const userId = params.get('userId');
+  const secret = params.get('secret');
+  if (!userId || !secret) return setAuthStatus('Link de recuperação inválido ou expirado.', true);
+  try {
+    setAuthStatus('Atualizando senha...', false);
+    await appwriteAccount.updateRecovery(userId, secret, el.resetPassword.value);
+    const cleanUrl = `${location.origin}${location.pathname}`;
+    history.replaceState(null, '', cleanUrl);
+    el.resetPassword.value = '';
+    el.resetPasswordConfirm.value = '';
+    showLoginMode();
+    setAuthStatus('Senha atualizada com sucesso. Entre com sua nova senha.', false);
+  } catch (error) {
+    setAuthStatus(error?.message || 'Não foi possível atualizar a senha.', true);
+  }
+}
+
 async function initSessionUI(){
+  hideLoading();
+  if (isRecoveryRoute()) {
+    showPasswordRecoveryMode();
+    return;
+  }
   if (!cloudReady || !appwriteAccount) {
     showLogin();
     setAuthStatus('Appwrite não configurado. Verifique endpoint e project ID.', true);
@@ -737,6 +831,11 @@ function showLoading(message = 'Preparando a plataforma...'){
 }
 function hideLoading(){ el.loadingScreen?.classList.add('hidden'); }
 function showLogin(){
+  el.resetPasswordBox?.classList.add('hidden');
+  document.querySelector('.auth-mode-switch')?.classList.remove('hidden');
+  document.querySelector('.login-options-row')?.classList.remove('hidden');
+  document.querySelector('.auth-actions')?.classList.remove('hidden');
+  document.querySelector('.auth-grid')?.classList.remove('hidden');
   setAuthMode(authMode || 'login');
   el.loginScreen?.classList.remove('hidden');
   el.loginScreen?.setAttribute('aria-hidden', 'false');
@@ -760,6 +859,7 @@ async function applyAuthUser(user){
   updateProfileModal();
   el.logoutBtn?.classList.remove('hidden');
   hideLogin();
+  startLibraryLoadIfNeeded();
   await loadCloudState();
 }
 async function enterSystem(){
