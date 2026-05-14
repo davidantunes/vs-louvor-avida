@@ -5863,3 +5863,188 @@ body.player-visible #setlistDetailModal .modal-card{
     font-size:18px !important;
   }
 }
+
+/* V93 — normalização geral dos ícones no smartphone */
+@media (max-width: 760px){
+  /* Botões com ícones: garantir caixa centralizada e sem cortes */
+  .icon-btn,
+  .action-icon,
+  .action-btn.primary.play-btn,
+  .mini-btn.play-setlist,
+  .mini-btn.play-one,
+  .track-actions .play-btn,
+  .track-actions .fav-btn,
+  .track-actions .tone-btn-open,
+  .track-actions .setlist-btn,
+  .track-actions .detail-btn,
+  .player-controls button,
+  .player-close-top,
+  .modal-close,
+  .tour-nav-arrow,
+  .field-toggle,
+  .filters-sheet-close,
+  .schedule-card-toggle,
+  .view-toggle button,
+  .mobile-dock a,
+  .sidebar-nav a .nav-icon,
+  .mobile-dock .dock-icon{
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    text-align:center !important;
+    line-height:1 !important;
+    vertical-align:middle !important;
+    box-sizing:border-box !important;
+  }
+
+  .icon-btn,
+  .action-icon,
+  .action-btn.primary.play-btn,
+  .mini-btn.play-setlist,
+  .mini-btn.play-one,
+  .track-actions .play-btn,
+  .track-actions .fav-btn,
+  .track-actions .tone-btn-open,
+  .track-actions .setlist-btn,
+  .track-actions .detail-btn,
+  .player-controls button,
+  .modal-close,
+  .tour-nav-arrow,
+  .field-toggle,
+  .filters-sheet-close,
+  .schedule-card-toggle,
+  .view-toggle button{
+    overflow:hidden !important;
+    padding:0 !important;
+  }
+
+  /* SVG e glifos sempre centralizados */
+  .nav-icon,
+  .dock-icon,
+  .icon-svg,
+  .action-icon-glyph,
+  .play-glyph,
+  .player-icon,
+  .player-icon-play,
+  .player-icon-pause,
+  .modal-close span,
+  .icon-btn span{
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    line-height:1 !important;
+    flex:0 0 auto !important;
+    margin:0 !important;
+    padding:0 !important;
+  }
+
+  .nav-icon svg,
+  .dock-icon svg,
+  .icon-svg svg{
+    display:block !important;
+    width:18px !important;
+    height:18px !important;
+    margin:0 auto !important;
+  }
+
+  .icon-btn .icon-svg,
+  .mobile-dock .dock-icon,
+  .sidebar-nav .nav-icon{
+    width:20px !important;
+    min-width:20px !important;
+    height:20px !important;
+  }
+
+  /* Botões circulares/quadrados de ações */
+  .track-actions .action-icon,
+  .track-actions .play-btn,
+  .mini-btn.play-setlist,
+  .mini-btn.play-one,
+  .player-controls button,
+  .icon-btn,
+  .modal-close,
+  .tour-nav-arrow,
+  .field-toggle,
+  .filters-sheet-close,
+  .schedule-card-toggle,
+  .view-toggle button{
+    min-width:44px !important;
+    min-height:44px !important;
+  }
+
+  .track-actions .action-icon,
+  .track-actions .play-btn,
+  .mini-btn.play-setlist,
+  .mini-btn.play-one{
+    border-radius:14px !important;
+  }
+
+  .track-actions .action-icon-glyph,
+  .track-actions .play-glyph,
+  .mini-btn.play-one .play-glyph,
+  .mini-btn.play-setlist::before,
+  .track-actions .play-btn::before,
+  .action-btn.primary.play-btn::before{
+    width:100% !important;
+    height:100% !important;
+    font-size:16px !important;
+    transform:none !important;
+    text-indent:0 !important;
+  }
+
+  .track-actions .detail-btn,
+  .track-actions .fav-btn,
+  .track-actions .tone-btn-open,
+  .track-actions .setlist-btn{
+    font-size:15px !important;
+  }
+
+  /* Player mobile */
+  .player-controls{align-items:center !important;}
+  .player-controls button{position:relative !important;}
+  .player-controls .play-main{min-width:48px !important;min-height:48px !important;}
+  .player-close-top{
+    gap:6px !important;
+    padding:0 12px !important;
+    min-width:auto !important;
+  }
+
+  /* Modal close no canto */
+  .modal-close{
+    font-size:28px !important;
+    line-height:1 !important;
+  }
+
+  /* Botões de mostrar senha */
+  .field-toggle{
+    padding:0 12px !important;
+    min-width:86px !important;
+    font-size:13px !important;
+  }
+
+  /* Dock inferior */
+  .mobile-dock a{
+    flex-direction:column !important;
+    gap:4px !important;
+  }
+  .mobile-dock a small{
+    display:block !important;
+    width:100% !important;
+    text-align:center !important;
+    line-height:1.1 !important;
+  }
+
+  /* Garantia extra para ícone play da biblioteca */
+  .track-grid .track-actions .play-btn,
+  .track-actions .play-btn{
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+  }
+  .track-grid .track-actions .play-btn::before,
+  .track-actions .play-btn::before{
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+  }
+}
