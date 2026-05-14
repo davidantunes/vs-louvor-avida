@@ -602,3 +602,11 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - corrigido problema no smartphone em que a lista de músicas voltava para o topo durante a rolagem
 - removido re-render automático em qualquer resize do navegador mobile
 - preservação de posição de rolagem quando a biblioteca precisa ser redesenhada
+
+
+## V83
+
+- playlist no smartphone com modal mais alto e área útil maior
+- rolagem interna da lista de músicas do repertório corrigida
+- player mobile mais compacto para não cobrir as músicas
+- últimas músicas do repertório continuam acessíveis mesmo com o player aberto
