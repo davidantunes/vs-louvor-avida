@@ -4316,3 +4316,145 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
     max-width:100% !important;
   }
 }
+
+
+/* V81 — playlist fluida, player sem cobrir músicas e loading personalizado */
+.modal{
+  align-items:start !important;
+  place-items:start center !important;
+  overflow:auto !important;
+  padding-top:clamp(14px, 3vh, 34px) !important;
+  padding-bottom:calc(var(--player-h) + 56px + env(safe-area-inset-bottom)) !important;
+  z-index:90 !important;
+}
+.modal-card{
+  max-height:calc(100dvh - 48px) !important;
+  display:flex !important;
+  flex-direction:column !important;
+  overflow:hidden !important;
+}
+#setlistDetailModal .modal-card{
+  width:min(980px, calc(100vw - 24px)) !important;
+  max-height:calc(100dvh - var(--player-h) - 74px - env(safe-area-inset-bottom)) !important;
+}
+#setlistDetailTracks{
+  overflow:auto !important;
+  overscroll-behavior:contain !important;
+  padding-right:6px !important;
+  padding-bottom:calc(var(--player-h) + 32px + env(safe-area-inset-bottom)) !important;
+  min-height:0 !important;
+}
+#setlistDetailTracks .reorder-item{
+  flex-shrink:0;
+}
+#setlistDetailTracks .play-one.is-loading{
+  opacity:.85;
+  pointer-events:none;
+}
+body.player-visible #setlistDetailModal .modal-card{
+  margin-bottom:calc(var(--player-h) + 20px + env(safe-area-inset-bottom)) !important;
+}
+.loading-screen{
+  position:fixed;
+  inset:0;
+  z-index:200;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(41,217,208,.16), transparent 32%),
+    linear-gradient(145deg, rgba(0,0,0,.96), rgba(4,12,14,.98));
+}
+.loading-screen.hidden{display:none!important}
+.loading-screen.is-background-loading{
+  pointer-events:none;
+  background:transparent !important;
+  place-items:end center;
+  padding-bottom:calc(22px + env(safe-area-inset-bottom));
+}
+.loading-screen.is-background-loading .loading-card{
+  width:min(460px, calc(100vw - 24px));
+  transform:translateY(0);
+  padding:14px 16px;
+  border-radius:20px;
+  opacity:.96;
+}
+.loading-screen.is-background-loading .loading-orbit,
+.loading-screen.is-background-loading .loading-progress,
+.loading-screen.is-background-loading #loadingSkipBtn{
+  display:none !important;
+}
+.loading-screen.is-background-loading .loading-card img{width:38px;height:38px}
+.loading-screen.is-background-loading .loading-copy strong{font-size:15px}
+.loading-screen.is-background-loading .loading-copy p{font-size:12px;margin:2px 0}
+.loading-screen.is-background-loading .loading-stage{font-size:11px}
+
+@media (max-width:760px){
+  :root{--player-h:190px}
+  .modal{
+    padding:10px 8px calc(var(--player-h) + 24px + env(safe-area-inset-bottom)) !important;
+  }
+  .modal-card{
+    width:calc(100vw - 16px) !important;
+    max-height:calc(100dvh - var(--player-h) - 34px - env(safe-area-inset-bottom)) !important;
+    border-radius:22px !important;
+    padding:18px 14px !important;
+  }
+  #setlistDetailModal .modal-card{
+    width:calc(100vw - 16px) !important;
+    max-height:calc(100dvh - var(--player-h) - 32px - env(safe-area-inset-bottom)) !important;
+  }
+  #setlistDetailTracks{
+    padding-bottom:calc(var(--player-h) + 44px + env(safe-area-inset-bottom)) !important;
+    padding-right:2px !important;
+  }
+  #setlistDetailTracks .reorder-item{
+    display:grid !important;
+    grid-template-columns:1fr auto !important;
+    gap:10px !important;
+    align-items:center !important;
+    padding:12px !important;
+  }
+  #setlistDetailTracks .reorder-item strong{
+    font-size:14px !important;
+    line-height:1.25 !important;
+  }
+  #setlistDetailTracks .reorder-item span{
+    font-size:12px !important;
+    line-height:1.35 !important;
+  }
+  #setlistDetailTracks .row-actions{
+    align-self:center !important;
+  }
+  #setlistDetailTracks .play-one{
+    width:48px !important;
+    min-width:48px !important;
+    height:48px !important;
+    border-radius:15px !important;
+    font-size:16px !important;
+  }
+  .modal-actions-top{
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:8px !important;
+  }
+  .modal-actions-top .btn{
+    width:100% !important;
+    min-height:44px !important;
+    padding:10px 10px !important;
+    font-size:12px !important;
+  }
+  .setlist-detail-palette-card{
+    display:grid !important;
+    grid-template-columns:56px 1fr !important;
+    gap:10px !important;
+  }
+  .setlist-detail-palette-card img{
+    width:56px !important;
+    height:56px !important;
+    border-radius:14px !important;
+  }
+  .setlist-detail-palette-card .inline-change-palette{
+    grid-column:1 / -1 !important;
+  }
+}

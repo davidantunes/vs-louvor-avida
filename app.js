@@ -827,9 +827,18 @@ function setAuthStatus(message = '', isError = false){
 }
 function showLoading(message = 'Preparando a plataforma...'){
   if (el.loadingMessage) el.loadingMessage.textContent = message;
+  if (authUser) {
+    // Depois do login, não bloquear a navegação; carregar biblioteca em segundo plano.
+    el.loadingScreen?.classList.add('is-background-loading');
+  } else {
+    el.loadingScreen?.classList.remove('is-background-loading');
+  }
   el.loadingScreen?.classList.remove('hidden');
 }
-function hideLoading(){ el.loadingScreen?.classList.add('hidden'); }
+function hideLoading(){
+  el.loadingScreen?.classList.add('hidden');
+  el.loadingScreen?.classList.remove('is-background-loading');
+}
 function showLogin(){
   el.resetPasswordBox?.classList.add('hidden');
   document.querySelector('.auth-mode-switch')?.classList.remove('hidden');
@@ -2421,6 +2430,21 @@ function handleAudioEnded(){
 
 function findTrack(id){ return allTracks.find(t => t.id === id); }
 
+
+function prewarmTrackAudio(track, semitones = null){
+  if (!track || current?.id === track.id) return;
+  const sourceSemitones = semitones !== null && semitones !== undefined ? semitones : Number(track.repertoireSemitones || 0);
+  const source = sourceSemitones ? transposeUrl(track.id, Number(sourceSemitones || 0)) : driveUrl(track.id);
+  // Não troca o player principal; apenas pede ao navegador para começar a resolver/conectar ao arquivo.
+  try {
+    const link = document.createElement('link');
+    link.rel = 'preconnect';
+    link.href = 'https://drive.google.com';
+    document.head.appendChild(link);
+    setTimeout(() => link.remove(), 4000);
+  } catch(_) {}
+}
+
 function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   if (!track) return;
   randomContinuousMode = Boolean(options.randomContinuous);
@@ -2430,15 +2454,29 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   current = track;
   currentQueue = queue && queue.length ? queue : getFiltered();
   currentIndex = currentQueue.findIndex(t => t.id === track.id);
-  const src = semitones ? transposeUrl(track.id, semitones) : driveUrl(track.id);
-  el.audio.src = src;
-  el.audio.load();
-  const p = el.audio.play();
-  if (p && typeof p.catch === 'function') p.catch(err => console.warn('Falha ao tocar automaticamente:', err));
   const alteredToneLabel = track.repertoireTone || (semitones ? calculateToneLabel(track.key, semitones) : '');
+
+  // Resposta visual imediata no smartphone: atualiza o player antes do áudio terminar de carregar.
   el.nowTitle.textContent = alteredToneLabel ? `${track.name} • Tom alterado ${formatKeyLabel(alteredToneLabel)}` : track.name;
   el.nowSinger.textContent = `${track.singer}${track.key && track.key !== '—' ? ' • Tom original ' + formatKeyLabel(track.key) : ''}${alteredToneLabel ? ' • Tom alterado ' + formatKeyLabel(alteredToneLabel) : ''}`;
   el.nowCover.src = track.coverUrl || 'assets/logo-avida.jpg';
+  setPlayButtonState(true);
+
+  const src = semitones ? transposeUrl(track.id, semitones) : driveUrl(track.id);
+  if (el.audio.src !== src) {
+    el.audio.preload = 'auto';
+    el.audio.src = src;
+    try { el.audio.load(); } catch(_) {}
+  }
+
+  const p = el.audio.play();
+  if (p && typeof p.catch === 'function') {
+    p.catch(err => {
+      console.warn('Falha ao tocar automaticamente:', err);
+      setPlayButtonState(false);
+    });
+  }
+
   recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: formatKeyLabel(track.key), changedKey: alteredToneLabel || '', semitones });
   syncProgressUI();
 }
@@ -2911,11 +2949,23 @@ function renderSetlistDetailTracks(){
     </div>
   `).join('');
   bindReorderEvents();
-  el.setlistDetailTracks.querySelectorAll('.play-one').forEach(btn => btn.addEventListener('click', () => {
-    const idx = Number(btn.closest('.reorder-item')?.dataset.index || 0);
-    const track = tracks[idx];
-    if (track) playTrack(track, null, tracks);
-  }));
+  el.setlistDetailTracks.querySelectorAll('.play-one').forEach(btn => {
+    const getTrack = () => {
+      const idx = Number(btn.closest('.reorder-item')?.dataset.index || 0);
+      return tracks[idx];
+    };
+    btn.addEventListener('touchstart', () => prewarmTrackAudio(getTrack()), { passive: true });
+    btn.addEventListener('mouseenter', () => prewarmTrackAudio(getTrack()));
+    btn.addEventListener('click', () => {
+      const track = getTrack();
+      if (track) {
+        btn.classList.add('is-loading');
+        btn.textContent = '…';
+        playTrack(track, null, tracks);
+        setTimeout(() => { btn.classList.remove('is-loading'); btn.textContent = '▶'; }, 900);
+      }
+    });
+  });
   el.setlistDetailTracks.querySelectorAll('.remove-one').forEach(btn => btn.addEventListener('click', () => {
     if (!isSetlistOwner(setlist)) {
       toast('Somente quem criou este repertório pode editá-lo.');

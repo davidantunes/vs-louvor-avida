@@ -587,3 +587,18 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - tela de loading começa oculta e aparece apenas quando necessário
 - recuperação de senha corrigida com fluxo de confirmação usando `userId` e `secret` do Appwrite
 - nova área para redefinir senha quando o usuário abre o link enviado por e-mail
+
+
+## V81
+
+- modal da playlist passa a ter rolagem interna e margem de segurança para não ficar atrás do player
+- layout mobile da playlist ajustado para rolar todas as músicas do repertório
+- botões de play dentro da playlist dão resposta visual imediata e fazem pré-aquecimento da conexão com o Drive
+- tela de loading personalizada fica visível logo ao abrir o sistema e vira aviso discreto quando a biblioteca carrega em segundo plano
+
+
+## V82
+
+- corrigido problema no smartphone em que a lista de músicas voltava para o topo durante a rolagem
+- removido re-render automático em qualquer resize do navegador mobile
+- preservação de posição de rolagem quando a biblioteca precisa ser redesenhada
