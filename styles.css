@@ -5457,3 +5457,207 @@ body.player-visible #setlistDetailModal .modal-card{
     min-height:50px !important;
   }
 }
+
+
+/* V88 — cards das músicas do repertório mais claros e maiores */
+#setlistDetailTracks .setlist-song-card{
+  min-height:82px;
+  padding:16px 18px !important;
+  border-radius:20px !important;
+  align-items:center !important;
+  gap:16px !important;
+}
+
+.setlist-song-main{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  min-width:0;
+  flex:1;
+}
+
+.setlist-song-info{
+  display:grid;
+  gap:8px;
+  min-width:0;
+}
+
+#setlistDetailTracks .setlist-song-info strong{
+  font-size:17px !important;
+  line-height:1.28 !important;
+  color:var(--text);
+  margin:0 !important;
+}
+
+.setlist-song-tone{
+  display:inline-flex !important;
+  align-items:center;
+  width:max-content;
+  max-width:100%;
+  padding:7px 11px;
+  border-radius:999px;
+  font-size:13px !important;
+  line-height:1.15 !important;
+  font-weight:900 !important;
+  border:1px solid rgba(41,217,208,.22);
+  background:rgba(41,217,208,.09);
+  color:var(--teal) !important;
+}
+
+.setlist-song-tone.is-original{
+  color:var(--muted) !important;
+  background:rgba(255,255,255,.04);
+  border-color:rgba(255,255,255,.10);
+}
+
+.setlist-song-tone.is-altered{
+  color:var(--teal) !important;
+}
+
+@media (max-width:760px){
+  #setlistDetailTracks .setlist-song-card{
+    min-height:92px !important;
+    grid-template-columns:1fr auto !important;
+    padding:14px 12px !important;
+    gap:12px !important;
+  }
+
+  .setlist-song-main{
+    gap:10px !important;
+  }
+
+  #setlistDetailTracks .setlist-song-info strong{
+    font-size:16px !important;
+    line-height:1.25 !important;
+  }
+
+  .setlist-song-tone{
+    font-size:12.5px !important;
+    padding:7px 10px !important;
+  }
+}
+
+@media (max-width:420px){
+  #setlistDetailTracks .setlist-song-info strong{
+    font-size:15px !important;
+  }
+
+  .setlist-song-tone{
+    font-size:12px !important;
+  }
+}
+
+
+/* V89 — performance rápida */
+.track-card,
+.setlist-card,
+.schedule-mobile-card,
+.palette-card{
+  content-visibility:auto;
+  contain-intrinsic-size:260px;
+}
+.track-grid,
+.setlist-grid,
+.palette-grid{
+  will-change:auto;
+}
+@media (max-width:760px){
+  .track-card{contain-intrinsic-size:170px;}
+}
+
+/* V90 — correção dos botões play duplicados e centralização */
+.action-btn.primary.play-btn,
+.mini-btn.play-setlist,
+.mini-btn.play-one{
+  font-size:0 !important;
+  color:transparent !important;
+  text-indent:-9999px;
+  overflow:hidden;
+  position:relative;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+.action-btn.primary.play-btn::before,
+.mini-btn.play-setlist::before,
+.mini-btn.play-one::before{
+  content:'▶' !important;
+  position:absolute;
+  inset:0;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-indent:0;
+  color:var(--text) !important;
+  font-size:16px !important;
+  line-height:1 !important;
+  font-weight:900;
+}
+
+.mini-btn.play-one.is-loading::before,
+.mini-btn.play-setlist.is-loading::before,
+.action-btn.primary.play-btn.is-loading::before{
+  content:'…' !important;
+  font-size:18px !important;
+}
+
+.track-actions .play-btn,
+.track-grid .track-actions .play-btn{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:0 !important;
+}
+
+#setlistDetailTracks .reorder-item{
+  align-items:center !important;
+}
+#setlistDetailTracks .row-actions{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+#setlistDetailTracks .play-one{
+  flex:0 0 auto;
+}
+
+@media (max-width:760px){
+  #setlistDetailTracks .reorder-item{
+    grid-template-columns:minmax(0,1fr) 52px !important;
+    gap:12px !important;
+    padding:14px !important;
+  }
+  #setlistDetailTracks .setlist-song-info strong{
+    display:block;
+    font-size:16px !important;
+    line-height:1.3 !important;
+    margin-bottom:8px !important;
+  }
+  #setlistDetailTracks .setlist-song-tone{
+    display:inline-flex !important;
+    width:auto !important;
+    max-width:100%;
+    font-size:13px !important;
+  }
+  #setlistDetailTracks .play-one{
+    width:52px !important;
+    min-width:52px !important;
+    height:52px !important;
+    min-height:52px !important;
+    border-radius:16px !important;
+  }
+  .track-actions,
+  .track-actions.has-active-setlist{
+    grid-template-columns:1fr repeat(4,44px) !important;
+    gap:8px !important;
+  }
+  .track-actions .play-btn,
+  .track-grid .track-actions .play-btn{
+    width:100% !important;
+    min-width:0 !important;
+    height:44px !important;
+    min-height:44px !important;
+    border-radius:14px !important;
+  }
+}

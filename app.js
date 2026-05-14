@@ -2407,7 +2407,7 @@ function renderTrackCard(t){
       </div>
       <div class="tag-wrap">${(t.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
       <div class="track-actions ${activeSetlist ? 'has-active-setlist' : ''}">
-        <button class="action-btn primary play-btn" data-id="${esc(t.id)}" aria-label="Tocar" title="Tocar">▶</button>
+        <button class="action-btn primary play-btn" data-id="${esc(t.id)}" aria-label="Tocar" title="Tocar"></button>
         <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar">${fav ? '♥' : '♡'}</button>
         <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom">♬</button>
         <button class="action-icon setlist-btn ${activeSetlist ? 'is-active-target' : ''} ${isInActiveSetlist ? 'is-already-added' : ''}" data-id="${esc(t.id)}" title="${esc(setlistTitle)}" data-tooltip="${esc(setlistLabel)}" aria-label="${esc(setlistTitle)}"><span class="action-icon-glyph">${isInActiveSetlist ? '✓' : '+☷'}</span><span class="action-icon-label">${activeSetlist ? 'Repertório' : 'Adicionar'}</span></button>
@@ -2769,7 +2769,7 @@ function renderSetlists(){
         </div>
         ${paletteMarkup}
         <div class="setlist-actions">
-          <button class="mini-btn play-setlist" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório">▶</button>
+          <button class="mini-btn play-setlist" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório"></button>
           <button class="mini-btn open-setlist" data-id="${esc(s.id)}">Playlist</button>
           <button class="mini-btn share-setlist" data-id="${esc(s.id)}">Compartilhar</button>
           <button class="mini-btn notify-setlist" data-id="${esc(s.id)}">Notificar</button>
@@ -2974,21 +2974,28 @@ function renderSetlistDetailTracks(){
     return;
   }
   const owner = isSetlistOwner(setlist);
-  el.setlistDetailTracks.innerHTML = tracks.map((track, index) => `
-    <div class="reorder-item ${owner ? '' : 'is-readonly'}" draggable="${owner ? 'true' : 'false'}" data-id="${esc(track.id)}" data-index="${index}">
-      <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1">
-        ${owner ? '<span class="drag-handle">⋮⋮</span>' : ''}
-        <div>
-          <strong>${index + 1}. ${esc(track.name)}</strong>
-          <span>${esc(track.singer)} • Tom original ${esc(formatKeyLabel(track.key || '—'))} ${track.repertoireTone ? ` • <span class="repertoire-tone-badge">Tom alterado: ${esc(formatKeyLabel(track.repertoireTone))}</span>` : ''}</span>
+  el.setlistDetailTracks.innerHTML = tracks.map((track, index) => {
+    const chosenTone = track.repertoireTone
+      ? `Tom: ${formatKeyLabel(track.repertoireTone)}`
+      : `Tom: ${formatKeyLabel(track.key || '—')}`;
+    const toneClass = track.repertoireTone ? 'is-altered' : 'is-original';
+
+    return `
+      <div class="reorder-item setlist-song-card ${owner ? '' : 'is-readonly'}" draggable="${owner ? 'true' : 'false'}" data-id="${esc(track.id)}" data-index="${index}">
+        <div class="setlist-song-main">
+          ${owner ? '<span class="drag-handle">⋮⋮</span>' : ''}
+          <div class="setlist-song-info">
+            <strong>${index + 1}. ${esc(track.name)}</strong>
+            <span class="setlist-song-tone ${toneClass}">${esc(chosenTone)}</span>
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="mini-btn play-one" data-id="${esc(track.id)}" aria-label="Tocar música" title="Tocar música"></button>
+          ${owner ? `<button class="mini-btn remove-one" data-id="${esc(track.id)}">Remover</button>` : ''}
         </div>
       </div>
-      <div class="row-actions">
-        <button class="mini-btn play-one" data-id="${esc(track.id)}" aria-label="Tocar música" title="Tocar música">▶</button>
-        ${owner ? `<button class="mini-btn remove-one" data-id="${esc(track.id)}">Remover</button>` : ''}
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
   bindReorderEvents();
   el.setlistDetailTracks.querySelectorAll('.play-one').forEach(btn => {
     const getTrack = () => {
@@ -3001,9 +3008,8 @@ function renderSetlistDetailTracks(){
       const track = getTrack();
       if (track) {
         btn.classList.add('is-loading');
-        btn.textContent = '…';
         playTrack(track, null, tracks);
-        setTimeout(() => { btn.classList.remove('is-loading'); btn.textContent = '▶'; }, 900);
+        setTimeout(() => { btn.classList.remove('is-loading'); }, 900);
       }
     });
   });

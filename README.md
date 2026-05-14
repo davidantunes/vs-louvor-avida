@@ -645,3 +645,21 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - removida duplicidade visual do botão play
 - player mobile restaurado com botão fechar, volume e barra de progresso
 - área da playlist ganhou margem/rolagem para não ficar atrás do player
+
+
+## V88
+
+- cards das músicas dentro do repertório mostram apenas nome da música e tom escolhido
+- removidas informações extras como cantor/pasta dentro da playlist
+- cards do repertório ficaram maiores e mais legíveis
+- tom original ou alterado aparece em destaque
+
+
+## V89 — Performance rápida
+
+- busca com debounce para reduzir processamento a cada tecla
+- endpoint backend `/api/appwrite/bootstrap/:userId` para carregar setlists, favoritos, escala, membros e histórico em uma única chamada
+- fallback automático para chamadas separadas caso o bootstrap falhe
+- imagens de paletas com `loading=lazy` e `decoding=async`
+- `content-visibility:auto` nos cards para melhorar scroll em listas grandes
+- correção do resize mobile para evitar re-render e salto de rolagem

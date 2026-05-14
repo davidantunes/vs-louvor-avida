@@ -67,6 +67,33 @@ app.get('/api/appwrite/config', (req, res) => {
   res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: APPWRITE_ADMIN_EMAILS.length > 0 });
 });
 
+app.get('/api/appwrite/bootstrap/:userId', async (req, res) => {
+  try {
+    const [appDocs, userDocs] = await Promise.all([
+      listDocuments(APPWRITE_APP_STATE_COLLECTION_ID),
+      listDocuments(APPWRITE_USER_STATE_COLLECTION_ID)
+    ]);
+    const findApp = key => {
+      const doc = appDocs.find(d => d.key === key);
+      return doc?.value ? JSON.parse(doc.value) : null;
+    };
+    const findUser = key => {
+      const doc = userDocs.find(d => d.user_id === req.params.userId && d.key === key);
+      return doc?.value ? JSON.parse(doc.value) : null;
+    };
+    res.json({
+      setlists: findApp('setlists'),
+      members: findApp('members'),
+      monthlySchedule: findApp('monthlySchedule'),
+      usageHistory: findApp('usageHistory'),
+      favorites: findUser('favorites')
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 async function verifyAppwriteJWT(req) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
