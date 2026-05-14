@@ -2975,9 +2975,8 @@ function renderSetlistDetailTracks(){
   }
   const owner = isSetlistOwner(setlist);
   el.setlistDetailTracks.innerHTML = tracks.map((track, index) => {
-    const chosenTone = track.repertoireTone
-      ? `Tom: ${formatKeyLabel(track.repertoireTone)}`
-      : `Tom: ${formatKeyLabel(track.key || '—')}`;
+    const chosenTone = formatKeyLabel(track.repertoireTone || track.key || '—');
+    const toneLabel = track.repertoireTone ? 'Tom escolhido' : 'Tom';
     const toneClass = track.repertoireTone ? 'is-altered' : 'is-original';
 
     return `
@@ -2986,11 +2985,11 @@ function renderSetlistDetailTracks(){
           ${owner ? '<span class="drag-handle">⋮⋮</span>' : ''}
           <div class="setlist-song-info">
             <strong>${index + 1}. ${esc(track.name)}</strong>
-            <span class="setlist-song-tone ${toneClass}">${esc(chosenTone)}</span>
+            <span class="setlist-song-tone ${toneClass}">${esc(toneLabel)}: ${esc(chosenTone)}</span>
           </div>
         </div>
         <div class="row-actions">
-          <button class="mini-btn play-one" data-id="${esc(track.id)}" aria-label="Tocar música" title="Tocar música"></button>
+          <button class="mini-btn play-one" data-id="${esc(track.id)}" aria-label="Tocar música" title="Tocar música"><span class="play-glyph" aria-hidden="true">▶</span></button>
           ${owner ? `<button class="mini-btn remove-one" data-id="${esc(track.id)}">Remover</button>` : ''}
         </div>
       </div>

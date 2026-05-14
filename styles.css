@@ -5771,3 +5771,95 @@ body.player-visible #setlistDetailModal .modal-card{
     grid-template-columns:1fr 44px 44px 44px 44px !important;
   }
 }
+
+/* V92 — cards do repertório com tom dentro do card e play centralizado */
+#setlistDetailTracks .setlist-song-card{
+  align-items:center !important;
+}
+
+#setlistDetailTracks .setlist-song-info{
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:flex-start !important;
+  gap:6px !important;
+  min-width:0 !important;
+}
+
+#setlistDetailTracks .setlist-song-tone{
+  display:block !important;
+  width:auto !important;
+  max-width:100% !important;
+  padding:0 !important;
+  margin:0 !important;
+  border:none !important;
+  background:transparent !important;
+  border-radius:0 !important;
+  font-size:13px !important;
+  line-height:1.35 !important;
+  font-weight:700 !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+}
+#setlistDetailTracks .setlist-song-tone.is-original{
+  color:var(--muted) !important;
+}
+#setlistDetailTracks .setlist-song-tone.is-altered{
+  color:var(--teal) !important;
+}
+
+#setlistDetailTracks .row-actions{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-width:52px !important;
+}
+
+#setlistDetailTracks .play-one{
+  position:relative !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:0 !important;
+}
+#setlistDetailTracks .play-one::before{
+  content:none !important;
+  display:none !important;
+}
+#setlistDetailTracks .play-one .play-glyph{
+  position:absolute !important;
+  inset:0 !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  width:100% !important;
+  height:100% !important;
+  color:var(--text) !important;
+  font-size:18px !important;
+  line-height:1 !important;
+  transform:none !important;
+  text-indent:0 !important;
+}
+
+@media (max-width:760px){
+  #setlistDetailTracks .setlist-song-card{
+    min-height:106px !important;
+    padding:14px 12px !important;
+    gap:12px !important;
+  }
+  #setlistDetailTracks .setlist-song-info strong{
+    margin-bottom:2px !important;
+  }
+  #setlistDetailTracks .setlist-song-tone{
+    font-size:13px !important;
+  }
+  #setlistDetailTracks .play-one{
+    width:50px !important;
+    min-width:50px !important;
+    height:50px !important;
+    min-height:50px !important;
+    border-radius:16px !important;
+  }
+  #setlistDetailTracks .play-one .play-glyph{
+    font-size:18px !important;
+  }
+}
