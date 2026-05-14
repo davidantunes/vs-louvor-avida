@@ -623,3 +623,25 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - feedbacks/toasts melhorados
 - estados vazios mais orientativos
 - linguagem padronizada para Repertórios, Biblioteca, Escala e Paletas
+
+
+## V85
+
+- texto “Refinamento” trocado por “Filtros da Biblioteca” na seção Biblioteca.
+- título “Filtros inteligentes” simplificado para “Filtros”.
+
+
+## V86
+
+- botão **Fechar** do player recolocado e fixado no smartphone.
+- ajuste de posição, tamanho e contraste do botão no player mobile.
+
+
+## V87
+
+- filtros no mobile retornaram ao modelo antigo, fixos na página
+- repertórios no smartphone abrem a playlist ao tocar no card ou no botão Playlist
+- cards de músicas mobile ficaram mais limpos e menos espremidos
+- removida duplicidade visual do botão play
+- player mobile restaurado com botão fechar, volume e barra de progresso
+- área da playlist ganhou margem/rolagem para não ficar atrás do player

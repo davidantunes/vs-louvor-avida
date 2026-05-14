@@ -5106,3 +5106,354 @@ body.player-visible #setlistDetailModal .modal-card{
     padding:28px 18px!important;
   }
 }
+
+
+/* V86 — botão fechar do player visível no smartphone */
+@media (max-width:760px){
+  .player-topbar{
+    display:flex !important;
+    justify-content:flex-end !important;
+    align-items:center !important;
+    padding:8px 8px 0 !important;
+    min-height:34px !important;
+  }
+
+  .player-close-top{
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    height:30px !important;
+    min-height:30px !important;
+    padding:0 11px !important;
+    border-radius:999px !important;
+    font-size:11px !important;
+    line-height:1 !important;
+    font-weight:900 !important;
+    border:1px solid rgba(41,217,208,.25) !important;
+    background:rgba(255,255,255,.06) !important;
+    color:var(--text) !important;
+    z-index:3 !important;
+  }
+
+  .player{
+    padding-top:0 !important;
+  }
+}
+
+
+/* V87 — restauração UX mobile: filtros antigos, cards limpos, player completo */
+@media (max-width:760px){
+  /* Filtros voltam ao modelo antigo, fixos na página */
+  .filters-sheet-backdrop,
+  .filters-sheet-trigger,
+  .filters-sheet-close{
+    display:none !important;
+  }
+
+  body.filters-sheet-open{
+    overflow:auto !important;
+  }
+
+  #filtersGrid.filters-grid,
+  .filters-grid{
+    position:static !important;
+    inset:auto !important;
+    z-index:auto !important;
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    gap:12px !important;
+    transform:none !important;
+    max-height:none !important;
+    overflow:visible !important;
+    padding:0 !important;
+    border:0 !important;
+    border-radius:0 !important;
+    background:transparent !important;
+    box-shadow:none !important;
+  }
+
+  #filters .section-head{
+    margin-bottom:14px !important;
+  }
+
+  /* Cards de música mais limpos no smartphone */
+  .track-card{
+    border-radius:20px !important;
+  }
+
+  .track-head,
+  .track-grid .track-head,
+  .track-grid.view-details .track-head{
+    padding:14px 14px 8px !important;
+    gap:12px !important;
+  }
+
+  .track-cover,
+  .track-grid .track-cover,
+  .track-grid.view-details .track-cover{
+    width:58px !important;
+    height:58px !important;
+    flex:0 0 58px !important;
+    border-radius:16px !important;
+  }
+
+  .track-title,
+  .track-grid .track-title,
+  .track-grid.view-details .track-title{
+    font-size:15px !important;
+    line-height:1.22 !important;
+    -webkit-line-clamp:2 !important;
+    white-space:normal !important;
+  }
+
+  .track-sub,
+  .track-grid .track-sub,
+  .track-grid.view-details .track-sub{
+    font-size:11px !important;
+    line-height:1.35 !important;
+    min-height:unset !important;
+    opacity:.82;
+  }
+
+  .track-meta,
+  .track-grid .track-meta,
+  .track-grid.view-details .track-meta{
+    padding:0 14px 8px !important;
+    gap:7px !important;
+  }
+
+  .tag-wrap{
+    display:none !important;
+  }
+
+  /* Botões sem texto espremido, e sem duplicar play */
+  .track-actions,
+  .track-grid .track-actions,
+  .track-grid.view-details .track-actions,
+  .track-actions.has-active-setlist{
+    display:grid !important;
+    grid-template-columns:1.4fr repeat(4,44px) !important;
+    gap:8px !important;
+    padding:0 14px 14px !important;
+  }
+
+  .track-actions .play-btn,
+  .track-grid .track-actions .play-btn{
+    grid-column:auto !important;
+    min-height:44px !important;
+    height:44px !important;
+    border-radius:14px !important;
+    padding:0 !important;
+    font-size:0 !important;
+    display:grid !important;
+    place-items:center !important;
+  }
+
+  .track-actions .play-btn::before,
+  .track-grid .track-actions .play-btn::before{
+    content:'▶' !important;
+    font-size:16px !important;
+    line-height:1 !important;
+    margin:0 !important;
+  }
+
+  .track-actions .play-btn::after{
+    content:'' !important;
+    display:none !important;
+  }
+
+  .track-actions .action-icon{
+    width:44px !important;
+    height:44px !important;
+    min-width:44px !important;
+    min-height:44px !important;
+    border-radius:14px !important;
+    padding:0 !important;
+    display:grid !important;
+    place-items:center !important;
+    font-size:15px !important;
+  }
+
+  .track-actions .action-icon::after,
+  .track-actions .action-icon-label{
+    display:none !important;
+  }
+
+  .track-actions .setlist-btn{
+    width:44px !important;
+    min-width:44px !important;
+    padding:0 !important;
+  }
+
+  .track-actions .setlist-btn .action-icon-glyph{
+    font-size:14px !important;
+  }
+
+  /* Player mobile completo e utilizável */
+  .player{
+    left:8px !important;
+    right:8px !important;
+    bottom:calc(74px + env(safe-area-inset-bottom)) !important;
+    max-height:none !important;
+    overflow:visible !important;
+    border-radius:22px !important;
+    padding:0 12px 12px !important;
+    z-index:9999 !important;
+  }
+
+  .player-topbar{
+    display:flex !important;
+    justify-content:flex-end !important;
+    align-items:center !important;
+    min-height:34px !important;
+    padding:9px 4px 0 !important;
+  }
+
+  .player-close-top{
+    display:inline-flex !important;
+    height:30px !important;
+    min-height:30px !important;
+    padding:0 12px !important;
+    border-radius:999px !important;
+    font-size:11px !important;
+    line-height:1 !important;
+  }
+
+  .player-main-row{
+    grid-template-columns:1fr !important;
+    gap:10px !important;
+    padding-top:8px !important;
+  }
+
+  .now-playing{
+    display:grid !important;
+    grid-template-columns:52px 1fr !important;
+    gap:10px !important;
+    align-items:center !important;
+  }
+
+  .now-playing img,
+  #nowCover{
+    width:52px !important;
+    height:52px !important;
+    border-radius:16px !important;
+  }
+
+  .now-meta strong,
+  #nowTitle{
+    font-size:14px !important;
+    line-height:1.2 !important;
+  }
+
+  .now-meta span,
+  #nowSinger{
+    font-size:11px !important;
+    line-height:1.3 !important;
+  }
+
+  .player-controls{
+    display:flex !important;
+    justify-content:center !important;
+    gap:9px !important;
+    padding-bottom:0 !important;
+  }
+
+  .player-controls button{
+    width:40px !important;
+    height:40px !important;
+    min-width:40px !important;
+    min-height:40px !important;
+  }
+
+  .player-controls .play-main{
+    width:52px !important;
+    height:52px !important;
+    min-width:52px !important;
+    min-height:52px !important;
+  }
+
+  .player-controls button::after{
+    display:none !important;
+  }
+
+  .player-progress-row{
+    display:grid !important;
+    grid-template-columns:44px 1fr 44px !important;
+    gap:8px !important;
+  }
+
+  .player-progress-row span{
+    font-size:11px !important;
+  }
+
+  .player-side{
+    display:grid !important;
+    grid-template-columns:1fr !important;
+  }
+
+  .volume-card{
+    display:flex !important;
+    align-items:center !important;
+    gap:10px !important;
+    min-height:42px !important;
+    padding:8px 10px !important;
+    border-radius:14px !important;
+  }
+
+  .player-caption{
+    display:none !important;
+  }
+
+  body.player-visible{
+    padding-bottom:250px !important;
+  }
+
+  /* Playlist não fica atrás do player */
+  #setlistDetailModal{
+    padding:8px 8px calc(250px + env(safe-area-inset-bottom)) !important;
+  }
+
+  #setlistDetailModal .modal-card{
+    width:calc(100vw - 16px) !important;
+    max-height:calc(100dvh - 250px - env(safe-area-inset-bottom)) !important;
+    overflow:hidden !important;
+  }
+
+  #setlistDetailTracks{
+    overflow:auto !important;
+    -webkit-overflow-scrolling:touch !important;
+    max-height:calc(100dvh - 430px - env(safe-area-inset-bottom)) !important;
+    padding-bottom:calc(250px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width:430px){
+  .track-actions,
+  .track-grid .track-actions,
+  .track-grid.view-details .track-actions,
+  .track-actions.has-active-setlist{
+    grid-template-columns:1fr repeat(4,40px) !important;
+    gap:7px !important;
+  }
+
+  .track-actions .action-icon{
+    width:40px !important;
+    height:40px !important;
+    min-width:40px !important;
+    min-height:40px !important;
+  }
+
+  .player-controls button{
+    width:38px !important;
+    height:38px !important;
+    min-width:38px !important;
+    min-height:38px !important;
+  }
+
+  .player-controls .play-main{
+    width:50px !important;
+    height:50px !important;
+    min-width:50px !important;
+    min-height:50px !important;
+  }
+}

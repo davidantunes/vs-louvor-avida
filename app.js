@@ -326,7 +326,19 @@ function closeFiltersSheet(){
 
 function bindEvents(){
   window.addEventListener('hashchange', routeInternalPage);
-  window.addEventListener('resize', () => { /* force details view on mobile */ applyViewMode(); render(); });
+  let lastMusicViewIsMobile = isMobileMusicView();
+  window.addEventListener('resize', () => {
+    const nowMobile = isMobileMusicView();
+    if (nowMobile === lastMusicViewIsMobile) {
+      applyViewMode();
+      return;
+    }
+    lastMusicViewIsMobile = nowMobile;
+    const previousScroll = window.scrollY;
+    applyViewMode();
+    render();
+    requestAnimationFrame(() => window.scrollTo({ top: previousScroll, behavior: 'auto' }));
+  });
   el.search.addEventListener('input', onGlobalSearchInput);
   el.search.addEventListener('keydown', onGlobalSearchKeydown);
   el.viewThumbBtn.addEventListener('click', () => setViewMode('thumbnails'));
