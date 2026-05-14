@@ -104,6 +104,10 @@ const el = {
   typeFilter: document.getElementById('typeFilter'),
   favoritesOnly: document.getElementById('favoritesOnly'),
   clearFilters: document.getElementById('clearFilters'),
+  openFiltersSheetBtn: document.getElementById('openFiltersSheetBtn'),
+  closeFiltersSheetBtn: document.getElementById('closeFiltersSheetBtn'),
+  filtersSheetBackdrop: document.getElementById('filtersSheetBackdrop'),
+  filtersGrid: document.getElementById('filtersGrid'),
   randomBtn: document.getElementById('randomBtn'),
   copyLinkBtn: document.getElementById('copyLinkBtn'),
   totalTracks: document.getElementById('totalTracks'),
@@ -171,6 +175,10 @@ const el = {
   activeSetlistMeta: document.getElementById('activeSetlistMeta'),
   activeSetlistViewBtn: document.getElementById('activeSetlistViewBtn'),
   activeSetlistDoneBtn: document.getElementById('activeSetlistDoneBtn'),
+  activeSetlistMiniBar: document.getElementById('activeSetlistMiniBar'),
+  activeSetlistMiniName: document.getElementById('activeSetlistMiniName'),
+  activeSetlistMiniViewBtn: document.getElementById('activeSetlistMiniViewBtn'),
+  activeSetlistMiniDoneBtn: document.getElementById('activeSetlistMiniDoneBtn'),
 
   setlistDetailModal: document.getElementById('setlistDetailModal'),
   closeSetlistDetail: document.getElementById('closeSetlistDetail'),
@@ -304,6 +312,18 @@ function setPlayButtonState(isPlaying){
   el.playPauseBtn.innerHTML = `<span class="player-icon ${isPlaying ? 'player-icon-pause' : 'player-icon-play'}" aria-hidden="true"></span>`;
 }
 
+
+function openFiltersSheet(){
+  el.filtersGrid?.classList.add('is-open');
+  el.filtersSheetBackdrop?.classList.remove('hidden');
+  document.body.classList.add('filters-sheet-open');
+}
+function closeFiltersSheet(){
+  el.filtersGrid?.classList.remove('is-open');
+  el.filtersSheetBackdrop?.classList.add('hidden');
+  document.body.classList.remove('filters-sheet-open');
+}
+
 function bindEvents(){
   window.addEventListener('hashchange', routeInternalPage);
   window.addEventListener('resize', () => { /* force details view on mobile */ applyViewMode(); render(); });
@@ -397,6 +417,11 @@ function bindEvents(){
     openSetlistDetail(active.id);
   });
   if (el.activeSetlistDoneBtn) el.activeSetlistDoneBtn.addEventListener('click', () => concludeActiveSetlist());
+  if (el.activeSetlistMiniViewBtn) el.activeSetlistMiniViewBtn.addEventListener('click', () => el.activeSetlistViewBtn?.click());
+  if (el.activeSetlistMiniDoneBtn) el.activeSetlistMiniDoneBtn.addEventListener('click', () => concludeActiveSetlist());
+  if (el.openFiltersSheetBtn) el.openFiltersSheetBtn.addEventListener('click', openFiltersSheet);
+  if (el.closeFiltersSheetBtn) el.closeFiltersSheetBtn.addEventListener('click', closeFiltersSheet);
+  if (el.filtersSheetBackdrop) el.filtersSheetBackdrop.addEventListener('click', closeFiltersSheet);
 
   if (el.closeSetlistReview) el.closeSetlistReview.addEventListener('click', closeSetlistReviewModal);
   if (el.setlistReviewModal) el.setlistReviewModal.addEventListener('click', e => { if (e.target === el.setlistReviewModal) closeSetlistReviewModal(); });
@@ -1143,12 +1168,15 @@ function renderActiveSetlistBanner(){
   const active = reconcileActiveSetlist();
   if (!active) {
     el.activeSetlistBanner.classList.add('hidden');
+    el.activeSetlistMiniBar?.classList.add('hidden');
     return;
   }
   el.activeSetlistBanner.classList.remove('hidden');
+  el.activeSetlistMiniBar?.classList.remove('hidden');
   el.activeSetlistName.textContent = active.name;
+  if (el.activeSetlistMiniName) el.activeSetlistMiniName.textContent = active.name;
   const count = (active.trackIds || []).length;
-  el.activeSetlistMeta.textContent = `${count} música(s) adicionada(s) • Use o ícone do repertório nos cards para montar sua playlist e clique em “Ver repertório” quando quiser revisar.`;
+  el.activeSetlistMeta.textContent = `${count} música(s) adicionada(s) • Use o botão de repertório nos cards e depois conclua para escolher a paleta.`;
 }
 
 function renderPaletteSelectionTarget(){
@@ -2370,7 +2398,7 @@ function renderTrackCard(t){
         <button class="action-btn primary play-btn" data-id="${esc(t.id)}" aria-label="Tocar" title="Tocar">▶</button>
         <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar">${fav ? '♥' : '♡'}</button>
         <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom">♬</button>
-        <button class="action-icon setlist-btn ${activeSetlist ? 'is-active-target' : ''} ${isInActiveSetlist ? 'is-already-added' : ''}" data-id="${esc(t.id)}" title="${esc(setlistTitle)}" data-tooltip="${esc(setlistLabel)}" aria-label="${esc(setlistTitle)}"><span class="action-icon-glyph">${isInActiveSetlist ? '✓' : '+☷'}</span><span class="action-icon-label sr-only">${esc(setlistLabel)}</span></button>
+        <button class="action-icon setlist-btn ${activeSetlist ? 'is-active-target' : ''} ${isInActiveSetlist ? 'is-already-added' : ''}" data-id="${esc(t.id)}" title="${esc(setlistTitle)}" data-tooltip="${esc(setlistLabel)}" aria-label="${esc(setlistTitle)}"><span class="action-icon-glyph">${isInActiveSetlist ? '✓' : '+☷'}</span><span class="action-icon-label">${activeSetlist ? 'Repertório' : 'Adicionar'}</span></button>
         <button class="action-icon detail-btn" data-id="${esc(t.id)}" title="Ver detalhes">⋯</button>
       </div>
     </article>
@@ -2648,7 +2676,7 @@ function createSetlistFromInput(){
     return;
   }
   const name = el.newSetlistName.value.trim();
-  if (!name) return;
+  if (!name) return toast('Informe o nome do repertório para continuar.');
   const creator = currentUserIdentity();
   const s = {
     id: String(Date.now()),
@@ -2668,6 +2696,7 @@ function createSetlistFromInput(){
   el.newSetlistName.value = '';
   recordUsageEvent({ type: 'setlist_created', setlistId: s.id, setlistName: s.name, trackCount: s.trackIds.length, message: `Repertório "${s.name}" criado.` });
   activateSetlistAndOpenLibrary(s);
+  toast('Repertório criado. Agora escolha as músicas na Biblioteca.');
 }
 function renderSetlistOptions(){
   if (!setlists.length) {
@@ -2699,7 +2728,7 @@ function renderSetlists(){
     ? 'Todos podem ver e tocar os repertórios. Somente quem criou um repertório pode editá-lo ou excluí-lo.'
     : 'Faça login para criar repertórios. Repertórios publicados ficam visíveis para todos.';
   if (!setlists.length) {
-    el.setlistsGrid.innerHTML = `<div class="empty">Nenhum repertório criado ainda. ${permissionNotice}</div>`;
+    el.setlistsGrid.innerHTML = `<div class="empty empty-polished"><strong>Nenhum repertório criado ainda.</strong><span>${permissionNotice}</span><button class="btn btn-primary btn-compact" type="button" onclick="document.getElementById('newSetlistBtn')?.click()">+ Criar repertório</button></div>`;
     return;
   }
   el.setlistsGrid.innerHTML = `<div class="setlist-permission-note">${permissionNotice}</div>` + setlists.map(s => {
@@ -3076,10 +3105,11 @@ function copyText(text, message){
 function toast(message){
   document.querySelector('.toast')?.remove();
   const div = document.createElement('div');
-  div.className = 'toast';
-  div.textContent = message;
+  div.className = 'toast toast-pro';
+  div.innerHTML = `<span class="toast-icon">✓</span><span>${esc(message)}</span>`;
   document.body.appendChild(div);
-  setTimeout(() => div.remove(), 1800);
+  setTimeout(() => div.classList.add('is-visible'), 20);
+  setTimeout(() => div.remove(), 2400);
 }
 
 function toggleTheme(){

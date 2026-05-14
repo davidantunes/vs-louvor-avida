@@ -610,3 +610,16 @@ Consulte `APPWRITE_SETUP.md` antes de publicar no Render.
 - rolagem interna da lista de músicas do repertório corrigida
 - player mobile mais compacto para não cobrir as músicas
 - últimas músicas do repertório continuam acessíveis mesmo com o player aberto
+
+
+## V84 — UX Mobile Pro
+
+- fluxo de criação de repertório com feedback mais claro
+- barra compacta de repertório ativo no mobile
+- cards de música mobile reorganizados com labels visíveis
+- player mobile mais compacto
+- filtros transformados em bottom sheet no smartphone
+- escala mobile em cards, sem tabela
+- feedbacks/toasts melhorados
+- estados vazios mais orientativos
+- linguagem padronizada para Repertórios, Biblioteca, Escala e Paletas

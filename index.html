@@ -512,9 +512,13 @@
             <span class="kicker">Refinamento</span>
             <h2>Filtros inteligentes</h2>
           </div>
-          <span id="status">Carregando...</span>
+          <div class="filters-head-actions">
+            <span id="status">Carregando...</span>
+            <button id="openFiltersSheetBtn" class="btn btn-secondary btn-compact filters-sheet-trigger" type="button">Filtros</button>
+          </div>
         </div>
-        <div class="filters-grid">
+        <div class="filters-sheet-backdrop hidden" id="filtersSheetBackdrop"></div>
+        <div class="filters-grid" id="filtersGrid">
           <label><span>Música</span><select id="musicFilter"><option value="">Todas as músicas</option></select></label>
           <label><span>Tom</span><select id="keyFilter"><option value="">Todos os tons</option></select></label>
           <label><span>Tag</span><select id="tagFilter"><option value="">Todas as tags</option></select></label>
@@ -583,6 +587,14 @@
             <button id="activeSetlistViewBtn" class="btn btn-secondary" type="button">Ver repertório</button>
             <button id="activeSetlistDoneBtn" class="btn btn-primary" type="button">Concluir repertório</button>
           </div>
+        </div>
+        <div id="activeSetlistMiniBar" class="active-setlist-mini hidden">
+          <div>
+            <span>Repertório ativo</span>
+            <strong id="activeSetlistMiniName">—</strong>
+          </div>
+          <button id="activeSetlistMiniViewBtn" type="button">Ver</button>
+          <button id="activeSetlistMiniDoneBtn" type="button">Concluir</button>
         </div>
 
         <div id="trackList" class="track-grid view-thumbnails"></div>
