@@ -5661,3 +5661,113 @@ body.player-visible #setlistDetailModal .modal-card{
     border-radius:14px !important;
   }
 }
+
+/* V91 — correções de modal da música, play centralizado e botão de repertório só com ícone */
+#songModal{
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+#songModal .modal-card{
+  max-height:min(92vh, 920px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+#songModal .song-modal-grid{
+  align-items:start;
+}
+#songModal .song-modal-body{
+  min-width:0;
+}
+#songModal .song-modal-title,
+#songModalTitle{
+  overflow-wrap:anywhere;
+}
+
+.action-btn.primary.play-btn,
+.track-grid .track-actions .play-btn,
+.track-actions .play-btn{
+  font-size:0 !important;
+  color:transparent !important;
+  text-indent:-9999px;
+  line-height:0 !important;
+  position:relative;
+}
+.action-btn.primary.play-btn::after,
+.track-grid .track-actions .play-btn::after,
+.track-actions .play-btn::after{
+  content:none !important;
+  display:none !important;
+}
+.action-btn.primary.play-btn::before,
+.track-grid .track-actions .play-btn::before,
+.track-actions .play-btn::before{
+  content:'▶' !important;
+  position:absolute !important;
+  inset:0 !important;
+  margin:auto !important;
+  width:100% !important;
+  height:100% !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-indent:0 !important;
+  color:var(--text) !important;
+  font-size:16px !important;
+  line-height:1 !important;
+  transform:none !important;
+}
+
+.track-actions .setlist-btn,
+.track-actions.has-active-setlist .setlist-btn{
+  min-width:52px !important;
+  width:52px !important;
+  padding:0 !important;
+  gap:0 !important;
+}
+.track-actions .setlist-btn .action-icon-label{
+  display:none !important;
+}
+.track-actions .setlist-btn .action-icon-glyph{
+  font-size:18px !important;
+}
+
+@media (max-width:760px){
+  #songModal{
+    align-items:flex-start !important;
+    padding:10px !important;
+  }
+  #songModal .modal-card{
+    width:min(100%, calc(100vw - 20px)) !important;
+    max-height:calc(100vh - 20px) !important;
+    padding:14px !important;
+    border-radius:22px !important;
+  }
+  #songModal .song-modal-grid{
+    grid-template-columns:1fr !important;
+    gap:14px !important;
+  }
+  #songModal .song-cover-panel img{
+    aspect-ratio:1 / 1;
+    max-height:320px;
+    object-fit:cover;
+  }
+  #songModalTitle{
+    font-size:clamp(28px, 7vw, 38px) !important;
+    line-height:1.1 !important;
+  }
+  #songModalSubtitle{
+    font-size:15px !important;
+    line-height:1.45 !important;
+    word-break:break-word;
+  }
+  #songModal .song-meta,
+  #songModal .tag-cluster{
+    row-gap:8px !important;
+  }
+  .track-actions,
+  .track-actions.has-active-setlist,
+  .track-grid .track-actions,
+  .track-grid.view-details .track-actions{
+    grid-template-columns:1fr 44px 44px 44px 44px !important;
+  }
+}
