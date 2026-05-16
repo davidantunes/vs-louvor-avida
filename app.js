@@ -1993,29 +1993,37 @@ function formatKeyLabelShort(key){
 }
 
 function detectKey(text){
-  // V99 — Detecção robusta de tom no nome do arquivo.
+  // V99.1 — Detecção robusta de tom no nome do arquivo.
   // Suporta:
   //   - Notação inglesa: C, D, E, F, G, A, B (com #, b, e m para menor)
   //   - Notação portuguesa: dó, ré, mi, fá, sol, lá, si (com #, sustenido, b, bemol, m, menor)
   //   - Prefixos: "Tom", "Tom de", "Tone", "Key", "em" (apenas quando seguido de tom)
-  //   - Localização preferencial: final do nome, ou entre parênteses, ou após hífen.
-  //   - Evita falsos positivos com a palavra "em" e com vogais isoladas no início.
+  //   - Formato invertido: Cm# = C#m (correção de digitação comum)
+  //   - Espaços múltiplos e (1), (2) parasitas no final
   const rawWithExt = String(text || '');
-  const raw = rawWithExt
-    .replace(/\.[a-z0-9]+$/i, '')  // tira extensão
+  let raw = rawWithExt
+    .replace(/\.[a-z0-9]+$/i, '')   // tira extensão
     .replace(/[♯]/g, '#')
     .replace(/[♭]/g, 'b')
     .trim();
 
-  // Versão sem acentos para regex (mas guardamos a com acento para detectar "dó", "fá" etc.)
+  // V99.1 — Normalização pré-regex:
+  //   1) Remove sufixos parasitas como " (1)", " (2)", " - cópia" no final
+  //   2) Corrige formato invertido "Xm#" → "X#m"
+  //   3) Colapsa múltiplos espaços em um só
+  raw = raw
+    .replace(/\s*\(\d+\)\s*$/i, '')           // "(1)" no fim
+    .replace(/\s*-\s*c[oó]pia\s*$/i, '')      // " - cópia" no fim
+    .replace(/([A-G])m#/g, '$1#m')            // Cm# → C#m  (e Dm#, Em#, etc.)
+    .replace(/\s+/g, ' ')                       // espaços múltiplos
+    .trim();
+
   const noAccents = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  // --- 1) Tentar notação portuguesa explícita ---
-  // dó, ré, mi, fá, sol, lá, si — com modificadores opcionais.
+  // --- 1) Notação portuguesa explícita ---
   const PT_NAMES = {
     'do':'C', 're':'D', 'mi':'E', 'fa':'F', 'sol':'G', 'la':'A', 'si':'B'
   };
-  // V99 — Regex sem acentos. # cola direto (sem espaço); sustenido/bemol com espaço opcional.
   const ptRegex = /\b(do|re|mi|fa|sol|la|si)(#|b\b|\s*sustenido|\s*bemol)?(\s*menor|\s*maior|m\b)?/gi;
   const ptMatches = [];
   let ptMatch;
@@ -2031,33 +2039,24 @@ function detectKey(text){
     const minor = ptMatch[3] && /m|menor/i.test(ptMatch[3]) ? 'm' : '';
     ptMatches.push({ key: note + suffix + minor, index: ptMatch.index, raw: ptMatch[0] });
   }
-  // V99 — Filtros:
-  //   a) PT só vale se vier após contexto "tom"/"em"/"key", OU se aparecer no final do nome.
-  //   b) Filtra preposições portuguesas comuns: "do"/"da" (de "Casa do Pai").
-  //      Não filtra se vier explicitamente após "Tom" ou "em" — aí é nota mesmo.
   const ptValid = ptMatches.filter(m => {
     const before = noAccents.slice(0, m.index).toLowerCase();
     const after = noAccents.slice(m.index + m.raw.length).toLowerCase();
     const followsContext = /(tom\s*(?:de)?|tone|key|em)\s*[:=\-]?\s*$/.test(before);
     const isAtEnd = m.index + m.raw.length >= noAccents.length - 6;
-
     if (followsContext) return true;
-
-    // Sem contexto explícito: rejeita "do"/"da" quando seguido de palavra (preposição)
     const lowerRaw = m.raw.toLowerCase().trim();
     if (lowerRaw === 'do' || lowerRaw === 'da') {
       const isolated = /^[\s\)\]\}]*$/.test(after) && /[\s\(\[\{\-]$/.test(before);
       if (!isolated) return false;
     }
-
     return isAtEnd;
   });
   if (ptValid.length) {
-    // Pega a última (mais provavelmente o tom oficial no final do nome)
     return normalizeKeyToken(ptValid[ptValid.length - 1].key);
   }
 
-  // --- 2) Notação inglesa com prefixo explícito "Tom X", "Tom de X", "Key X" ---
+  // --- 2) Notação inglesa com prefixo explícito ---
   const token = '(?:C#|Db|D#|Eb|F#|Gb|G#|Ab|A#|Bb|A|B|C|D|E|F|G)(?:m)?';
   const explicit = new RegExp(
     `\\b(?:tom\\s+de|tom|tone|key)\\s*[:=\\-]?\\s*(${token})(?=$|[\\s_\\-\\.\\)\\]\\}])`,
@@ -2067,9 +2066,8 @@ function detectKey(text){
   if (explicitMatch) return normalizeKeyToken(explicitMatch[1]);
 
   // --- 3) Notação inglesa solta, entre delimitadores ---
-  // Reconhece o tom quando: vem após "(", "[", "-", " ", "_", ou início; e
-  // termina em fim/separador. IMPORTANTE: filtra a palavra "em" e vogais isoladas.
   const matches = [];
+  // V99.1 — Aceita separador antes (espaço/_/-/(/[/{) e separador depois (idem + fim).
   const re = new RegExp(`(^|[\\s_\\-\\(\\[\\{])(${token})(?=$|[\\s_\\-\\.\\)\\]\\}])`, 'gi');
   let match;
   while ((match = re.exec(noAccents)) !== null) {
@@ -2080,30 +2078,31 @@ function detectKey(text){
     const before = noAccents.slice(0, index);
     const after = noAccents.slice(end);
 
-    // V99 — Filtros para reduzir falsos positivos:
-    //  a) Não considerar "em" (a palavra em português aparece muito em títulos).
-    //     Se o token capturado for "Em" e ele NÃO estiver em fim de linha nem
-    //     seguido de separador imediato, ignora.
+    // a) Filtra "em" como palavra em português
     if (/^em$/i.test(key)) {
       const trimmedAfter = after.trimStart();
-      const looksLikeWord = /^[a-zA-Z]/.test(trimmedAfter); // "em casa", "em Cristo"
-      if (looksLikeWord) continue;
+      if (/^[a-zA-Z]/.test(trimmedAfter)) continue;
     }
 
-    //  b) Tokens de uma letra (A, B, C, D, E, F, G) no INÍCIO do nome são
-    //     suspeitos: "A Ele a Glória", "B-Day", "D-Day". Só aceitamos no
-    //     início se o tom estiver entre parênteses/colchetes ou seguido de
-    //     separador "-" ou número (bpm).
-    if (key.length === 1 && index === 0) {
-      const okStartContext = /^\s*[\-\(\[\{]/.test(after) || /^\s*\d/.test(after.trimStart());
-      if (!okStartContext) continue;
-    }
+    // V99.1 — b) Filtro de "1 letra solta" reformulado.
+    // Aceita tokens de 1 letra (A, B, C, D, E, F, G) quando:
+    //   - vem precedido por "-" em qualquer posição (inclusive com espaços), OU
+    //   - está entre parênteses/colchetes/chaves, OU
+    //   - é o último token do nome (só dígitos/espaços/fim depois)
+    if (key.length === 1) {
+      // Caractere não-espaço imediatamente antes da posição do token
+      const beforeTrim = before.replace(/\s+$/, '');
+      const lastCharBefore = beforeTrim.charAt(beforeTrim.length - 1);
+      const isAfterHyphen = lastCharBefore === '-';
+      const isInBrackets = /[\(\[\{]/.test(lastCharBefore);
+      // Caractere não-espaço imediatamente depois
+      const afterTrim = after.replace(/^\s+/, '');
+      const firstCharAfter = afterTrim.charAt(0);
+      const isLastToken = afterTrim === '' || firstCharAfter === '-' || /[\)\]\}\.]/.test(firstCharAfter) || /^\d/.test(afterTrim);
+      const startsAtBeginning = index === 0;
 
-    //  c) Token de uma letra solta no meio: aceita só se vier após "-", "(", "[", "{".
-    if (key.length === 1 && sep !== '' && !/[\-\(\[\{]/.test(sep)) {
-      // Permite se for o ÚLTIMO token do nome (acabou ou só tem espaços/dígitos depois)
-      const trailingOk = /^\s*(\d|$)/.test(after);
-      if (!trailingOk) continue;
+      const acceptable = isAfterHyphen || isInBrackets || (isLastToken && !startsAtBeginning);
+      if (!acceptable) continue;
     }
 
     matches.push({ key, index, end });
@@ -2111,13 +2110,12 @@ function detectKey(text){
 
   if (!matches.length) return '—';
 
-  // V99 — Heurística: prioriza tons que estão no FINAL do nome (mais provavelmente
-  // são o tom oficial), depois os que vêm entre parênteses, depois o resto.
+  // Prioriza tons no final, depois mais à direita.
   matches.sort((a, b) => {
     const aAtEnd = a.end >= noAccents.length - 8 ? 0 : 1;
     const bAtEnd = b.end >= noAccents.length - 8 ? 0 : 1;
     if (aAtEnd !== bAtEnd) return aAtEnd - bAtEnd;
-    return b.index - a.index; // último primeiro
+    return b.index - a.index;
   });
 
   return normalizeKeyToken(matches[0].key);

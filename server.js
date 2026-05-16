@@ -332,11 +332,22 @@ function normalizeKeyToken(token){
 
 // V99 — detectKey idêntico ao do app.js para garantir consistência.
 function detectKey(text){
-  const raw = String(text || '')
+  // V99.1 — Detecção idêntica à do app.js para consistência total.
+  const rawWithExt = String(text || '');
+  let raw = rawWithExt
     .replace(/\.[a-z0-9]+$/i, '')
     .replace(/[♯]/g, '#')
     .replace(/[♭]/g, 'b')
     .trim();
+
+  // V99.1 — pré-processamento
+  raw = raw
+    .replace(/\s*\(\d+\)\s*$/i, '')
+    .replace(/\s*-\s*c[oó]pia\s*$/i, '')
+    .replace(/([A-G])m#/g, '$1#m')
+    .replace(/\s+/g, ' ')
+    .trim();
+
   const noAccents = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
   const PT_NAMES = {
@@ -390,21 +401,31 @@ function detectKey(text){
     const key = match[2];
     const index = match.index + sep.length;
     const end = index + key.length;
+    const before = noAccents.slice(0, index);
     const after = noAccents.slice(end);
+
     if (/^em$/i.test(key)) {
       const trimmedAfter = after.trimStart();
       if (/^[a-zA-Z]/.test(trimmedAfter)) continue;
     }
-    if (key.length === 1 && index === 0) {
-      const okStartContext = /^\s*[\-\(\[\{]/.test(after) || /^\s*\d/.test(after.trimStart());
-      if (!okStartContext) continue;
+
+    // V99.1 — Filtro de 1 letra reformulado
+    if (key.length === 1) {
+      const beforeTrim = before.replace(/\s+$/, '');
+      const lastCharBefore = beforeTrim.charAt(beforeTrim.length - 1);
+      const isAfterHyphen = lastCharBefore === '-';
+      const isInBrackets = /[\(\[\{]/.test(lastCharBefore);
+      const afterTrim = after.replace(/^\s+/, '');
+      const firstCharAfter = afterTrim.charAt(0);
+      const isLastToken = afterTrim === '' || firstCharAfter === '-' || /[\)\]\}\.]/.test(firstCharAfter) || /^\d/.test(afterTrim);
+      const startsAtBeginning = index === 0;
+      const acceptable = isAfterHyphen || isInBrackets || (isLastToken && !startsAtBeginning);
+      if (!acceptable) continue;
     }
-    if (key.length === 1 && sep !== '' && !/[\-\(\[\{]/.test(sep)) {
-      if (!/^\s*(\d|$)/.test(after)) continue;
-    }
+
     matches.push({ key, index, end });
   }
-  if (!matches.length) return '';  // servidor retorna '' (não '—') para deixar cliente formatar
+  if (!matches.length) return '';
   matches.sort((a, b) => {
     const aAtEnd = a.end >= noAccents.length - 8 ? 0 : 1;
     const bAtEnd = b.end >= noAccents.length - 8 ? 0 : 1;

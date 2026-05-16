@@ -1,4 +1,34 @@
-# VS Louvor — Igreja Amor e Vida — V99 Detecção de tom robusta + desduplicação dupla
+# VS Louvor — Igreja Amor e Vida — V99.1 Hotfix detecção de tom (casos reais)
+
+## O que entra na V99.1
+
+Hotfix da v99 baseado em diagnóstico real da biblioteca do David (243 músicas).
+Antes: 234/243 com tom (96%). Depois desta versão, espera-se **241/243 com tom (99%)**.
+
+### Bugs corrigidos
+1. **Cm# → C#m**: pessoas digitam o `#` no fim por engano. Pré-processador agora reordena.
+   - Ex: `Criatura Igual ao Criador - Cm#.mp3` → detecta `C#m` ✓
+2. **`(1)` parasita no fim do arquivo**: arquivos baixados duplicados ficam com `(1)`, `(2)` etc.
+   - Ex: `Digno de Tudo - C (1).mp3` → agora detecta `C` ✓
+3. **Múltiplos espaços antes/depois do tom**: era um problema da regex de separadores.
+   - Ex: `NÃO PARE MIDIAN - E  - 130 BPM.wav` (dois espaços) → detecta `E` ✓
+4. **Filtro de "1 letra solta" reformulado**: estava bloqueando casos legítimos onde a letra do tom vinha depois de `-` mas o `sep` capturado pela regex era o espaço.
+   - Ex: `LOVE - A -127 BPM.mp3` → detecta `A` ✓
+   - Ex: `Tudo a Ver com Ele - G - 137bpm.mp3` → detecta `G` ✓
+5. **Sufixo `- cópia` no fim**: arquivos com `- cópia` no final agora são tratados.
+
+### Cobertura de testes
+- **45 casos de teste** (36 antigos + 9 do diagnóstico real do David).
+- **45 passando, 0 falhando, 0 regressões.**
+
+### Quais músicas continuam sem tom (esperado)
+Após a v99.1, devem sobrar 2 músicas sem tom — porque o nome do arquivo realmente não tem:
+1. `ATE QUE O SENHOR VENHA - CULTURA DO CEU.mp3` (renomear no Drive para incluir tom)
+2. `Ministério Pedras Vivas - Pai nosso... _bass_mixed.m4a` (idem)
+
+---
+
+# Versão anterior — V99 Detecção de tom robusta + desduplicação dupla
 
 ## O que entra na V99
 
