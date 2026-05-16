@@ -1,4 +1,29 @@
-# VS Louvor — Igreja Amor e Vida — V96 Performance pack (todas otimizações grátis)
+# VS Louvor — Igreja Amor e Vida — V97 Ajustes finos dos modais no celular
+
+## O que entra na V97
+
+### Modal "Alterar tom"
+- Texto explicativo encurtado: agora só "Escolha o tom desejado." (uma linha em vez de duas).
+- Botões com texto curto: "**▶ Ouvir Música**" e "**⤓ Baixar Música**" (em vez de "Ouvir no tom original" etc).
+  - O tom selecionado já aparece com destaque nos info-strips "Tom original" e "Tom alterado" logo acima — não precisa repetir no botão.
+- Ordem: **⤓ Baixar Música** (primary, destacado) **antes de** ▶ Ouvir Música.
+- Botões agora ficam **lado a lado em 1 linha** no mobile (antes empilhavam um abaixo do outro), economizando ~50px de altura.
+- "+ Adicionar ao repertório" fica embaixo, em linha inteira, mas menor.
+- A nota técnica ("download usa FFmpeg") fica discreta no mobile e some em telas pequenas.
+
+### Modal "Detalhes da música"
+- Removidos os badges "**Arquivo: MP3**" e "**Origem: Google Drive**" — informação que não muda comportamento, só ocupa espaço.
+- Botões reorganizados: "**▶ Tocar agora**" e "**⤓ Baixar tom original**" lado a lado em destaque (ambos primary). Embaixo, "Alterar tom", "Favoritar" e "Compartilhar" em uma linha.
+- Em telas com altura ≥ 700px, os 3 secundários ficam em 3 colunas; em telas menores, em 2 colunas e a linha de play/download fica em destaque.
+
+### Resultado prático
+- Em iPhones modernos (de 14 e mais novos, altura ≥ 700px), **todo o modal cabe na tela sem scroll**.
+- Em iPhones SE / Android com altura ≤ 680px, info-strips ficam mais compactos e a nota técnica some, garantindo que as ações principais sempre fiquem visíveis.
+- A grid das 12 tonalidades continua sendo a única região scrollável (em caso extremo) — ações principais sempre fixas no rodapé.
+
+---
+
+# Versão anterior — V96 Performance pack (todas otimizações grátis)
 
 ## O que entra na V96
 

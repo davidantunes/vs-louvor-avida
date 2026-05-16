@@ -2771,8 +2771,8 @@ function openToneModal(track){
   if (el.toneSelected) el.toneSelected.textContent = parsed.base ? formatKeyLabel(`${originalBase}${suffix}`) : 'Escolha o tom';
 
   const helper = parsed.base
-    ? '<div class="tone-help">Escolha o novo tom desejado. O sistema calcula automaticamente a transposição.</div>'
-    : '<div class="tone-help">Tom original não detectado. Para maior precisão, inclua o tom no nome do arquivo, exemplo: “Nome da Música - D.mp3”.</div>';
+    ? '<div class="tone-help">Escolha o tom desejado.</div>'
+    : '<div class="tone-help">Escolha o tom desejado. (Tom original não detectado — inclua o tom no nome do arquivo para maior precisão.)</div>';
 
   el.toneButtons.innerHTML = helper + CHROMATIC_KEYS.map(key => {
     const semitone = calculateShortestShift(originalIndex >= 0 ? originalIndex : 0, CHROMATIC_KEYS.indexOf(key));
@@ -2795,14 +2795,15 @@ function openToneModal(track){
 
     if (el.toneSelected) el.toneSelected.textContent = selectedToneLabel;
     el.downloadToneBtn.href = downloadUrl(track.id, track.name, selectedSemitone);
-    el.playToneBtn.textContent = selectedSemitone === 0 ? '▶ Ouvir no tom original' : `▶ Ouvir em ${selectedToneLabel}`;
-    el.downloadToneBtn.textContent = selectedSemitone === 0 ? 'Baixar tom original' : `Baixar em ${selectedToneLabel}`;
-    if (el.addToneToSetlistBtn) el.addToneToSetlistBtn.textContent = selectedSemitone === 0 ? '+ Adicionar ao repertório' : `+ Adicionar ao repertório em ${formatKeyLabel(selectedToneLabel)}`;
+    // V97 — textos curtos: o tom escolhido já fica nos info-strips acima
+    el.playToneBtn.textContent = '▶ Ouvir Música';
+    el.downloadToneBtn.textContent = '⤓ Baixar Música';
+    if (el.addToneToSetlistBtn) el.addToneToSetlistBtn.textContent = '+ Adicionar ao repertório';
   }));
 
   el.downloadToneBtn.href = downloadUrl(track.id, track.name, 0);
-  el.playToneBtn.textContent = '▶ Ouvir no tom original';
-  el.downloadToneBtn.textContent = 'Baixar tom original';
+  el.playToneBtn.textContent = '▶ Ouvir Música';
+  el.downloadToneBtn.textContent = '⤓ Baixar Música';
   if (el.addToneToSetlistBtn) el.addToneToSetlistBtn.textContent = '+ Adicionar ao repertório';
   el.toneModal.classList.remove('hidden');
 }
@@ -3238,8 +3239,6 @@ function openSongModal(track){
   el.songModalMeta.innerHTML = `
     <span class="meta key">Tom original: ${esc(formatKeyLabel(track.key || '—'))}</span>
     <span class="meta altered-tone">Tom alterado: ${alteredTone ? esc(alteredTone) : '—'}</span>
-    <span class="meta">Arquivo: ${esc(track.ext.toUpperCase())}</span>
-    <span class="meta">Origem: Google Drive</span>
   `;
   el.songModalTags.innerHTML = (track.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('');
   el.songModalFavorite.textContent = favorites.includes(track.id) ? '♥ Favorita' : '♡ Favoritar';
