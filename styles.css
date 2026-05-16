@@ -52,8 +52,8 @@ body[data-theme="light"] .sidebar{background:linear-gradient(180deg, rgba(255,25
 .sidebar-status{position:absolute;left:22px;right:22px;bottom:22px;border:1px solid var(--line-soft);background:rgba(255,255,255,.03);border-radius:18px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between}.sidebar-status span{display:block;color:var(--muted);font-size:12px}.sidebar-status strong{display:block;margin-top:4px}.sidebar-status i{width:10px;height:10px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 8px rgba(41,217,208,.10)}
 .content{margin-left:var(--sidebar-w);width:calc(100% - var(--sidebar-w));padding:28px clamp(18px,3vw,42px)}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}.searchbox{display:flex;align-items:center;gap:14px;flex:1;min-height:58px;padding:0 18px;border-radius:18px;border:1px solid var(--line-soft);background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));box-shadow:var(--shadow)}.searchbox span{color:var(--teal)}.searchbox input{width:100%;background:transparent;border:0;outline:0;color:var(--text);font-size:15px;font-weight:700}.searchbox input::placeholder{color:var(--muted)}.topbar-actions{display:flex;gap:10px}.icon-btn{width:52px;height:52px;border-radius:16px;border:1px solid var(--line-soft);background:rgba(255,255,255,.04);color:var(--text);font-size:22px;cursor:pointer;transition:.18s ease}.icon-btn:hover{transform:translateY(-1px);border-color:var(--line)}
-.hero{position:relative;overflow:hidden;min-height:440px;border-radius:32px;border:1px solid var(--line);background-image:var(--hero-overlay), url("assets/hero-blue-cross.png");background-size:cover;background-position:center right;box-shadow:var(--shadow);margin-bottom:22px}
-.hero::before{content:"";position:absolute;inset:0;background-image:linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.25)), url("assets/hero-warm-cross.png");background-size:cover;background-position:center;mix-blend-mode:screen;opacity:.42}
+.hero{position:relative;overflow:hidden;min-height:440px;border-radius:32px;border:1px solid var(--line);background-image:var(--hero-overlay), image-set(url("assets/hero-blue-cross.webp") type("image/webp"), url("assets/hero-blue-cross.png") type("image/png"));background-size:cover;background-position:center right;box-shadow:var(--shadow);margin-bottom:22px}
+.hero::before{content:"";position:absolute;inset:0;background-image:linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.25)), image-set(url("assets/hero-warm-cross.webp") type("image/webp"), url("assets/hero-warm-cross.png") type("image/png"));background-size:cover;background-position:center;mix-blend-mode:screen;opacity:.42}
 body[data-theme="light"] .hero::before{opacity:.26}.hero-overlay,.hero-radial,.hero-particles{position:absolute;inset:0;pointer-events:none}.hero-radial{background:radial-gradient(circle at 20% 85%, rgba(255,173,94,.18), transparent 20rem),radial-gradient(circle at 75% 10%, rgba(41,217,208,.20), transparent 24rem)}.hero-particles{opacity:.12;background-image:radial-gradient(circle, rgba(255,255,255,.9) 1px, transparent 1px);background-size:24px 24px;mask-image:linear-gradient(180deg, rgba(0,0,0,.25), transparent 80%)}
 .hero-content{position:relative;z-index:2;max-width:760px;padding:48px clamp(26px,4vw,54px)}.hero-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.pill{display:inline-flex;align-items:center;padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.06);font-size:12px;font-weight:900}.pill.live{background:linear-gradient(135deg,#ff6c62,#ff955f);border-color:transparent;color:white}.hero-eyebrow{font-size:13px;font-weight:900;letter-spacing:.28em;margin-bottom:18px}.hero h1{margin:0;font-size:clamp(46px,5vw,78px);line-height:.93;letter-spacing:-.055em}.accent{color:var(--teal)}.nowrap{white-space:nowrap}.hero p{max-width:620px;color:var(--text);opacity:.92;font-size:18px;line-height:1.55;margin:18px 0 0}.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;font-weight:900;border-radius:16px;border:1px solid transparent;cursor:pointer;transition:.18s ease;padding:14px 18px}
 .favorites-active{background:linear-gradient(135deg,var(--teal),var(--teal-2))!important;color:#001312!important;border-color:transparent!important}
@@ -336,8 +336,8 @@ audio{display:none}
     linear-gradient(90deg, rgba(0,0,0,.82) 0%, rgba(0,0,0,.55) 38%, rgba(0,0,0,.28) 68%, rgba(0,0,0,.58) 100%),
     radial-gradient(circle at 78% 18%, rgba(87,234,228,.26), transparent 34%),
     radial-gradient(circle at 24% 12%, rgba(87,234,228,.10), transparent 25%),
-    url('assets/hero-blue-cross.png') center/cover no-repeat,
-    url('assets/hero-warm-cross.png') center/cover no-repeat !important;
+    image-set(url('assets/hero-blue-cross.webp') type('image/webp'), url('assets/hero-blue-cross.png') type('image/png')) center/cover no-repeat,
+    image-set(url('assets/hero-warm-cross.webp') type('image/webp'), url('assets/hero-warm-cross.png') type('image/png')) center/cover no-repeat !important;
   box-shadow:0 30px 80px rgba(0,0,0,.35), inset 0 0 0 1px rgba(41,217,208,.12);
 }
 .hero::after{
@@ -399,8 +399,8 @@ audio{display:none}
     radial-gradient(circle at 78% 20%, rgba(85, 236, 228, .35), transparent 26%),
     radial-gradient(circle at 82% 16%, rgba(255,255,255,.13), transparent 14%),
     radial-gradient(circle at 15% 78%, rgba(41,217,208,.14), transparent 24%),
-    url('assets/hero-blue-cross.png') center/cover no-repeat,
-    url('assets/hero-warm-cross.png') center/cover no-repeat !important;
+    image-set(url('assets/hero-blue-cross.webp') type('image/webp'), url('assets/hero-blue-cross.png') type('image/png')) center/cover no-repeat,
+    image-set(url('assets/hero-warm-cross.webp') type('image/webp'), url('assets/hero-warm-cross.png') type('image/png')) center/cover no-repeat !important;
   animation: heroPulse 16s ease-in-out infinite alternate;
 }
 @keyframes heroPulse{
@@ -6246,5 +6246,199 @@ body.player-visible #setlistDetailModal .modal-card{
   .track-actions .action-icon,
   .track-actions .download-btn{
     min-width:44px;
+  }
+}
+
+/* ============================================================
+   V95 — Modal de tom no celular: garantir que os botões
+   "Ouvir no tom" e "Baixar no tom" SEMPRE apareçam.
+   Problema: .modal-card era flex + overflow:hidden, e o conteúdo
+   crescia além da tela empurrando os botões pra fora.
+   Solução: a grid de teclas (tone-buttons) é a única área que
+   scrolla; as ações ficam fixas no rodapé do card.
+   ============================================================ */
+@media (max-width:760px){
+
+  /* O padding inferior do .modal não precisa reservar todo o player.
+     O .modal-card já tem max-height calculado; padding excessivo só
+     espreme o conteúdo verticalmente. Mantemos apenas o safe-area. */
+  .modal{
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Card vira coluna flex onde apenas a grid de tons cresce/scrolla.
+     O título, info e ações ficam fixos. */
+  #toneModal .modal-card{
+    display:flex !important;
+    flex-direction:column !important;
+    max-height:calc(100dvh - 28px - env(safe-area-inset-bottom)) !important;
+    padding:18px 14px 14px !important;
+    overflow:hidden !important;
+  }
+
+  /* Cabeçalho e info: tamanho natural, não encolhem */
+  #toneModal .kicker,
+  #toneModal h3,
+  #toneModal #toneTrackName,
+  #toneModal .tone-info-grid{
+    flex:0 0 auto !important;
+  }
+
+  /* Título e descrição mais compactos no celular */
+  #toneModal h3{
+    font-size:22px !important;
+    margin-bottom:6px !important;
+  }
+  #toneModal #toneTrackName{
+    font-size:13px !important;
+    margin-bottom:10px !important;
+  }
+  #toneModal .tone-info-grid{
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:8px !important;
+    margin-bottom:10px !important;
+  }
+  #toneModal .info-strip{
+    padding:8px 10px !important;
+    margin-bottom:0 !important;
+    font-size:12px !important;
+  }
+
+  /* A única área que scrolla: a grid das 12 tonalidades */
+  #toneModal #toneButtons{
+    flex:1 1 auto !important;
+    overflow-y:auto !important;
+    overscroll-behavior:contain !important;
+    -webkit-overflow-scrolling:touch !important;
+    min-height:120px !important;
+    margin-bottom:10px !important;
+    padding-right:4px !important;
+  }
+  #toneModal .tone-help{
+    grid-column:1 / -1 !important;
+    font-size:12px !important;
+    color:var(--muted) !important;
+    margin-bottom:6px !important;
+  }
+  #toneModal .tone-btn{
+    height:42px !important;
+    font-size:14px !important;
+  }
+  #toneModal .tone-btn small{
+    display:block !important;
+    font-size:10px !important;
+    margin-top:2px !important;
+  }
+
+  /* AÇÕES SEMPRE VISÍVEIS no rodapé do card */
+  #toneModal .modal-actions{
+    flex:0 0 auto !important;
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    gap:8px !important;
+    margin:0 !important;
+    padding-top:10px !important;
+    border-top:1px solid var(--line-soft) !important;
+  }
+  #toneModal .modal-actions .btn{
+    width:100% !important;
+    min-height:46px !important;
+    padding:10px 14px !important;
+    font-size:14px !important;
+  }
+  #toneModal .note{
+    flex:0 0 auto !important;
+    font-size:10.5px !important;
+    margin-top:6px !important;
+    line-height:1.35 !important;
+  }
+}
+
+/* Telas com altura muito reduzida (celular em paisagem) */
+@media (max-width:760px) and (max-height:560px){
+  #toneModal .tone-info-grid,
+  #toneModal #toneTrackName{
+    display:none !important;
+  }
+  #toneModal h3{
+    font-size:18px !important;
+    margin-bottom:8px !important;
+  }
+  #toneModal .modal-actions .btn{
+    min-height:42px !important;
+    font-size:13px !important;
+  }
+}
+
+/* V95 — Mesma proteção para o modal de detalhes da música (#songModal):
+   no celular, a coluna do corpo passa a ser scrollável com ações fixas. */
+@media (max-width:760px){
+  #songModal .modal-card{
+    display:flex !important;
+    flex-direction:column !important;
+    max-height:calc(100dvh - 28px - env(safe-area-inset-bottom)) !important;
+    padding:18px 14px 14px !important;
+    overflow:hidden !important;
+  }
+  #songModal .song-modal-grid{
+    display:flex !important;
+    flex-direction:column !important;
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    gap:12px !important;
+    overflow:hidden !important;
+  }
+  #songModal .song-cover-panel{
+    flex:0 0 auto !important;
+  }
+  #songModal .song-cover-panel img{
+    width:100% !important;
+    max-height:32svh !important;
+    object-fit:cover !important;
+    aspect-ratio:auto !important;
+    border-radius:16px !important;
+  }
+  #songModal .song-modal-body{
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    display:flex !important;
+    flex-direction:column !important;
+    overflow:hidden !important;
+  }
+  #songModal .song-modal-body > *{
+    flex:0 0 auto;
+  }
+  #songModal .song-modal-body h3{
+    font-size:22px !important;
+    margin:4px 0 6px !important;
+  }
+  #songModal .song-modal-body p,
+  #songModal .song-meta,
+  #songModal .tag-cluster{
+    margin-bottom:8px !important;
+  }
+  /* Espaço para crescer entre meta/tags e as ações */
+  #songModal .song-modal-body::before{
+    content:"";
+    flex:1 1 auto;
+  }
+  #songModal .modal-actions{
+    flex:0 0 auto !important;
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:8px !important;
+    margin-top:10px !important;
+    padding-top:10px !important;
+    border-top:1px solid var(--line-soft) !important;
+  }
+  #songModal .modal-actions .btn{
+    min-height:44px !important;
+    padding:10px 12px !important;
+    font-size:13px !important;
+    width:100% !important;
+  }
+  #songModal .modal-actions .btn.btn-primary{
+    grid-column:1 / -1 !important;
   }
 }

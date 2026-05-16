@@ -220,6 +220,7 @@ const el = {
   songModalMeta: document.getElementById('songModalMeta'),
   songModalTags: document.getElementById('songModalTags'),
   songModalPlay: document.getElementById('songModalPlay'),
+  songModalDownload: document.getElementById('songModalDownload'),
   songModalFavorite: document.getElementById('songModalFavorite'),
   songModalTone: document.getElementById('songModalTone'),
   songModalShare: document.getElementById('songModalShare'),
@@ -522,6 +523,23 @@ function bindEvents(){
   });
   el.songModalTone.addEventListener('click', () => { if (songModalTarget) { closeSongModal(); openToneModal(songModalTarget); } });
   el.songModalShare.addEventListener('click', () => { if (songModalTarget) shareTrack(songModalTarget); });
+  // V95 — feedback de download no modal de detalhes
+  if (el.songModalDownload) {
+    el.songModalDownload.addEventListener('click', () => {
+      if (!songModalTarget) return;
+      toast(`Baixando "${songModalTarget.name}" no tom original.`);
+      try {
+        recordUsageEvent({
+          type: 'track_downloaded',
+          trackId: songModalTarget.id,
+          trackName: songModalTarget.name,
+          tone: songModalTarget.key || '',
+          semitones: 0,
+          message: `Música "${songModalTarget.name}" baixada (tom original).`
+        });
+      } catch (_) {}
+    });
+  }
 
   if (el.tutorialStartBtn) el.tutorialStartBtn.addEventListener('click', startGuidedTour);
   if (el.tutorialPageStartBtn) el.tutorialPageStartBtn.addEventListener('click', startGuidedTour);
@@ -2172,6 +2190,27 @@ async function refreshLibraryInBackground(){
   try {
     libraryLoadingInBackground = true;
     resetProgressCounters();
+
+    // V96 — Prefere /api/library (cache de servidor); fallback ao método antigo.
+    if (useBackend()) {
+      try {
+        const resp = await fetch(`/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}`, { credentials: 'omit' });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (Array.isArray(data.tracks) && data.tracks.length) {
+            const fresh = dedupeTracksById(data.tracks);
+            allTracks = fresh;
+            saveJSON('vs_drive_cache_v79', { updatedAt: Date.now(), tracks: allTracks });
+            afterLibraryLoaded();
+            el.status.textContent = 'Biblioteca sincronizada em segundo plano.';
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Refresh via /api/library falhou, usando progressivo:', e);
+      }
+    }
+
     const freshTracks = [];
     await loadFolderProgressive(cfg.ROOT_FOLDER_ID, '', '', freshTracks, false);
     const deduped = dedupeTracksById(freshTracks);
@@ -2206,6 +2245,34 @@ async function loadLibrary(force = false){
         precacheSetlistAudios();
         refreshLibraryInBackground();
         return;
+      }
+    }
+
+    // V96 — Tenta primeiro o endpoint consolidado /api/library (mais rápido).
+    // Se falhar (servidor antigo / erro de rede), cai no método progressivo antigo.
+    if (useBackend()) {
+      try {
+        const url = `/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}${force ? '&force=1' : ''}`;
+        const resp = await fetch(url, { credentials: 'omit' });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (Array.isArray(data.tracks) && data.tracks.length) {
+            allTracks = dedupeTracksById(data.tracks);
+            saveJSON(cacheKey, { updatedAt: Date.now(), tracks: allTracks });
+            afterLibraryLoaded();
+            completeLoadingProgress();
+            el.status.textContent = data.cached
+              ? `Biblioteca carregada (${data.count} músicas, do cache do servidor).`
+              : `Biblioteca carregada (${data.count} músicas).`;
+            hideLoading();
+            precacheSetlistAudios();
+            return;
+          }
+        }
+        // Se chegou aqui, vai cair no fallback abaixo
+        console.warn('/api/library indisponível ou vazio, usando indexação progressiva.');
+      } catch (e) {
+        console.warn('Falha ao usar /api/library, fallback para indexação progressiva:', e);
       }
     }
 
@@ -3176,6 +3243,10 @@ function openSongModal(track){
   `;
   el.songModalTags.innerHTML = (track.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('');
   el.songModalFavorite.textContent = favorites.includes(track.id) ? '♥ Favorita' : '♡ Favoritar';
+  // V95 — botão de download direto no modal de detalhes
+  if (el.songModalDownload) {
+    el.songModalDownload.href = downloadUrl(track.id, track.name, 0);
+  }
   el.songModal.classList.remove('hidden');
 }
 function closeSongModal(){ el.songModal.classList.add('hidden'); }

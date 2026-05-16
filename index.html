@@ -11,6 +11,16 @@
   <link rel="icon" href="assets/logo-avida.jpg" />
   <link rel="apple-touch-icon" href="assets/logo-avida.jpg" />
   <link rel="manifest" href="manifest.json" />
+
+  <!-- V96 — Preconnect/dns-prefetch para reduzir latência da 1ª chamada ao Drive e ao Appwrite.
+       O navegador resolve DNS e abre TLS em paralelo enquanto o HTML é parseado. -->
+  <link rel="preconnect" href="https://www.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://drive.google.com" crossorigin>
+  <link rel="dns-prefetch" href="https://www.googleapis.com">
+  <link rel="dns-prefetch" href="https://drive.google.com">
+  <link rel="dns-prefetch" href="https://lh3.googleusercontent.com">
+  <link rel="dns-prefetch" href="https://fra.cloud.appwrite.io">
+
   <link rel="stylesheet" href="styles.css" />
   <script>
     if ('serviceWorker' in navigator) {
@@ -272,9 +282,9 @@
           </div>
         </div>
 <div class="palette-grid">
-          <article class="palette-card glass-lite" data-palette-id="1" data-palette-title="Paleta 1" data-palette-image="assets/palette-1.png">
+          <article class="palette-card glass-lite" data-palette-id="1" data-palette-title="Paleta 1" data-palette-image="assets/palette-1.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-1.png" alt="Paleta 1 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-1.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-1.png" alt="Paleta 1 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 1</strong>
@@ -286,9 +296,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="2" data-palette-title="Paleta 2" data-palette-image="assets/palette-2.png">
+          <article class="palette-card glass-lite" data-palette-id="2" data-palette-title="Paleta 2" data-palette-image="assets/palette-2.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-2.png" alt="Paleta 2 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-2.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-2.png" alt="Paleta 2 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 2</strong>
@@ -300,9 +310,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="3" data-palette-title="Paleta 3" data-palette-image="assets/palette-3.png">
+          <article class="palette-card glass-lite" data-palette-id="3" data-palette-title="Paleta 3" data-palette-image="assets/palette-3.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-3.png" alt="Paleta 3 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-3.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-3.png" alt="Paleta 3 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 3</strong>
@@ -314,9 +324,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="4" data-palette-title="Paleta 4" data-palette-image="assets/palette-4.png">
+          <article class="palette-card glass-lite" data-palette-id="4" data-palette-title="Paleta 4" data-palette-image="assets/palette-4.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-4.png" alt="Paleta 4 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-4.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-4.png" alt="Paleta 4 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 4</strong>
@@ -328,9 +338,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="5" data-palette-title="Paleta 5" data-palette-image="assets/palette-5.png">
+          <article class="palette-card glass-lite" data-palette-id="5" data-palette-title="Paleta 5" data-palette-image="assets/palette-5.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-5.png" alt="Paleta 5 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-5.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-5.png" alt="Paleta 5 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 5</strong>
@@ -342,9 +352,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="6" data-palette-title="Paleta 6" data-palette-image="assets/palette-6.png">
+          <article class="palette-card glass-lite" data-palette-id="6" data-palette-title="Paleta 6" data-palette-image="assets/palette-6.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-6.png" alt="Paleta 6 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-6.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-6.png" alt="Paleta 6 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 6</strong>
@@ -356,9 +366,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="7" data-palette-title="Paleta 7" data-palette-image="assets/palette-7.png">
+          <article class="palette-card glass-lite" data-palette-id="7" data-palette-title="Paleta 7" data-palette-image="assets/palette-7.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-7.png" alt="Paleta 7 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-7.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-7.png" alt="Paleta 7 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 7</strong>
@@ -370,9 +380,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="8" data-palette-title="Paleta 8" data-palette-image="assets/palette-8.png">
+          <article class="palette-card glass-lite" data-palette-id="8" data-palette-title="Paleta 8" data-palette-image="assets/palette-8.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-8.png" alt="Paleta 8 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-8.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-8.png" alt="Paleta 8 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 8</strong>
@@ -384,9 +394,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="9" data-palette-title="Paleta 9" data-palette-image="assets/palette-9.png">
+          <article class="palette-card glass-lite" data-palette-id="9" data-palette-title="Paleta 9" data-palette-image="assets/palette-9.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-9.png" alt="Paleta 9 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-9.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-9.png" alt="Paleta 9 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 9</strong>
@@ -398,9 +408,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="10" data-palette-title="Paleta 10" data-palette-image="assets/palette-10.png">
+          <article class="palette-card glass-lite" data-palette-id="10" data-palette-title="Paleta 10" data-palette-image="assets/palette-10.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-10.png" alt="Paleta 10 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-10.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-10.png" alt="Paleta 10 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 10</strong>
@@ -412,9 +422,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="11" data-palette-title="Paleta 11" data-palette-image="assets/palette-11.png">
+          <article class="palette-card glass-lite" data-palette-id="11" data-palette-title="Paleta 11" data-palette-image="assets/palette-11.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-11.png" alt="Paleta 11 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-11.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-11.png" alt="Paleta 11 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 11</strong>
@@ -426,9 +436,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="12" data-palette-title="Paleta 12" data-palette-image="assets/palette-12.png">
+          <article class="palette-card glass-lite" data-palette-id="12" data-palette-title="Paleta 12" data-palette-image="assets/palette-12.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-12.png" alt="Paleta 12 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-12.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-12.png" alt="Paleta 12 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 12</strong>
@@ -440,9 +450,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="13" data-palette-title="Paleta 13" data-palette-image="assets/palette-13.png">
+          <article class="palette-card glass-lite" data-palette-id="13" data-palette-title="Paleta 13" data-palette-image="assets/palette-13.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-13.png" alt="Paleta 13 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-13.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-13.png" alt="Paleta 13 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 13</strong>
@@ -454,9 +464,9 @@
               </div>
             </div>
           </article>
-          <article class="palette-card glass-lite" data-palette-id="14" data-palette-title="Paleta 14" data-palette-image="assets/palette-14.png">
+          <article class="palette-card glass-lite" data-palette-id="14" data-palette-title="Paleta 14" data-palette-image="assets/palette-14.webp">
             <div class="palette-thumb-wrap">
-              <img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-14.png" alt="Paleta 14 - uniforme do culto">
+              <picture><source type="image/webp" srcset="assets/palette-14.webp"><img loading="lazy" decoding="async" class="palette-thumb" src="assets/palette-14.png" alt="Paleta 14 - uniforme do culto"></picture>
             </div>
             <div class="palette-card-body">
               <strong>Paleta 14</strong>
@@ -779,8 +789,9 @@
           <div id="songModalTags" class="tag-cluster"></div>
           <div class="modal-actions">
             <button id="songModalPlay" class="btn btn-primary">▶ Tocar agora</button>
-            <button id="songModalFavorite" class="btn btn-secondary">♡ Favoritar</button>
+            <a id="songModalDownload" class="btn btn-secondary" href="#" download>⤓ Baixar tom original</a>
             <button id="songModalTone" class="btn btn-secondary">Alterar tom</button>
+            <button id="songModalFavorite" class="btn btn-secondary">♡ Favoritar</button>
             <button id="songModalShare" class="btn btn-secondary">Compartilhar</button>
           </div>
         </div>

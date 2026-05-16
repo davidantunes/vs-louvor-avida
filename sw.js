@@ -1,7 +1,7 @@
 /* Service Worker — Biblioteca de Louvor Igreja Amor e Vida
-   v94 — cache offline para reduzir tempo de carregamento no celular */
+   v96 — performance pack (gzip, webp, preconnect, /api/library cache) */
 
-const SW_VERSION = 'v94.0.0';
+const SW_VERSION = 'v96.0.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;

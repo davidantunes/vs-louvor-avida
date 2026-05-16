@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const fetch = require('node-fetch');
 const { spawn } = require('child_process');
 const ffmpeg = require('ffmpeg-static');
@@ -6,6 +7,18 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// V96 — Compressão gzip/brotli automática para HTML, CSS, JS, JSON.
+// Reduz ~80% do tráfego de texto. Não comprime áudio (já comprimido).
+app.use(compression({
+  // threshold padrão é 1KB; reduzimos um pouco para pegar mais arquivos pequenos
+  threshold: 512,
+  // Não comprime se o cliente pediu explicitamente para não comprimir
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  }
+}));
 
 // Em produção, prefira definir GOOGLE_DRIVE_API_KEY nas variáveis de ambiente.
 // A chave abaixo está como fallback porque o projeto já foi configurado para você.
@@ -269,6 +282,168 @@ app.get('/api/drive', async (req, res) => {
     console.error(error);
     res.status(500).send('Erro ao consultar Google Drive.');
   }
+});
+
+/* ===== V96 — /api/library: indexação consolidada com cache no servidor =====
+   Antes: o cliente fazia 1 request por pasta (recursivo), N requests em série.
+   Agora: o servidor varre o Drive uma vez, cacheia em memória por 30 minutos,
+   e o cliente recebe TODO o catálogo em uma única chamada. Cliente que ainda
+   usar /api/drive continua funcionando (compatibilidade). */
+
+const LIBRARY_TTL_MS = 30 * 60 * 1000;
+let libraryCache = null;       // { tracks, builtAt, rootId }
+let libraryBuildPromise = null; // dedupe de chamadas concorrentes
+
+async function listFolder(folderId) {
+  const out = [];
+  let pageToken = '';
+  do {
+    const params = new URLSearchParams({
+      key: API_KEY,
+      q: `'${folderId}' in parents and trashed=false`,
+      fields: 'nextPageToken, files(id,name,mimeType,webViewLink)',
+      pageSize: '1000',
+      orderBy: 'folder,name'
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const response = await fetch(`${GOOGLE_API}?${params}`);
+    if (!response.ok) throw new Error(`Drive ${response.status}: ${await response.text()}`);
+    const data = await response.json();
+    out.push(...(data.files || []));
+    pageToken = data.nextPageToken || '';
+  } while (pageToken);
+  return out;
+}
+
+const AUDIO_EXT = ['mp3','wav','m4a','aac','ogg','flac','wma'];
+const IMAGE_EXT = ['jpg','jpeg','png','webp'];
+function getExt(name){ const m = String(name).toLowerCase().match(/\.([a-z0-9]+)$/); return m ? m[1] : ''; }
+function cleanTrackName(name){ return name.replace(/\.[^/.]+$/, '').replace(/[_]+/g,' ').replace(/\s+/g,' ').trim(); }
+function detectKey(fileName){
+  // Extrai tom no final do nome ex: "Música - D.mp3", "Música - Em.mp3"
+  const base = fileName.replace(/\.[^/.]+$/, '');
+  const m = base.match(/[-–—]\s*([A-G][#b♯♭]?m?)\s*$/i);
+  return m ? m[1].toUpperCase().replace('♯','#').replace('♭','b') : '';
+}
+
+async function buildLibrary(rootFolderId) {
+  // Recursão BFS com paralelização limitada (até 4 pastas simultâneas)
+  const tracks = [];
+  const seen = new Set();
+  // Mapa de capa: para cada pasta, achamos a 1ª imagem como capa de todas as músicas dela
+  async function walk(folderId, singerName, inheritedCover) {
+    const files = await listFolder(folderId);
+    const audioFiles = files.filter(f =>
+      f.mimeType !== 'application/vnd.google-apps.folder' &&
+      AUDIO_EXT.includes(getExt(f.name))
+    );
+    const imageFiles = files.filter(f =>
+      f.mimeType !== 'application/vnd.google-apps.folder' &&
+      IMAGE_EXT.includes(getExt(f.name))
+    );
+    const subfolders = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+    const cover = imageFiles.length
+      ? `/api/audio/${encodeURIComponent(imageFiles[0].id)}` // backend já serve mídia binária
+      : inheritedCover;
+    for (const f of audioFiles) {
+      if (seen.has(f.id)) continue;
+      seen.add(f.id);
+      tracks.push({
+        id: f.id,
+        fileName: f.name,
+        name: cleanTrackName(f.name),
+        singer: singerName || 'Diversos',
+        ext: getExt(f.name),
+        key: detectKey(f.name),
+        tags: [],
+        coverUrl: cover || ''
+      });
+    }
+    // Paraleliza subpastas (no máx 4 ao mesmo tempo)
+    const queue = [...subfolders];
+    const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+      while (queue.length) {
+        const folder = queue.shift();
+        if (!folder) break;
+        await walk(folder.id, singerName || folder.name, cover);
+      }
+    });
+    await Promise.all(workers);
+  }
+  await walk(rootFolderId, '', '');
+  tracks.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+  return tracks;
+}
+
+app.get('/api/library', async (req, res) => {
+  try {
+    if (!requireApiKey(res)) return;
+    const rootId = req.query.rootId || req.query.folderId;
+    if (!rootId) return res.status(400).json({ error: 'rootId obrigatório.' });
+
+    const now = Date.now();
+    const fresh = libraryCache &&
+                  libraryCache.rootId === rootId &&
+                  (now - libraryCache.builtAt) < LIBRARY_TTL_MS;
+
+    if (fresh && !req.query.force) {
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800');
+      res.setHeader('X-Library-Cache', 'hit');
+      return res.json({
+        tracks: libraryCache.tracks,
+        builtAt: libraryCache.builtAt,
+        count: libraryCache.tracks.length,
+        cached: true
+      });
+    }
+
+    // Dedupe: se outro request já está rebuildando, espera ele
+    if (!libraryBuildPromise) {
+      libraryBuildPromise = (async () => {
+        try {
+          const tracks = await buildLibrary(rootId);
+          libraryCache = { tracks, builtAt: Date.now(), rootId };
+          return tracks;
+        } finally {
+          libraryBuildPromise = null;
+        }
+      })();
+    }
+    const tracks = await libraryBuildPromise;
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800');
+    res.setHeader('X-Library-Cache', 'miss');
+    res.json({
+      tracks,
+      builtAt: libraryCache.builtAt,
+      count: tracks.length,
+      cached: false
+    });
+  } catch (error) {
+    console.error('Erro em /api/library:', error);
+    // Em caso de erro, devolve último cache se houver
+    if (libraryCache) {
+      res.setHeader('X-Library-Cache', 'stale-on-error');
+      return res.json({
+        tracks: libraryCache.tracks,
+        builtAt: libraryCache.builtAt,
+        count: libraryCache.tracks.length,
+        cached: true,
+        stale: true,
+        error: error.message
+      });
+    }
+    res.status(500).json({ error: error.message || 'Erro ao indexar biblioteca.' });
+  }
+});
+
+// Health check leve, útil para pings de uptime gratuitos (cron-job.org / UptimeRobot)
+app.get('/healthz', (req, res) => {
+  res.json({
+    ok: true,
+    libraryCached: !!libraryCache,
+    libraryAge: libraryCache ? (Date.now() - libraryCache.builtAt) : null,
+    libraryCount: libraryCache ? libraryCache.tracks.length : 0
+  });
 });
 
 app.get('/api/audio/:id', async (req, res) => {

@@ -1,4 +1,80 @@
-# VS Louvor — Igreja Amor e Vida — V94 PWA mobile + cache de áudios + card otimizado
+# VS Louvor — Igreja Amor e Vida — V96 Performance pack (todas otimizações grátis)
+
+## O que entra na V96
+
+### Resumo de impacto
+- Páginas/CSS/JS: **~80% menos tráfego** (gzip).
+- Paletas de roupa: **27 MB → 1,4 MB** total (WebP -95%).
+- Indexação da biblioteca: **N requests sequenciais → 1 request com cache no servidor**.
+- Primeira chamada ao Drive: **~200–400 ms a menos** (preconnect).
+- Servidor pode ficar acordado 24/7 sem upgrade (instruções de keep-alive).
+
+### 1) Compressão gzip/brotli (`compression` middleware)
+- Adicionada dependência `compression@1.7.4`.
+- HTML, CSS, JS, JSON e SVG agora trafegam comprimidos automaticamente.
+- Medição local: `styles.css` 197KB → 34KB (-83%), `app.js` 149KB → 35KB (-76%).
+- Áudios não são comprimidos (já são formato comprimido).
+
+### 2) WebP para paletas e heroes (com fallback PNG)
+- Convertidas as 14 paletas de cor (`palette-1.png` a `palette-14.png`) para WebP com qualidade 82.
+- Tamanhos: cada paleta caiu de ~2 MB para ~100 KB.
+- HTML usa `<picture><source type="image/webp"><img ...PNG fallback></picture>` — navegador moderno baixa só o WebP, navegador antigo cai no PNG.
+- Heroes da página inicial (`hero-blue-cross.png`, `hero-warm-cross.png`) convertidos também, usando CSS `image-set()` para o `background-image`.
+- Os arquivos `.png` originais foram **mantidos** para o link "Abrir imagem" (que oferece a paleta full-quality para download/print) e como fallback.
+
+### 3) Endpoint `/api/library` consolidado com cache no servidor
+- Antes: o cliente fazia N chamadas sequenciais a `/api/drive` (uma por subpasta), recursivamente. Em biblioteca com 30 cantores, isso virava ~50 requests em série.
+- Agora: o servidor varre o Drive uma vez, monta o catálogo completo, cacheia em memória por **30 minutos**, e devolve tudo em **um único request**.
+- O endpoint paraleliza até 4 subpastas simultâneas, reduzindo o tempo de build em si.
+- O cliente tenta `/api/library` primeiro; se falhar (offline, erro), faz fallback automático para o método progressivo antigo.
+- Para forçar rebuild: `GET /api/library?rootId=...&force=1`.
+- Header `X-Library-Cache: hit|miss|stale-on-error` para debug.
+
+### 4) Preconnect e dns-prefetch
+- Adicionados no `<head>` para `googleapis.com`, `drive.google.com`, `lh3.googleusercontent.com` e `fra.cloud.appwrite.io`.
+- O navegador resolve DNS e abre TLS em paralelo com o parse do HTML.
+- Ganho típico: 200–400ms na primeira chamada a cada um desses serviços.
+
+### 5) Endpoint `/healthz` para keep-alive
+- `GET /healthz` retorna JSON pequeno com status do servidor e idade do cache da biblioteca.
+- Use isso para **manter o serviço acordado no plano free do Render** (que dorme depois de 15min sem tráfego).
+
+#### Configurando keep-alive grátis no cron-job.org
+1. Crie conta grátis em https://cron-job.org
+2. Crie um job:
+   - URL: `https://vs-louvor-avida.onrender.com/healthz`
+   - Schedule: a cada 14 minutos
+   - Failure notification: opcional
+3. Salve. Pronto — o servidor não dorme mais.
+
+Alternativa: UptimeRobot grátis (50 monitores, intervalo mínimo 5 min) em https://uptimerobot.com
+
+### Mudanças menores
+- Versão do Service Worker bumpada para `v96.0.0` (força refresh automático nos celulares).
+- Header `Vary: Accept-Encoding` adicionado automaticamente pelo middleware de compressão (necessário para caches HTTP funcionarem corretamente).
+
+---
+
+# Versão anterior — V95 Modais sem corte no celular
+
+## O que entra na V95
+
+### Modal "Alterar tom" no celular
+- Antes: em telefones, o modal estourava a altura da tela e cortava no meio do botão "Ouvir no tom original", de forma que "Baixar tom original" ficava invisível.
+- Agora o `.modal-card` é um flex column onde só a grid das 12 tonalidades scrolla. O bloco de ações ("Ouvir neste tom", "Baixar neste tom", "Adicionar ao repertório neste tom") fica fixo no rodapé do card, sempre visível, com separador discreto.
+- Padding inferior reservado para o player foi reduzido — o `max-height` do card já garante que ele não fica atrás do mini-player.
+- Tipografia e info-strips do header ficaram mais compactos no mobile para sobrar espaço para os botões.
+- Em paisagem (`max-height: 560px`), o título encolhe e os info-strips somem para garantir a visibilidade dos botões.
+
+### Modal "Detalhes da música" no celular
+- Mesma proteção flex-column com ações fixas no rodapé.
+- Adicionado botão **⤓ Baixar tom original** entre "Tocar agora" e "Alterar tom".
+- A capa quadrada virou retangular com `max-height: 32svh` para não comer a tela.
+- As 5 ações ficam em grid 2 colunas no mobile, com "Tocar agora" ocupando a linha inteira no topo.
+
+---
+
+# Versão anterior — V94 PWA mobile + cache de áudios + card otimizado
 
 ## O que entra na V94
 
