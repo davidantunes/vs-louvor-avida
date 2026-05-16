@@ -1970,46 +1970,157 @@ function formatKeyLabel(key){
   return `${normalized} (${name}${minor ? ' menor' : ''})`;
 }
 
+// V98 — versão curta para botões compactos do toneModal:
+// "C# (dó sustenido)" é longo demais para 3 colunas no celular.
+// Aqui retornamos "C# (dó#)" — claro, curto e cabe em 1 linha.
+function formatKeyLabelShort(key){
+  if (!key || key === '—') return '—';
+  const normalized = normalizeKeyToken(key);
+  const minor = /m$/.test(normalized);
+  const base = normalized.replace(/m$/,'');
+  const namesShort = {
+    'C':'dó',  'C#':'dó#',
+    'D':'ré',  'D#':'ré#',
+    'E':'mi',
+    'F':'fá',  'F#':'fá#',
+    'G':'sol', 'G#':'sol#',
+    'A':'lá',  'A#':'lá#',
+    'B':'si'
+  };
+  const name = namesShort[base] || '';
+  if (!name) return normalized;
+  return `${normalized} (${name}${minor ? 'm' : ''})`;
+}
+
 function detectKey(text){
-  const raw = String(text || '')
-    .replace(/\.[a-z0-9]+$/i, '')
+  // V99 — Detecção robusta de tom no nome do arquivo.
+  // Suporta:
+  //   - Notação inglesa: C, D, E, F, G, A, B (com #, b, e m para menor)
+  //   - Notação portuguesa: dó, ré, mi, fá, sol, lá, si (com #, sustenido, b, bemol, m, menor)
+  //   - Prefixos: "Tom", "Tom de", "Tone", "Key", "em" (apenas quando seguido de tom)
+  //   - Localização preferencial: final do nome, ou entre parênteses, ou após hífen.
+  //   - Evita falsos positivos com a palavra "em" e com vogais isoladas no início.
+  const rawWithExt = String(text || '');
+  const raw = rawWithExt
+    .replace(/\.[a-z0-9]+$/i, '')  // tira extensão
     .replace(/[♯]/g, '#')
     .replace(/[♭]/g, 'b')
     .trim();
 
-  const s = raw.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  // Versão sem acentos para regex (mas guardamos a com acento para detectar "dó", "fá" etc.)
+  const noAccents = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+  // --- 1) Tentar notação portuguesa explícita ---
+  // dó, ré, mi, fá, sol, lá, si — com modificadores opcionais.
+  const PT_NAMES = {
+    'do':'C', 're':'D', 'mi':'E', 'fa':'F', 'sol':'G', 'la':'A', 'si':'B'
+  };
+  // V99 — Regex sem acentos. # cola direto (sem espaço); sustenido/bemol com espaço opcional.
+  const ptRegex = /\b(do|re|mi|fa|sol|la|si)(#|b\b|\s*sustenido|\s*bemol)?(\s*menor|\s*maior|m\b)?/gi;
+  const ptMatches = [];
+  let ptMatch;
+  while ((ptMatch = ptRegex.exec(noAccents)) !== null) {
+    const note = PT_NAMES[ptMatch[1].toLowerCase()];
+    if (!note) continue;
+    let suffix = '';
+    if (ptMatch[2]) {
+      const mod = ptMatch[2].trim().toLowerCase();
+      if (mod === '#' || mod === 'sustenido') suffix = '#';
+      else if (mod === 'b' || mod === 'bemol') suffix = 'b';
+    }
+    const minor = ptMatch[3] && /m|menor/i.test(ptMatch[3]) ? 'm' : '';
+    ptMatches.push({ key: note + suffix + minor, index: ptMatch.index, raw: ptMatch[0] });
+  }
+  // V99 — Filtros:
+  //   a) PT só vale se vier após contexto "tom"/"em"/"key", OU se aparecer no final do nome.
+  //   b) Filtra preposições portuguesas comuns: "do"/"da" (de "Casa do Pai").
+  //      Não filtra se vier explicitamente após "Tom" ou "em" — aí é nota mesmo.
+  const ptValid = ptMatches.filter(m => {
+    const before = noAccents.slice(0, m.index).toLowerCase();
+    const after = noAccents.slice(m.index + m.raw.length).toLowerCase();
+    const followsContext = /(tom\s*(?:de)?|tone|key|em)\s*[:=\-]?\s*$/.test(before);
+    const isAtEnd = m.index + m.raw.length >= noAccents.length - 6;
+
+    if (followsContext) return true;
+
+    // Sem contexto explícito: rejeita "do"/"da" quando seguido de palavra (preposição)
+    const lowerRaw = m.raw.toLowerCase().trim();
+    if (lowerRaw === 'do' || lowerRaw === 'da') {
+      const isolated = /^[\s\)\]\}]*$/.test(after) && /[\s\(\[\{\-]$/.test(before);
+      if (!isolated) return false;
+    }
+
+    return isAtEnd;
+  });
+  if (ptValid.length) {
+    // Pega a última (mais provavelmente o tom oficial no final do nome)
+    return normalizeKeyToken(ptValid[ptValid.length - 1].key);
+  }
+
+  // --- 2) Notação inglesa com prefixo explícito "Tom X", "Tom de X", "Key X" ---
   const token = '(?:C#|Db|D#|Eb|F#|Gb|G#|Ab|A#|Bb|A|B|C|D|E|F|G)(?:m)?';
-
-  const explicit = new RegExp(`(?:tom|tone|key)\\s*[:=\\-]?\\s*(${token})(?=$|[\\s_\\-\\)\\]\\}])`, 'i');
-  const explicitMatch = s.match(explicit);
+  const explicit = new RegExp(
+    `\\b(?:tom\\s+de|tom|tone|key)\\s*[:=\\-]?\\s*(${token})(?=$|[\\s_\\-\\.\\)\\]\\}])`,
+    'i'
+  );
+  const explicitMatch = noAccents.match(explicit);
   if (explicitMatch) return normalizeKeyToken(explicitMatch[1]);
 
+  // --- 3) Notação inglesa solta, entre delimitadores ---
+  // Reconhece o tom quando: vem após "(", "[", "-", " ", "_", ou início; e
+  // termina em fim/separador. IMPORTANTE: filtra a palavra "em" e vogais isoladas.
   const matches = [];
-  const re = new RegExp(`(^|[\\s_\\-\\(\\[\\{])(${token})(?=$|[\\s_\\-\\)\\]\\}])`, 'gi');
+  const re = new RegExp(`(^|[\\s_\\-\\(\\[\\{])(${token})(?=$|[\\s_\\-\\.\\)\\]\\}])`, 'gi');
   let match;
-  while ((match = re.exec(s)) !== null) {
+  while ((match = re.exec(noAccents)) !== null) {
     const sep = match[1] || '';
     const key = match[2];
     const index = match.index + sep.length;
     const end = index + key.length;
-    const after = s.slice(end);
-    const nextNonSpace = after.trimStart().charAt(0);
+    const before = noAccents.slice(0, index);
+    const after = noAccents.slice(end);
 
-    // Evita falso positivo em títulos como "A Ele a Glória", onde "A" é artigo/palavra inicial.
-    const startsAtBeginning = index === 0;
-    const nextIsOnlyWhitespaceThenWord = /^\s+[A-Za-z]/.test(after);
-    const nextIsSeparator = /^\s*[-_)\]\}]/.test(after) || after.length === 0;
+    // V99 — Filtros para reduzir falsos positivos:
+    //  a) Não considerar "em" (a palavra em português aparece muito em títulos).
+    //     Se o token capturado for "Em" e ele NÃO estiver em fim de linha nem
+    //     seguido de separador imediato, ignora.
+    if (/^em$/i.test(key)) {
+      const trimmedAfter = after.trimStart();
+      const looksLikeWord = /^[a-zA-Z]/.test(trimmedAfter); // "em casa", "em Cristo"
+      if (looksLikeWord) continue;
+    }
 
-    if (startsAtBeginning && nextIsOnlyWhitespaceThenWord && !nextIsSeparator) continue;
+    //  b) Tokens de uma letra (A, B, C, D, E, F, G) no INÍCIO do nome são
+    //     suspeitos: "A Ele a Glória", "B-Day", "D-Day". Só aceitamos no
+    //     início se o tom estiver entre parênteses/colchetes ou seguido de
+    //     separador "-" ou número (bpm).
+    if (key.length === 1 && index === 0) {
+      const okStartContext = /^\s*[\-\(\[\{]/.test(after) || /^\s*\d/.test(after.trimStart());
+      if (!okStartContext) continue;
+    }
 
-    matches.push({ key, index });
+    //  c) Token de uma letra solta no meio: aceita só se vier após "-", "(", "[", "{".
+    if (key.length === 1 && sep !== '' && !/[\-\(\[\{]/.test(sep)) {
+      // Permite se for o ÚLTIMO token do nome (acabou ou só tem espaços/dígitos depois)
+      const trailingOk = /^\s*(\d|$)/.test(after);
+      if (!trailingOk) continue;
+    }
+
+    matches.push({ key, index, end });
   }
 
   if (!matches.length) return '—';
 
-  // Prioriza o último tom encontrado, pois normalmente o arquivo vem como "Nome da música - D".
-  return normalizeKeyToken(matches[matches.length - 1].key);
+  // V99 — Heurística: prioriza tons que estão no FINAL do nome (mais provavelmente
+  // são o tom oficial), depois os que vêm entre parênteses, depois o resto.
+  matches.sort((a, b) => {
+    const aAtEnd = a.end >= noAccents.length - 8 ? 0 : 1;
+    const bAtEnd = b.end >= noAccents.length - 8 ? 0 : 1;
+    if (aAtEnd !== bAtEnd) return aAtEnd - bAtEnd;
+    return b.index - a.index; // último primeiro
+  });
+
+  return normalizeKeyToken(matches[0].key);
 }
 function suggestTags(t){
   const text = normalize(`${t.name} ${t.singer} ${t.fileName}`);
@@ -2238,7 +2349,16 @@ async function loadLibrary(force = false){
     if (!force) {
       const cached = loadJSON(cacheKey, null);
       if (cached && Array.isArray(cached.tracks) && cached.tracks.length) {
-        allTracks = dedupeTracksById(cached.tracks);
+        // V99 — reaplica detectKey sobre o cache antigo. Versões anteriores tinham
+        // detecção mais fraca, então músicas que estavam com key="" ou "—" podem
+        // ter o tom recuperado direto do nome do arquivo. Não toca em tons já bons.
+        allTracks = dedupeTracksById(cached.tracks).map(t => {
+          if (!t.key || t.key === '—' || t.key === '') {
+            const recovered = detectKey(`${t.name || ''} ${t.fileName || ''}`);
+            if (recovered && recovered !== '—') return { ...t, key: recovered };
+          }
+          return t;
+        });
         afterLibraryLoaded();
         el.status.textContent = 'Biblioteca carregada do cache. Atualizando em segundo plano...';
         hideLoading();
@@ -2307,13 +2427,33 @@ async function loadLibrary(force = false){
 // V94 — Remove músicas duplicadas pelo mesmo id do Drive (mantém a 1ª ocorrência).
 function dedupeTracksById(tracks){
   if (!Array.isArray(tracks)) return [];
-  const seen = new Set();
+  // V99 — Dupla desduplicação:
+  //   1) Por id do Drive (mesmo arquivo aparecendo 2x na indexação).
+  //   2) Por nome normalizado de arquivo: se a MESMA música foi colocada em
+  //      duas pastas diferentes (ids diferentes), preferimos a primeira.
+  const seenIds = new Set();
+  const seenNames = new Set();
   const out = [];
+  let dupedByName = 0;
   for (const t of tracks) {
     if (!t || !t.id) continue;
-    if (seen.has(t.id)) continue;
-    seen.add(t.id);
+    if (seenIds.has(t.id)) continue;
+    const normalizedFileName = String(t.fileName || t.name || '')
+      .toLowerCase()
+      .replace(/\.[a-z0-9]+$/, '')   // tira extensão
+      .replace(/[\s_\-]+/g, ' ')       // normaliza separadores
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (normalizedFileName && seenNames.has(normalizedFileName)) {
+      dupedByName++;
+      continue;
+    }
+    seenIds.add(t.id);
+    if (normalizedFileName) seenNames.add(normalizedFileName);
     out.push(t);
+  }
+  if (dupedByName > 0 && typeof console !== 'undefined') {
+    console.info(`[dedupe] ${dupedByName} duplicata(s) por nome de arquivo removida(s).`);
   }
   return out;
 }
@@ -2770,18 +2910,18 @@ function openToneModal(track){
   el.toneCurrent.textContent = parsed.base ? formatKeyLabel(`${originalBase}${suffix}`) : 'Não detectado';
   if (el.toneSelected) el.toneSelected.textContent = parsed.base ? formatKeyLabel(`${originalBase}${suffix}`) : 'Escolha o tom';
 
-  const helper = parsed.base
-    ? '<div class="tone-help">Escolha o tom desejado.</div>'
-    : '<div class="tone-help">Escolha o tom desejado. (Tom original não detectado — inclua o tom no nome do arquivo para maior precisão.)</div>';
+  const helper = '<div class="tone-help">Escolha o tom desejado.</div>';
 
   el.toneButtons.innerHTML = helper + CHROMATIC_KEYS.map(key => {
     const semitone = calculateShortestShift(originalIndex >= 0 ? originalIndex : 0, CHROMATIC_KEYS.indexOf(key));
     const label = `${key}${suffix}`;
     const isOriginal = parsed.base && key === originalBase;
+    // V98 — Nome curto + semitom em UMA linha. Ex: "C (dó) -1" ou "E (mi) original"
+    const semitoneLabel = semitone === 0 ? 'original' : `${semitone > 0 ? '+' : ''}${semitone}`;
     return `
-      <button class="tone-btn ${isOriginal ? 'active original' : ''}" data-key="${key}" data-step="${semitone}">
-        ${formatKeyLabel(label)}
-        <small>${semitone === 0 ? 'original' : `${semitone > 0 ? '+' : ''}${semitone}`}</small>
+      <button class="tone-btn tone-btn-inline ${isOriginal ? 'active original' : ''}" data-key="${key}" data-step="${semitone}">
+        <span class="tone-btn-name">${formatKeyLabelShort(label)}</span>
+        <span class="tone-btn-step">${semitoneLabel}</span>
       </button>
     `;
   }).join('');

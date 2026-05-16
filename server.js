@@ -319,18 +319,107 @@ const AUDIO_EXT = ['mp3','wav','m4a','aac','ogg','flac','wma'];
 const IMAGE_EXT = ['jpg','jpeg','png','webp'];
 function getExt(name){ const m = String(name).toLowerCase().match(/\.([a-z0-9]+)$/); return m ? m[1] : ''; }
 function cleanTrackName(name){ return name.replace(/\.[^/.]+$/, '').replace(/[_]+/g,' ').replace(/\s+/g,' ').trim(); }
-function detectKey(fileName){
-  // Extrai tom no final do nome ex: "Música - D.mp3", "Música - Em.mp3"
-  const base = fileName.replace(/\.[^/.]+$/, '');
-  const m = base.match(/[-–—]\s*([A-G][#b♯♭]?m?)\s*$/i);
-  return m ? m[1].toUpperCase().replace('♯','#').replace('♭','b') : '';
+function normalizeKeyToken(token){
+  if (!token) return '';
+  let key = String(token).trim().replace('♯','#').replace('♭','b');
+  const minor = /m$/i.test(key);
+  key = key.replace(/m$/i,'');
+  const flatMap = { Db:'C#', Eb:'D#', Gb:'F#', Ab:'G#', Bb:'A#' };
+  const proper = key.charAt(0).toUpperCase() + key.slice(1);
+  const normalized = flatMap[proper] || proper.toUpperCase();
+  return normalized + (minor ? 'm' : '');
+}
+
+// V99 — detectKey idêntico ao do app.js para garantir consistência.
+function detectKey(text){
+  const raw = String(text || '')
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[♯]/g, '#')
+    .replace(/[♭]/g, 'b')
+    .trim();
+  const noAccents = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  const PT_NAMES = {
+    'do':'C', 're':'D', 'mi':'E', 'fa':'F', 'sol':'G', 'la':'A', 'si':'B'
+  };
+  const ptRegex = /\b(do|re|mi|fa|sol|la|si)(#|b\b|\s*sustenido|\s*bemol)?(\s*menor|\s*maior|m\b)?/gi;
+  const ptMatches = [];
+  let ptMatch;
+  while ((ptMatch = ptRegex.exec(noAccents)) !== null) {
+    const note = PT_NAMES[ptMatch[1].toLowerCase()];
+    if (!note) continue;
+    let suffix = '';
+    if (ptMatch[2]) {
+      const mod = ptMatch[2].trim().toLowerCase();
+      if (mod === '#' || mod === 'sustenido') suffix = '#';
+      else if (mod === 'b' || mod === 'bemol') suffix = 'b';
+    }
+    const minor = ptMatch[3] && /m|menor/i.test(ptMatch[3]) ? 'm' : '';
+    ptMatches.push({ key: note + suffix + minor, index: ptMatch.index, raw: ptMatch[0] });
+  }
+  const ptValid = ptMatches.filter(m => {
+    const before = noAccents.slice(0, m.index).toLowerCase();
+    const after = noAccents.slice(m.index + m.raw.length).toLowerCase();
+    const followsContext = /(tom\s*(?:de)?|tone|key|em)\s*[:=\-]?\s*$/.test(before);
+    const isAtEnd = m.index + m.raw.length >= noAccents.length - 6;
+    if (followsContext) return true;
+    const lowerRaw = m.raw.toLowerCase().trim();
+    if (lowerRaw === 'do' || lowerRaw === 'da') {
+      const isolated = /^[\s\)\]\}]*$/.test(after) && /[\s\(\[\{\-]$/.test(before);
+      if (!isolated) return false;
+    }
+    return isAtEnd;
+  });
+  if (ptValid.length) {
+    return normalizeKeyToken(ptValid[ptValid.length - 1].key);
+  }
+
+  const token = '(?:C#|Db|D#|Eb|F#|Gb|G#|Ab|A#|Bb|A|B|C|D|E|F|G)(?:m)?';
+  const explicit = new RegExp(
+    `\\b(?:tom\\s+de|tom|tone|key)\\s*[:=\\-]?\\s*(${token})(?=$|[\\s_\\-\\.\\)\\]\\}])`,
+    'i'
+  );
+  const explicitMatch = noAccents.match(explicit);
+  if (explicitMatch) return normalizeKeyToken(explicitMatch[1]);
+
+  const matches = [];
+  const re = new RegExp(`(^|[\\s_\\-\\(\\[\\{])(${token})(?=$|[\\s_\\-\\.\\)\\]\\}])`, 'gi');
+  let match;
+  while ((match = re.exec(noAccents)) !== null) {
+    const sep = match[1] || '';
+    const key = match[2];
+    const index = match.index + sep.length;
+    const end = index + key.length;
+    const after = noAccents.slice(end);
+    if (/^em$/i.test(key)) {
+      const trimmedAfter = after.trimStart();
+      if (/^[a-zA-Z]/.test(trimmedAfter)) continue;
+    }
+    if (key.length === 1 && index === 0) {
+      const okStartContext = /^\s*[\-\(\[\{]/.test(after) || /^\s*\d/.test(after.trimStart());
+      if (!okStartContext) continue;
+    }
+    if (key.length === 1 && sep !== '' && !/[\-\(\[\{]/.test(sep)) {
+      if (!/^\s*(\d|$)/.test(after)) continue;
+    }
+    matches.push({ key, index, end });
+  }
+  if (!matches.length) return '';  // servidor retorna '' (não '—') para deixar cliente formatar
+  matches.sort((a, b) => {
+    const aAtEnd = a.end >= noAccents.length - 8 ? 0 : 1;
+    const bAtEnd = b.end >= noAccents.length - 8 ? 0 : 1;
+    if (aAtEnd !== bAtEnd) return aAtEnd - bAtEnd;
+    return b.index - a.index;
+  });
+  return normalizeKeyToken(matches[0].key);
 }
 
 async function buildLibrary(rootFolderId) {
   // Recursão BFS com paralelização limitada (até 4 pastas simultâneas)
   const tracks = [];
   const seen = new Set();
-  // Mapa de capa: para cada pasta, achamos a 1ª imagem como capa de todas as músicas dela
+  const seenNames = new Set();
+  let dupedByName = 0;
   async function walk(folderId, singerName, inheritedCover) {
     const files = await listFolder(folderId);
     const audioFiles = files.filter(f =>
@@ -343,11 +432,23 @@ async function buildLibrary(rootFolderId) {
     );
     const subfolders = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
     const cover = imageFiles.length
-      ? `/api/audio/${encodeURIComponent(imageFiles[0].id)}` // backend já serve mídia binária
+      ? `/api/audio/${encodeURIComponent(imageFiles[0].id)}`
       : inheritedCover;
     for (const f of audioFiles) {
       if (seen.has(f.id)) continue;
+      // V99 — desduplicação extra por nome normalizado
+      const normalizedName = String(f.name)
+        .toLowerCase()
+        .replace(/\.[a-z0-9]+$/, '')
+        .replace(/[\s_\-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (normalizedName && seenNames.has(normalizedName)) {
+        dupedByName++;
+        continue;
+      }
       seen.add(f.id);
+      if (normalizedName) seenNames.add(normalizedName);
       tracks.push({
         id: f.id,
         fileName: f.name,
@@ -359,7 +460,6 @@ async function buildLibrary(rootFolderId) {
         coverUrl: cover || ''
       });
     }
-    // Paraleliza subpastas (no máx 4 ao mesmo tempo)
     const queue = [...subfolders];
     const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
       while (queue.length) {
@@ -371,6 +471,7 @@ async function buildLibrary(rootFolderId) {
     await Promise.all(workers);
   }
   await walk(rootFolderId, '', '');
+  if (dupedByName > 0) console.log(`[library] ${dupedByName} duplicata(s) por nome removida(s).`);
   tracks.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
   return tracks;
 }
@@ -438,11 +539,42 @@ app.get('/api/library', async (req, res) => {
 
 // Health check leve, útil para pings de uptime gratuitos (cron-job.org / UptimeRobot)
 app.get('/healthz', (req, res) => {
+  let withKey = 0, withoutKey = 0;
+  if (libraryCache && libraryCache.tracks) {
+    for (const t of libraryCache.tracks) {
+      if (t.key && t.key !== '—' && t.key !== '') withKey++;
+      else withoutKey++;
+    }
+  }
   res.json({
     ok: true,
     libraryCached: !!libraryCache,
     libraryAge: libraryCache ? (Date.now() - libraryCache.builtAt) : null,
-    libraryCount: libraryCache ? libraryCache.tracks.length : 0
+    libraryCount: libraryCache ? libraryCache.tracks.length : 0,
+    keyDetection: {
+      withKey,
+      withoutKey,
+      pct: libraryCache && libraryCache.tracks.length
+        ? Math.round((withKey / libraryCache.tracks.length) * 100)
+        : 0
+    }
+  });
+});
+
+// V99 — Endpoint diagnóstico: lista as músicas SEM tom detectado.
+// Útil para o David ver quais nomes precisam ser ajustados no Drive.
+app.get('/api/diagnostics/missing-keys', (req, res) => {
+  if (!libraryCache) {
+    return res.json({ ready: false, message: 'Biblioteca ainda não foi indexada. Acesse /api/library?rootId=...' });
+  }
+  const missing = libraryCache.tracks
+    .filter(t => !t.key || t.key === '—' || t.key === '')
+    .map(t => ({ id: t.id, fileName: t.fileName, singer: t.singer }));
+  res.json({
+    ready: true,
+    total: libraryCache.tracks.length,
+    missingCount: missing.length,
+    missing
   });
 });
 

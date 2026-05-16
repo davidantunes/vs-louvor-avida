@@ -1,4 +1,80 @@
-# VS Louvor — Igreja Amor e Vida — V97 Ajustes finos dos modais no celular
+# VS Louvor — Igreja Amor e Vida — V99 Detecção de tom robusta + desduplicação dupla
+
+## O que entra na V99
+
+### 1) Detecção de tom muito mais robusta
+A função `detectKey` foi reescrita com mais de 40 casos de teste. Agora detecta:
+
+**Notação inglesa:** `C`, `C#`, `Db`, `D`, `D#`, `Eb`, `E`, `F`, `F#`, `Gb`, `G`, `G#`, `Ab`, `A`, `A#`, `Bb`, `B` — com ou sem `m` para menor.
+
+**Notação portuguesa:** `dó`, `ré`, `mi`, `fá`, `sol`, `lá`, `si` — com modificadores escritos por extenso: `sustenido`, `bemol`, `menor`, `maior`.
+
+**Prefixos:** `Tom X`, `Tom de X`, `Tone X`, `Key X`, `em X`.
+
+**Posições:**
+- Final do nome: `Música - Tom E.mp3`, `Música - E 80bpm.mp3`, `Música - E.mp3`.
+- Entre parênteses: `Música (E).mp3`, `Música (Tom A).mp3`, `Música (Em).mp3`.
+- Direto colado: `Música -TomE`.
+
+**Falsos positivos eliminados:**
+- `A Casa do Pai.mp3` → não detecta (era pegar "do" como C).
+- `Em Tua Presença.mp3` → não detecta (era pegar "Em" como E menor).
+- `Em Espírito e em Verdade.mp3` → não detecta.
+- `A Ele a Glória.mp3` → não detecta (era pegar o "A" inicial).
+- "Casa do Pai - Tom F#" → detecta F# (não confunde com "do" preposição).
+
+**Cobertura final dos testes:** 40 de 40 casos. ✓
+
+A mesma lógica está em `app.js` (cliente) e em `server.js` (`/api/library`).
+
+### 2) Desduplicação dupla
+Antes a desduplicação era só por `id` do Drive. Agora:
+- **Por id**: arquivo aparecendo duas vezes na indexação (caso raro de recursão).
+- **Por nome normalizado**: se uma mesma música foi colocada em duas pastas diferentes do Drive (ids diferentes), só a primeira é mantida. Normalização: minúsculas, sem extensão, espaços/`_`/`-` virando espaço único.
+- Quantidade de duplicatas removidas é logada no console do servidor e do navegador.
+
+### 3) Reaplicação automática de detectKey no cache do cliente
+- Quando o navegador carrega o cache antigo do Drive (de versões anteriores), a v99 reaplica `detectKey` sobre cada música que ainda está sem tom.
+- Recupera tons que estavam vazios sem precisar fazer um refresh completo do servidor.
+- Não toca em tons que já foram detectados corretamente.
+
+### 4) Endpoints diagnósticos
+- `GET /healthz` agora retorna `keyDetection: { withKey, withoutKey, pct }`. Você pode acompanhar quantas músicas têm tom detectado.
+- `GET /api/diagnostics/missing-keys` retorna a lista completa de músicas sem tom, com `id`, `fileName` e `singer`. Útil para rever os nomes no Drive.
+
+### Recomendação de uso
+Após subir a v99 no Render:
+1. Abrir `https://vs-louvor-avida.onrender.com/healthz` — você vai ver `pct: 100` (ou bem perto).
+2. Se sobrar alguma sem tom, abrir `https://vs-louvor-avida.onrender.com/api/diagnostics/missing-keys` para ver quais arquivos precisam ter o nome ajustado no Drive.
+3. No app, clicar no botão de "Atualizar biblioteca" no header — força refresh com a nova lógica.
+
+---
+
+# Versão anterior — V98 Tons compactos + modal mais limpo
+
+## O que entra na V98
+
+### Modal "Alterar tom"
+- **Removida** a nota técnica "O download transposto usa o backend Node + FFmpeg...".
+- **Helper sempre curto**: agora é só "Escolha o tom desejado." em qualquer situação (antes ficava maior quando o tom original não era detectado).
+- **Botões de tom em uma linha só**: cada botão agora mostra o nome + semitom **na mesma linha**. Exemplos:
+  - "C (dó) −4"
+  - "E (mi) original"
+  - "C# (dó#) +1"
+  - "G# (sol#) +3"
+- Nomes "sustenido" foram encurtados para `#` no apelido entre parênteses (`dó#`, `ré#`, `fá#`, `sol#`, `lá#`) — fica claro, curto, e cabe na linha.
+- Tons menores aparecem como "Dm (ré m)" em vez de "D (ré menor)".
+- Botões agora têm `min-height: 46px` no mobile padrão e `52px` no desktop — área de toque maior e mais confortável.
+- Em celulares estreitos (≤ 380px), os botões empilham nome em cima e semitom embaixo (mas em fontes maiores que antes).
+
+### Resultado prático
+- Sumiram **2 blocos de texto** que ocupavam ~50px verticais (a nota técnica + a 2ª linha do helper).
+- Os botões de tom ganharam altura (≥ 46px) sem precisar empilhar o nome do tom em duas linhas.
+- O modal todo cabe na tela em iPhones modernos sem rolar nada.
+
+---
+
+# Versão anterior — V97 Ajustes finos dos modais no celular
 
 ## O que entra na V97
 

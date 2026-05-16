@@ -6556,3 +6556,90 @@ body.player-visible #setlistDetailModal .modal-card{
     font-size:11.5px !important;
   }
 }
+
+/* ============================================================
+   V98 — Botões de tom em formato INLINE compacto:
+   nome curto + número de semitom em UMA linha por botão.
+   Ex: "C (dó) −1"  /  "E (mi) original"  /  "C# (dó#) +2"
+   ============================================================ */
+
+.tone-btn-inline{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:6px !important;
+  flex-wrap:nowrap !important;
+  white-space:nowrap !important;
+  padding:0 8px !important;
+  text-align:center !important;
+  line-height:1.1 !important;
+}
+.tone-btn-inline .tone-btn-name{
+  font-weight:900;
+  font-size:14px;
+  line-height:1;
+}
+.tone-btn-inline .tone-btn-step{
+  font-weight:700;
+  font-size:11px;
+  opacity:.7;
+  line-height:1;
+  letter-spacing:0.02em;
+}
+.tone-btn-inline.active .tone-btn-step{
+  opacity:.85;
+  color:inherit;
+}
+
+/* MOBILE — 3 colunas, botões altos o suficiente para nome + semitom */
+@media (max-width:760px){
+  #toneModal #toneButtons{
+    grid-template-columns:repeat(3, minmax(0, 1fr)) !important;
+    gap:7px !important;
+  }
+  .tone-btn-inline{
+    height:auto !important;
+    min-height:46px !important;
+    padding:8px 6px !important;
+    gap:5px !important;
+    flex-direction:row !important;
+    flex-wrap:wrap !important;
+  }
+  .tone-btn-inline .tone-btn-name{
+    font-size:13px;
+  }
+  .tone-btn-inline .tone-btn-step{
+    font-size:11px;
+  }
+}
+
+/* Celulares estreitos (≤ 380px): empilha nome em cima, semitom embaixo,
+   mas em fontes maiores que o antigo (mantém legível). */
+@media (max-width:380px){
+  #toneModal #toneButtons{
+    gap:5px !important;
+  }
+  .tone-btn-inline{
+    flex-direction:column !important;
+    gap:2px !important;
+    padding:6px 4px !important;
+    min-height:44px !important;
+  }
+  .tone-btn-inline .tone-btn-name{
+    font-size:12.5px;
+  }
+  .tone-btn-inline .tone-btn-step{
+    font-size:10px;
+  }
+}
+
+/* Telas com altura confortável: pode usar 4 colunas e botões mais espaçados */
+@media (min-width:761px){
+  #toneModal #toneButtons{
+    grid-template-columns:repeat(4, minmax(0, 1fr)) !important;
+    gap:8px !important;
+  }
+  .tone-btn-inline{
+    min-height:52px !important;
+  }
+}
