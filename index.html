@@ -2,10 +2,23 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Biblioteca de Louvor — Igreja Amor e Vida</title>
+  <meta name="theme-color" content="#0a1014" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Louvor Ávida" />
   <link rel="icon" href="assets/logo-avida.jpg" />
+  <link rel="apple-touch-icon" href="assets/logo-avida.jpg" />
+  <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="styles.css" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
 </head>
 <body data-theme="dark">
   <div class="bg-blur bg-blur-a"></div>

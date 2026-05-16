@@ -13,7 +13,31 @@ const API_KEY = process.env.GOOGLE_DRIVE_API_KEY || '';
 const GOOGLE_API = 'https://www.googleapis.com/drive/v3/files';
 
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(__dirname));
+
+// O Service Worker e o Manifest precisam ser servidos sem cache forte
+// para que atualizações cheguem rápido aos celulares.
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.sendFile(path.join(__dirname, 'sw.js'));
+});
+
+app.get('/manifest.json', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+  res.sendFile(path.join(__dirname, 'manifest.json'));
+});
+
+app.use(express.static(__dirname, {
+  setHeaders: (res, filePath) => {
+    // Assets podem ser cacheados longamente (o navegador valida com ETag).
+    if (/\.(png|jpg|jpeg|webp|svg|gif|woff2?|ttf|eot)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    } else if (/\.(css|js)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
+    }
+  }
+}));
 
 
 // Appwrite backend integration (V28B)
@@ -268,6 +292,14 @@ app.get('/api/audio/:id', async (req, res) => {
     if (contentLength) res.setHeader('Content-Length', contentLength);
     if (contentRange) res.setHeader('Content-Range', contentRange);
     if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
+
+    // Cache longo no navegador/SW: áudios são imutáveis por id do Drive.
+    // Quando é range (206), evitamos cachear (resposta parcial).
+    if (response.status === 200 && !req.headers.range) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'no-store');
+    }
 
     if (req.query.download) {
       const filename = req.query.filename || 'audio.mp3';

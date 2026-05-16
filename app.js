@@ -1500,6 +1500,12 @@ function saveFavoritesState(){
 function saveSetlistsState(){
   saveJSON('vs_setlists_v1', setlists);
   setSharedState('setlists', setlists).catch(err => console.warn('Repertórios não sincronizados:', err));
+  // V94 — quando o repertório muda, refaz o pré-cache das músicas e re-renderiza
+  // para que as músicas dos repertórios apareçam primeiro na biblioteca.
+  try {
+    if (typeof precacheSetlistAudios === 'function') precacheSetlistAudios();
+    if (libraryLoaded && typeof render === 'function') render();
+  } catch (_) {}
 }
 
 function saveUsageHistoryState(){
@@ -2168,9 +2174,10 @@ async function refreshLibraryInBackground(){
     resetProgressCounters();
     const freshTracks = [];
     await loadFolderProgressive(cfg.ROOT_FOLDER_ID, '', '', freshTracks, false);
-    freshTracks.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
-    if (freshTracks.length) {
-      allTracks = freshTracks;
+    const deduped = dedupeTracksById(freshTracks);
+    deduped.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
+    if (deduped.length) {
+      allTracks = deduped;
       saveJSON('vs_drive_cache_v79', { updatedAt: Date.now(), tracks: allTracks });
       afterLibraryLoaded();
       el.status.textContent = 'Biblioteca sincronizada em segundo plano.';
@@ -2192,10 +2199,11 @@ async function loadLibrary(force = false){
     if (!force) {
       const cached = loadJSON(cacheKey, null);
       if (cached && Array.isArray(cached.tracks) && cached.tracks.length) {
-        allTracks = cached.tracks;
+        allTracks = dedupeTracksById(cached.tracks);
         afterLibraryLoaded();
         el.status.textContent = 'Biblioteca carregada do cache. Atualizando em segundo plano...';
         hideLoading();
+        precacheSetlistAudios();
         refreshLibraryInBackground();
         return;
       }
@@ -2213,17 +2221,77 @@ async function loadLibrary(force = false){
     }, 1400);
 
     await loadFolderProgressive(cfg.ROOT_FOLDER_ID, '', '', allTracks, true);
+    allTracks = dedupeTracksById(allTracks);
     allTracks.sort((a,b) => a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
     saveJSON(cacheKey, { updatedAt: Date.now(), tracks: allTracks });
     afterLibraryLoaded();
     completeLoadingProgress();
     el.status.textContent = 'Biblioteca carregada';
     hideLoading();
+    precacheSetlistAudios();
   } catch (error) {
     console.error(error);
     hideLoading();
     el.status.textContent = 'Erro ao carregar a biblioteca';
     el.trackList.innerHTML = `<div class="empty">${esc(error.message || 'Erro ao carregar')}</div>`;
+  }
+}
+
+// V94 — Remove músicas duplicadas pelo mesmo id do Drive (mantém a 1ª ocorrência).
+function dedupeTracksById(tracks){
+  if (!Array.isArray(tracks)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const t of tracks) {
+    if (!t || !t.id) continue;
+    if (seen.has(t.id)) continue;
+    seen.add(t.id);
+    out.push(t);
+  }
+  return out;
+}
+
+// V94 — Conjunto de ids de música que estão em ALGUM repertório (priorização).
+function getSetlistTrackIdSet(){
+  const ids = new Set();
+  for (const s of (setlists || [])) {
+    for (const entry of (s.trackIds || [])) {
+      const id = getSetlistEntryTrackId(entry);
+      if (id) ids.add(id);
+    }
+  }
+  return ids;
+}
+
+// V94 — Pede ao Service Worker para baixar e cachear os áudios das músicas
+// que estão em repertórios. Roda em segundo plano, em pequenas levas, sem travar o app.
+let precachingInFlight = false;
+async function precacheSetlistAudios(){
+  if (precachingInFlight) return;
+  if (!('serviceWorker' in navigator)) return;
+  const reg = await navigator.serviceWorker.getRegistration().catch(() => null);
+  const sw = reg && (reg.active || reg.waiting);
+  if (!sw) return;
+
+  const ids = getSetlistTrackIdSet();
+  if (!ids.size) return;
+
+  // Só pré-baixa se estiver em wifi/rede boa. Em conexão lenta, deixa sob demanda.
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (conn && (conn.saveData || /2g/i.test(conn.effectiveType || ''))) return;
+
+  precachingInFlight = true;
+  try {
+    const urls = [];
+    for (const t of allTracks) {
+      if (ids.has(t.id)) urls.push(driveUrl(t.id));
+      if (urls.length >= 60) break; // segurança: no máx 60 por sessão
+    }
+    if (urls.length) sw.postMessage({ type: 'PRECACHE_AUDIOS', urls });
+  } catch (_) {
+    // silencioso
+  } finally {
+    setTimeout(() => { precachingInFlight = false; }, 30000);
   }
 }
 
@@ -2286,7 +2354,7 @@ function clearFilters(){
 
 function getFiltered(){
   const q = normalize(el.search.value);
-  return allTracks.filter(t => {
+  const result = allTracks.filter(t => {
     if (isFavoritesFilter && !favorites.includes(t.id)) return false;
     if (el.musicFilter.value && t.name !== el.musicFilter.value) return false;
     if (el.keyFilter.value && t.key !== el.keyFilter.value) return false;
@@ -2296,6 +2364,21 @@ function getFiltered(){
     const blob = normalize(`${t.name} ${t.singer} ${t.fileName} ${(t.tags||[]).join(' ')} ${t.key}`);
     return blob.includes(q);
   });
+
+  // V94 — Quando não há busca textual ativa, priorizar músicas dos repertórios
+  // (carregam primeiro na biblioteca, já cacheadas pelo SW = abertura instantânea).
+  if (!q) {
+    const setlistIds = getSetlistTrackIdSet();
+    if (setlistIds.size) {
+      result.sort((a, b) => {
+        const aIn = setlistIds.has(a.id) ? 0 : 1;
+        const bIn = setlistIds.has(b.id) ? 0 : 1;
+        if (aIn !== bIn) return aIn - bIn;
+        return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
+      });
+    }
+  }
+  return result;
 }
 
 function isMobileMusicView(){
@@ -2391,6 +2474,8 @@ function renderTrackCard(t){
   const isInActiveSetlist = activeSetlist ? isTrackPresentInSetlist(activeSetlist, t.id) : false;
   const setlistTitle = activeSetlist ? `Adicionar a este repertório: ${activeSetlist.name}` : 'Adicionar ao repertório';
   const setlistLabel = activeSetlist ? 'Adicionar a este repertório' : 'Adicionar ao repertório';
+  // V94 — Download direto sempre disponível no card (tom original).
+  const downloadHref = downloadUrl(t.id, t.name, 0);
   return `
     <article class="track-card ${isInActiveSetlist ? 'track-in-active-setlist' : ''}" data-id="${esc(t.id)}">
       <div class="track-head">
@@ -2408,10 +2493,11 @@ function renderTrackCard(t){
       <div class="tag-wrap">${(t.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
       <div class="track-actions ${activeSetlist ? 'has-active-setlist' : ''}">
         <button class="action-btn primary play-btn" data-id="${esc(t.id)}" aria-label="Tocar" title="Tocar"></button>
-        <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar">${fav ? '♥' : '♡'}</button>
-        <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom">♬</button>
+        <a class="action-icon download-btn" href="${esc(downloadHref)}" download data-id="${esc(t.id)}" data-name="${esc(t.name)}" title="Baixar música" aria-label="Baixar música">⤓</a>
+        <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom" aria-label="Alterar tom">♬</button>
+        <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar" aria-label="Favoritar">${fav ? '♥' : '♡'}</button>
         <button class="action-icon setlist-btn ${activeSetlist ? 'is-active-target' : ''} ${isInActiveSetlist ? 'is-already-added' : ''}" data-id="${esc(t.id)}" title="${esc(setlistTitle)}" data-tooltip="${esc(setlistLabel)}" aria-label="${esc(setlistTitle)}"><span class="action-icon-glyph">${isInActiveSetlist ? '✓' : '+'}</span><span class="action-icon-label"></span></button>
-        <button class="action-icon detail-btn" data-id="${esc(t.id)}" title="Ver detalhes">⋯</button>
+        <button class="action-icon detail-btn" data-id="${esc(t.id)}" title="Ver detalhes" aria-label="Ver detalhes">⋯</button>
       </div>
     </article>
   `;
@@ -2449,6 +2535,28 @@ function bindTrackCardEvents(container){
   container.querySelectorAll('.detail-btn:not([data-bound])').forEach(btn => {
     btn.dataset.bound = '1';
     btn.addEventListener('click', () => openSongModal(findTrack(btn.dataset.id)));
+  });
+
+  // V94 — Download direto no card (tom original). O <a download> dispara o download,
+  // só damos feedback ao usuário e registramos no histórico.
+  container.querySelectorAll('.download-btn:not([data-bound])').forEach(btn => {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+      const t = findTrack(btn.dataset.id);
+      if (t) {
+        toast(`Baixando "${t.name}" no tom original.`);
+        try {
+          recordUsageEvent({
+            type: 'track_downloaded',
+            trackId: t.id,
+            trackName: t.name,
+            tone: t.key || '',
+            semitones: 0,
+            message: `Música "${t.name}" baixada (tom original).`
+          });
+        } catch (_) {}
+      }
+    });
   });
 }
 

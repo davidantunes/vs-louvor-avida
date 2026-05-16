@@ -1,4 +1,46 @@
-# VS Louvor — Igreja Amor e Vida — V19 Tom alterado visível + textos padronizados
+# VS Louvor — Igreja Amor e Vida — V94 PWA mobile + cache de áudios + card otimizado
+
+## O que entra na V94
+
+### 1) Cache offline das músicas no celular (PWA)
+- Novo arquivo `sw.js` (Service Worker) com 3 estratégias de cache:
+  - **Shell** (HTML/CSS/JS/manifest/logo): stale-while-revalidate.
+  - **Áudios** (`/api/audio/:id` e arquivos .mp3/.m4a etc): cache-first com LRU de até 300 músicas.
+  - **APIs do Appwrite e listagem do Drive**: network-first com fallback ao cache (abre offline).
+- Após o primeiro acesso, as músicas tocam direto do disco do celular — sem rebaixar.
+- `manifest.json` torna o sistema instalável como app na tela inicial (Android e iOS).
+- `index.html` agora registra o SW automaticamente e tem `theme-color` + `apple-touch-icon`.
+
+### 2) Pré-carregamento priorizado por repertório
+- Ao abrir a biblioteca, as músicas que estão em **qualquer repertório** aparecem primeiro na grid.
+- Em segundo plano, o SW recebe um `postMessage('PRECACHE_AUDIOS', urls)` e baixa silenciosamente até 60 músicas dos repertórios — respeitando `saveData` e conexões 2G.
+- Quando um repertório é criado, editado ou recebe uma música nova, o pré-cache é refeito automaticamente.
+
+### 3) Desduplicação da biblioteca
+- `dedupeTracksById()` aplica `Set` por `track.id` em todo carregamento (cache local, indexação inicial e refresh em background).
+- Acaba o problema de músicas repetidas quando a indexação reentrava.
+
+### 4) Cards de música redesenhados para mobile
+- Card ocupa quase a tela inteira no celular (`min-height: calc(100svh - 220px)`).
+- Capa quadrada grande no topo, ideal para o ensaio/culto onde o ministro precisa identificar a música de longe.
+- Nova linha de ações de 6 botões na mesma fileira: **Tocar | Baixar | Tom | Favoritar | + | ⋯**
+- Botão **Baixar (⤓)** agora vive no próprio card e funciona sempre, mesmo no tom original (antes só existia dentro do modal de tom).
+- Botões com altura reduzida (42px no mobile, 40px em telas <380px) para caberem em uma linha.
+- Ícone "+" do repertório centralizado corretamente (correção de off-center).
+
+### 5) Headers de cache no backend
+- `/api/audio/:id` retorna `Cache-Control: public, max-age=2592000, immutable` quando não é range request — assim o SW (e o navegador) podem guardar o áudio inteiro.
+- Range requests (206) continuam com `Cache-Control: no-store` para não corromper o cache com fatias parciais.
+- `/sw.js` é servido com `Cache-Control: no-cache` para que atualizações cheguem ao celular imediatamente.
+
+### Notas operacionais
+- O cache de áudios tem teto de **300 entradas** por dispositivo (~1–1.5 GB típico). Quando passa, o SW remove as entradas mais antigas (FIFO simples).
+- O usuário pode forçar refresh apertando "Atualizar biblioteca" (já existia) — isso limpa o cache do Drive em localStorage, mas não o cache de áudios. Para limpar áudios, é possível enviar `postMessage('CLEAR_AUDIO_CACHE')` ao SW (futuro botão de configuração).
+- O Service Worker só funciona em **HTTPS** ou `localhost`. No Render isso já é HTTPS por padrão.
+
+---
+
+# Histórico anterior — V19 Tom alterado visível + textos padronizados
 
 ## O que entra na V10
 
