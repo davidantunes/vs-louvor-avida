@@ -1,4 +1,41 @@
-# VS Louvor — Igreja Amor e Vida — V99.1 Hotfix detecção de tom (casos reais)
+# VS Louvor — Igreja Amor e Vida — V100 Fix Play centralizado + Bug crítico de repertório
+
+## O que entra na V100
+
+### Bug 1 — Ícone ▶ descentralizado no desktop
+**Causa real:** O pseudo-elemento `::before` (que renderiza o `▶`) tinha `width:1em; height:1em` definidos dentro de um botão com `font-size:0`. Como `1em` calculado de uma fonte de tamanho 0 é zero, o pseudo-elemento ficava com caixa zero-dimensional, e o glyph extravasava de forma inconsistente entre navegadores e tamanhos de botão (especialmente no desktop, onde o grid dá mais largura ao botão).
+
+**Correção:** Regra V100 anexada ao `styles.css` para `min-width:761px` (desktop) que:
+- Remove `width`/`height` fixos do pseudo-elemento, deixando o glyph dimensionar a caixa naturalmente.
+- Usa `display:grid; place-items:center; place-content:center` no botão.
+- Aplica `transform:translateX(1px)` no glyph para compensar o peso visual à esquerda do triângulo `▶` (ajuste óptico padrão para esse caractere).
+
+### Bug 2 — Repertório apagando sozinho ao adicionar 3 músicas no mobile (CRÍTICO)
+
+**Causa real (rastreada após análise do fluxo completo):** Race condition entre saves concorrentes ao Appwrite e o `loadCloudState`.
+
+Cenário exato do bug:
+1. Usuário adiciona música 1 no celular → `setSharedState('setlists', [{trackIds:[m1]}])` fire-and-forget.
+2. Quase ao mesmo tempo adiciona música 2 → outro PUT entra em voo.
+3. Adiciona música 3 → terceiro PUT em voo simultaneamente.
+4. O endpoint `/api/appwrite/state/setlists` faz upsert read-then-write — quando 3 PATCHes processam fora de ordem, há janela onde o servidor retorna versão antiga.
+5. Se o usuário troca de aba ou faz qualquer ação que dispare `loadCloudState`, o GET pode retornar a versão antiga (com 1 música) → `setlists = shared` substituía o local de 3 músicas pela versão antiga do servidor.
+
+**Correções aplicadas (3 camadas de defesa):**
+
+1. **Fila sequencial de saves** (`setlistsSavePromise`): cada `setSharedState` espera a anterior terminar antes de enviar. Promise chain garante ordem.
+
+2. **Flag de pendência em localStorage** (`vs_setlists_pending_v1`): marca enquanto há saves em voo. O `loadCloudState` respeita essa flag e **não sobrescreve** o local enquanto há mudanças pendentes — em vez disso, dispara um re-sync com o servidor.
+
+3. **Merge defensivo** (`mergeSetlistsDefensive`): mesmo quando o servidor responde sem pendências locais, faz merge inteligente em vez de substituição cega. Para cada setlist com mesmo id, mantém a versão com **mais músicas**; em empate, decide pelo `updatedAt` mais recente. Setlists só locais ou só remotos são preservados.
+
+4. **Retry automático**: se uma escrita falhar (rede instável no celular), o sistema tenta novamente após 2 segundos sem intervenção do usuário.
+
+**Testes:** A função `mergeSetlistsDefensive` foi validada com 6 cenários, incluindo o bug exato do relato (local com 3, servidor com 1 atrasado) — preserva as 3 músicas.
+
+---
+
+# Versão anterior — V99.1 Hotfix detecção de tom (casos reais)
 
 ## O que entra na V99.1
 

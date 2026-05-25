@@ -6643,3 +6643,46 @@ body.player-visible #setlistDetailModal .modal-card{
     min-height:52px !important;
   }
 }
+
+/* ============================================================
+   V100 — Centralização correta do ícone ▶ no botão Play do desktop.
+   Causa do bug: o ::before tinha `width:1em; height:1em` enquanto o
+   pai tem `font-size:0`. 1em de 0 = 0, então o pseudo-elemento ficava
+   com caixa zero-dimensional e o glyph extravasava de forma inconsistente.
+   Solução: remover width/height do ::before, deixar o conteúdo dimensionar
+   a caixa naturalmente, e usar grid place-items no pai para centralizar.
+   ============================================================ */
+@media (min-width:761px){
+  .track-actions .play-btn,
+  .track-actions .action-btn.primary.play-btn,
+  .track-grid .track-actions .play-btn{
+    display:grid !important;
+    place-items:center !important;
+    place-content:center !important;
+    padding:0 18px !important;
+    font-size:0 !important;
+    line-height:1 !important;
+    min-width:64px !important;
+    text-align:center !important;
+  }
+  .track-actions .play-btn::before,
+  .track-actions .action-btn.primary.play-btn::before,
+  .track-grid .track-actions .play-btn::before{
+    content:"▶" !important;
+    display:block !important;
+    width:auto !important;
+    height:auto !important;
+    margin:0 !important;
+    padding:0 !important;
+    font-size:16px !important;
+    line-height:1 !important;
+    font-weight:900 !important;
+    transform:translateX(1px); /* ajuste óptico: ▶ tem peso visual à esquerda */
+    text-align:center !important;
+  }
+  .track-actions .play-btn::after,
+  .track-grid .track-actions .play-btn::after{
+    content:none !important;
+    display:none !important;
+  }
+}

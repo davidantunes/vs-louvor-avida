@@ -1027,7 +1027,23 @@ async function loadCloudState(){
       getSharedState('monthlySchedule'),
       getSharedState('usageHistory')
     ]);
-    if (Array.isArray(shared)) setlists = shared;
+
+    // V100 — Proteção anti-perda de dados:
+    // Se o usuário fez alterações LOCAIS depois do último sync bem-sucedido com o servidor,
+    // NÃO sobrescrevemos com o que veio do servidor — porque o que veio do servidor pode
+    // ser uma versão antiga (request anterior que estava em voo, ou patch que ainda não
+    // foi aplicado em sequência).
+    if (Array.isArray(shared)) {
+      const localPendingFlag = loadJSON('vs_setlists_pending_v1', false);
+      if (localPendingFlag) {
+        console.info('[setlists] Mudanças locais pendentes detectadas — preservando estado local e re-sincronizando.');
+        setSharedState('setlists', setlists).catch(err => console.warn('Resync pendente falhou:', err));
+      } else {
+        // V100 — Merge defensivo: preserva trackIds locais se servidor devolveu menos.
+        // Isso protege contra o cenário "PATCH atrasado sobrescreveu PATCH mais recente".
+        setlists = mergeSetlistsDefensive(setlists, shared);
+      }
+    }
     if (Array.isArray(userState)) favorites = userState;
     if (Array.isArray(cloudMembers) && cloudMembers.length) members = normalizeMembers(cloudMembers);
     if (Array.isArray(cloudSchedule) && cloudSchedule.length) scheduleRows = normalizeScheduleRows(cloudSchedule);
@@ -1055,6 +1071,46 @@ async function getSharedState(key){
   const data = await res.json();
   return data.value;
 }
+// V100 — Merge defensivo de setlists local + remoto.
+// Para cada setlist com mesmo id, escolhe a versão com MAIS músicas
+// (mais provável de ser a mais recente). Para setlists só locais ou só remotos,
+// preserva ambos. Protege contra race conditions onde o servidor responde com
+// versão antiga durante adições rápidas no mobile.
+function mergeSetlistsDefensive(local, remote){
+  if (!Array.isArray(local)) return remote;
+  if (!Array.isArray(remote)) return local;
+  const byId = new Map();
+  // Indexa remote
+  for (const r of remote) {
+    if (r && r.id) byId.set(r.id, { remote: r, local: null });
+  }
+  // Indexa local — sobrepõe ou adiciona
+  for (const l of local) {
+    if (!l || !l.id) continue;
+    const entry = byId.get(l.id) || { remote: null, local: null };
+    entry.local = l;
+    byId.set(l.id, entry);
+  }
+  const merged = [];
+  for (const { local: l, remote: r } of byId.values()) {
+    if (l && r) {
+      // Pega o que tem mais tracks; em empate, prefere o mais recente updatedAt
+      const lCount = (l.trackIds || []).length;
+      const rCount = (r.trackIds || []).length;
+      if (lCount > rCount) merged.push(l);
+      else if (rCount > lCount) merged.push(r);
+      else {
+        const lAt = Date.parse(l.updatedAt || '') || 0;
+        const rAt = Date.parse(r.updatedAt || '') || 0;
+        merged.push(lAt >= rAt ? l : r);
+      }
+    } else {
+      merged.push(l || r);
+    }
+  }
+  return merged;
+}
+
 async function setSharedState(key, value){
   if (!authUser) return;
   const res = await fetch(`/api/appwrite/state/${encodeURIComponent(key)}`, {
@@ -1515,11 +1571,41 @@ function saveFavoritesState(){
   saveJSON('vs_favorites_v1', favorites);
   setUserState('favorites', favorites).catch(err => console.warn('Favoritos não sincronizados:', err));
 }
+// V100 — Fila sequencial para escrita de setlists no Appwrite.
+// Antes: saveSetlistsState disparava setSharedState fire-and-forget. Se o usuário
+// adicionava várias músicas em sequência (mobile, comum), múltiplos PUTs entravam
+// em voo simultaneamente. O servidor processa cada PUT como upsert (read-then-write),
+// criando race condition que podia fazer um PATCH antigo sobrescrever um PATCH novo.
+// Agora: serializamos as escritas com um Promise chain — só uma escrita por vez.
+let setlistsSavePromise = Promise.resolve();
+let setlistsPendingCount = 0;
+
+function flushSetlistsPending(){
+  setlistsPendingCount = Math.max(0, setlistsPendingCount - 1);
+  if (setlistsPendingCount === 0) {
+    saveJSON('vs_setlists_pending_v1', false);
+  }
+}
+
 function saveSetlistsState(){
   saveJSON('vs_setlists_v1', setlists);
-  setSharedState('setlists', setlists).catch(err => console.warn('Repertórios não sincronizados:', err));
-  // V94 — quando o repertório muda, refaz o pré-cache das músicas e re-renderiza
-  // para que as músicas dos repertórios apareçam primeiro na biblioteca.
+  // V100 — marca que tem alterações pendentes (lida em loadCloudState para evitar overwrite)
+  setlistsPendingCount += 1;
+  saveJSON('vs_setlists_pending_v1', true);
+  // V100 — Serializa as escritas: cada chamada espera a anterior antes de enviar.
+  // Sempre envia o `setlists` ATUAL (capturado no momento do envio, não da chamada).
+  setlistsSavePromise = setlistsSavePromise
+    .then(() => setSharedState('setlists', setlists))
+    .then(() => flushSetlistsPending())
+    .catch(err => {
+      console.warn('Repertórios não sincronizados:', err);
+      flushSetlistsPending();
+      // Re-tenta uma vez depois de 2s
+      setTimeout(() => {
+        setSharedState('setlists', setlists).catch(e => console.warn('Retry falhou:', e));
+      }, 2000);
+    });
+  // V94 — re-pré-cache e re-render
   try {
     if (typeof precacheSetlistAudios === 'function') precacheSetlistAudios();
     if (libraryLoaded && typeof render === 'function') render();
