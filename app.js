@@ -718,14 +718,16 @@ function setAuthMode(mode = 'login'){
     el.loginNameField.style.display = isRegister ? '' : 'none';
   }
   el.recoverPasswordBtn?.classList.toggle('hidden', isRegister);
-  if (el.authModeHint) el.authModeHint.textContent = isRegister
-    ? 'Crie sua conta informando nome, e-mail e senha.'
-    : 'Entre com seu e-mail e senha para acessar sua conta.';
+  // V102 — authModeHint foi removido do HTML (era redundante com loginNote)
+  if (el.authModeHint) el.authModeHint.style.display = 'none';
+  // V102 — loginNote curto e direto ao ponto
   if (el.loginNote) el.loginNote.textContent = isRegister
-    ? 'Crie sua conta com nome, e-mail e senha. Após o cadastro, faça login para acessar sua conta de usuário. Usuários comuns não têm permissão para alterar a escala.'
-    : 'Use seu e-mail e senha para entrar. Usuários comuns acessam a plataforma em modo de uso e não podem alterar a escala.';
-  if (el.enterSystemBtn) el.enterSystemBtn.textContent = 'Entrar na conta';
-  if (el.createAccountBtn) el.createAccountBtn.textContent = 'Criar cadastro';
+    ? 'Informe nome, e-mail e senha para criar sua conta.'
+    : 'Usuários comuns não podem alterar a escala.';
+  // V102 — botão secundário muda de texto conforme modo;
+  // o primário "Entrar" sempre loga, "Criar minha conta" sempre registra.
+  if (el.enterSystemBtn) el.enterSystemBtn.textContent = 'Entrar';
+  if (el.createAccountBtn) el.createAccountBtn.textContent = isRegister ? 'Criar minha conta' : 'Criar cadastro';
   setAuthStatus('', false);
   ['loginName','loginEmail','loginPassword'].forEach(validateAuthField);
 }

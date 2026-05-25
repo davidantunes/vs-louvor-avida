@@ -62,23 +62,22 @@
         <img src="assets/logo-avida.jpg" alt="Igreja Amor e Vida">
         <div>
           <span class="kicker">Acesso de usuário</span>
-          <h1>Entrar na Biblioteca de Louvor</h1>
+          <h1>Biblioteca de Louvor</h1>
           <p>Igreja Amor e Vida</p>
         </div>
       </div>
-      <div class="login-verse">"Tudo quanto tem fôlego louve ao Senhor. Louvai ao Senhor!" <strong>Salmos 150:6</strong></div>
-      <div class="auth-mode-switch" role="tablist" aria-label="Modo de acesso">
+      <!-- V102: tabs escondidas — botões do rodapé são os únicos controles de modo -->
+      <div class="auth-mode-switch" role="tablist" aria-label="Modo de acesso" style="display:none">
         <button id="modeLoginBtn" class="auth-mode-btn is-active" type="button" role="tab" aria-selected="true">Entrar</button>
         <button id="modeRegisterBtn" class="auth-mode-btn" type="button" role="tab" aria-selected="false">Criar cadastro</button>
       </div>
-      <div id="authModeHint" class="auth-mode-hint">Entre com seu e-mail e senha para acessar sua conta.</div>
       <div class="login-grid auth-grid auth-grid-clean">
         <label id="loginNameField" class="hidden" style="display:none"><span>Nome</span><input id="loginName" type="text" placeholder="Ex.: Gabriel" /><small class="field-hint">Informe seu nome completo.</small></label>
-        <label id="loginEmailField"><span>E-mail</span><input id="loginEmail" type="email" placeholder="seuemail@exemplo.com" autocomplete="email" /><small class="field-hint">Use um e-mail válido para entrar.</small></label>
-        <label id="loginPasswordField"><span>Senha</span><div class="input-wrap password-wrap"><input id="loginPassword" type="password" placeholder="Sua senha" autocomplete="current-password" /><button id="togglePasswordBtn" class="field-toggle" type="button" aria-label="Mostrar senha">Mostrar</button></div><small class="field-hint">Sua senha deve ter pelo menos 6 caracteres.</small></label>
+        <label id="loginEmailField"><span>E-mail</span><input id="loginEmail" type="email" placeholder="seuemail@exemplo.com" autocomplete="email" /></label>
+        <label id="loginPasswordField"><span>Senha</span><div class="input-wrap password-wrap"><input id="loginPassword" type="password" placeholder="Sua senha" autocomplete="current-password" /><button id="togglePasswordBtn" class="field-toggle" type="button" aria-label="Mostrar senha">Mostrar</button></div></label>
       </div>
       <div class="login-options-row">
-        <label class="remember-option"><input id="rememberSession" type="checkbox" checked><span>Lembrar sessão neste dispositivo</span></label>
+        <label class="remember-option"><input id="rememberSession" type="checkbox" checked><span>Lembrar sessão</span></label>
         <button id="recoverPasswordBtn" class="link-button" type="button">Esqueci minha senha</button>
       </div>
       <div id="authStatus" class="auth-status"></div>
@@ -96,10 +95,10 @@
       </div>
 
       <div class="login-actions auth-actions">
-        <button id="enterSystemBtn" class="btn btn-primary" type="button">Entrar na conta</button>
+        <button id="enterSystemBtn" class="btn btn-primary" type="button">Entrar</button>
         <button id="createAccountBtn" class="btn btn-secondary" type="button">Criar cadastro</button>
       </div>
-      <small class="login-note" id="loginNote">Crie sua conta com e-mail e senha. Após o cadastro, faça login para acessar sua conta de usuário. Usuários comuns não têm permissão para alterar a escala.</small>
+      <small class="login-note" id="loginNote">Usuários comuns não podem alterar a escala.</small>
     </div>
   </div>
 
