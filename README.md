@@ -1,4 +1,24 @@
-# VS Louvor — Igreja Amor e Vida — V100 Fix Play centralizado + Bug crítico de repertório
+# VS Louvor — Igreja Amor e Vida — V101 Cards desktop sem cortes + Play centralizado de verdade
+
+## O que entra na V101
+
+### Bug 1 — Ícone ▶ ainda descentralizado (após v100)
+A tentativa v100 não foi suficiente porque havia uma regra V90 (linha 5582) que aplicava `position:absolute; inset:0` no `::before` do botão. Com o botão tendo `padding-inline:18px`, o "centro" do absolute era calculado em relação à área total (sem padding), criando deslocamento visual à esquerda.
+
+**Correção V101:** Reescreve completamente o ::before como elemento estático (`position:static`), num botão com `display:grid; place-items:center` e `padding:0`. Sem mais conflito de centro entre absolute e padding. Adiciona `transform:translateX(1px)` no glyph para compensar o peso visual à esquerda do triângulo ▶ (ajuste óptico padrão).
+
+### Bug 2 — Cards no desktop cortando informações (NOVO, introduzido pela v94)
+Quando adicionei o botão "Baixar" na v94, o template do card passou a ter **6 botões** na linha de ações. Mas a regra base do CSS desktop (`.view-thumbnails .track-actions`) ainda tinha `grid-template-columns:1fr repeat(4,44px)` — só 5 colunas. Os 6 botões eram empurrados para uma 2ª linha, que ultrapassava o `min-height:360px` do card e era cortada pelo `overflow:hidden` da classe `.track-card`.
+
+**Correção V101:**
+- Grid do `track-actions` no desktop agora é `1.3fr repeat(5, 44px)` — 6 colunas certas.
+- `min-height: 460px` no `.view-thumbnails .track-card` para acomodar conteúdo + 6 botões + tags.
+- `overflow: visible` no `.track-card` (só desktop) para garantir que nada seja cortado mesmo se um card tiver título muito longo.
+- Ícones quadrados com tamanho fixo 44x44 para consistência visual.
+
+---
+
+# Versão anterior — V100 Fix Play centralizado + Bug crítico de repertório
 
 ## O que entra na V100
 

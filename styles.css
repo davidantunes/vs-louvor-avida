@@ -6645,44 +6645,108 @@ body.player-visible #setlistDetailModal .modal-card{
 }
 
 /* ============================================================
-   V100 — Centralização correta do ícone ▶ no botão Play do desktop.
-   Causa do bug: o ::before tinha `width:1em; height:1em` enquanto o
-   pai tem `font-size:0`. 1em de 0 = 0, então o pseudo-elemento ficava
-   com caixa zero-dimensional e o glyph extravasava de forma inconsistente.
-   Solução: remover width/height do ::before, deixar o conteúdo dimensionar
-   a caixa naturalmente, e usar grid place-items no pai para centralizar.
+   V101 — Correção definitiva: ícone ▶ centralizado + cards não cortarem.
+   Substitui a tentativa V100 que não foi suficiente.
+
+   Bug 1: O CSS V90 (linha 5582) usa `position:absolute; inset:0` no ::before,
+   o que ignora padding-inline do botão. Como o botão tinha padding-inline:18px,
+   o "centro" do absolute era deslocado em relação ao centro visual da caixa.
+   Solução: zera padding do botão e usa grid place-items:center (sem absolute).
+
+   Bug 2: A v94 adicionou um 6º botão (Baixar) no card, mas a regra base
+   .view-thumbnails .track-actions ainda tinha grid-template-columns:1fr repeat(4,44px).
+   Os 6 botões eram empurrados pra 2ª linha, ultrapassando o min-height:360px,
+   sendo cortados pelo overflow:hidden do track-card.
+   Solução: grid de 6 colunas no desktop + min-height suficiente.
    ============================================================ */
+
+/* --- DESKTOP (acima de 760px): garantir 6 botões em linha única --- */
 @media (min-width:761px){
+  /* Grid do track-actions com 6 colunas: play maior + 5 ícones */
+  .track-actions,
+  .view-thumbnails .track-actions,
+  .view-details .track-actions,
+  .track-grid .track-actions,
+  .track-actions.has-active-setlist{
+    display:grid !important;
+    grid-template-columns: 1.3fr repeat(5, 44px) !important;
+    gap:8px !important;
+    padding:0 16px 16px !important;
+    align-items:center !important;
+  }
+
+  /* Card mais alto para acomodar 6 botões + título + meta + tags */
+  .view-thumbnails .track-card{
+    min-height: 460px !important;
+  }
+  .view-details .track-card,
+  .track-grid:not(.view-thumbnails) .track-card{
+    min-height: auto !important;
+  }
+  /* Remove o overflow:hidden no desktop pra não cortar nada inesperado */
+  .track-card{
+    overflow: visible !important;
+  }
+  /* O ::before do card (gradiente decorativo) precisa do overflow para não vazar.
+     Mantemos visual com border-radius e o gradient não passa do clip do radius. */
+  .track-card::before{
+    border-radius: 24px;
+  }
+
+  /* ---- BOTÃO PLAY CENTRALIZADO ---- */
   .track-actions .play-btn,
   .track-actions .action-btn.primary.play-btn,
-  .track-grid .track-actions .play-btn{
+  .track-grid .track-actions .play-btn,
+  .view-thumbnails .track-actions .play-btn,
+  .view-details .track-actions .play-btn{
     display:grid !important;
     place-items:center !important;
     place-content:center !important;
-    padding:0 18px !important;
+    padding:0 !important;            /* zera padding-inline:18px que descentralizava */
+    text-indent:0 !important;         /* zera text-indent:-9999px da v90 */
     font-size:0 !important;
     line-height:1 !important;
-    min-width:64px !important;
-    text-align:center !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    height: 44px !important;
+    overflow: hidden !important;
+    position: relative !important;
   }
   .track-actions .play-btn::before,
   .track-actions .action-btn.primary.play-btn::before,
-  .track-grid .track-actions .play-btn::before{
+  .track-grid .track-actions .play-btn::before,
+  .view-thumbnails .track-actions .play-btn::before,
+  .view-details .track-actions .play-btn::before{
     content:"▶" !important;
-    display:block !important;
-    width:auto !important;
-    height:auto !important;
-    margin:0 !important;
-    padding:0 !important;
-    font-size:16px !important;
-    line-height:1 !important;
-    font-weight:900 !important;
-    transform:translateX(1px); /* ajuste óptico: ▶ tem peso visual à esquerda */
-    text-align:center !important;
+    /* Mudança chave: position estática + grid centraliza naturalmente */
+    position: static !important;
+    inset: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+    font-weight: 900 !important;
+    color: #001110 !important;
+    transform: translateX(1px); /* ajuste óptico: peso visual do ▶ está à esquerda */
+    text-indent: 0 !important;
   }
-  .track-actions .play-btn::after,
-  .track-grid .track-actions .play-btn::after{
-    content:none !important;
-    display:none !important;
+
+  /* Os outros ícones quadrados continuam 44x44, conferindo consistência visual */
+  .track-actions .action-icon,
+  .track-actions .download-btn,
+  .track-actions .setlist-btn,
+  .track-actions .fav-btn,
+  .track-actions .tone-btn-open,
+  .track-actions .detail-btn{
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    padding: 0 !important;
   }
 }
+
