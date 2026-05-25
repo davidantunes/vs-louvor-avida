@@ -6816,3 +6816,81 @@ body.player-visible #setlistDetailModal .modal-card{
     gap:5px !important;
   }
 }
+
+/* ============================================================
+   V104 — Card mobile: remove duplicidades e botão Baixar.
+   - track-sub: só cantor (sem fileName, sem overflow: visible)
+   - track-meta: esconde badge MP3 (redundante — formato é detalhe técnico)
+   - track-actions: 5 colunas (play + tom + fav + + + ⋯), sem download-btn
+   - tag-wrap: esconde no mobile (tags já aparecem no modal de detalhes)
+   ============================================================ */
+@media (max-width:760px){
+
+  /* Cantor: uma linha, sem quebra */
+  .track-grid .track-sub,
+  .track-grid.view-thumbnails .track-sub,
+  .track-grid.view-details .track-sub,
+  .track-sub{
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+    display:block !important;
+  }
+
+  /* Esconde badge de formato (MP3/WAV) — redundante no contexto mobile */
+  .track-meta .meta:not(.key):not(.in-setlist){
+    display:none !important;
+  }
+
+  /* 5 botões: play | tom | fav | + | ⋯ */
+  .track-grid .track-actions,
+  .track-grid.view-thumbnails .track-actions,
+  .track-grid.view-details .track-actions,
+  .track-actions,
+  .view-thumbnails .track-actions,
+  .view-details .track-actions,
+  .track-actions.has-active-setlist{
+    display:grid !important;
+    grid-template-columns: minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr)) !important;
+    gap:6px !important;
+    padding:8px 12px 14px !important;
+    align-items:center !important;
+  }
+
+  /* Todos os botões mesma altura */
+  .track-actions .action-btn,
+  .track-actions .action-icon,
+  .track-actions .setlist-btn,
+  .track-actions .tone-btn-open,
+  .track-actions .fav-btn,
+  .track-actions .detail-btn{
+    height:42px !important;
+    min-width:0 !important;
+    width:100% !important;
+    padding:0 !important;
+    font-size:15px !important;
+    border-radius:12px !important;
+  }
+  .track-actions .play-btn::before{
+    font-size:14px !important;
+  }
+  .track-actions .setlist-btn .action-icon-glyph{
+    font-size:18px !important;
+  }
+
+  /* Oculta botão de download se ainda existir no DOM */
+  .track-actions .download-btn{
+    display:none !important;
+  }
+}
+
+/* Telas estreitas */
+@media (max-width:380px){
+  .track-actions,
+  .track-grid .track-actions{
+    grid-template-columns: minmax(56px, 1.2fr) repeat(4, minmax(0, 1fr)) !important;
+    gap:5px !important;
+    padding-left:10px !important;
+    padding-right:10px !important;
+  }
+}
