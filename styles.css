@@ -6745,3 +6745,74 @@ body.player-visible #setlistDetailModal .modal-card{
 }
 
 
+
+/* ============================================================
+   V103 — Card limpo: sem download no card, sem fileName no sub,
+   grid de 5 colunas (play + 4 ícones: tom, fav, +, ⋯)
+   ============================================================ */
+
+/* DESKTOP — 5 colunas */
+@media (min-width:761px){
+  .track-actions,
+  .view-thumbnails .track-actions,
+  .view-details .track-actions,
+  .track-grid .track-actions,
+  .track-actions.has-active-setlist{
+    display:grid !important;
+    grid-template-columns: 1.4fr repeat(4, 44px) !important;
+    gap:8px !important;
+    padding:0 16px 16px !important;
+    align-items:stretch !important;
+  }
+  /* min-height ajustado pois não tem mais linha de fileName */
+  .view-thumbnails .track-card{
+    min-height:420px !important;
+  }
+  /* track-sub agora tem apenas cantor — fonte única linha */
+  .track-sub{
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+}
+
+/* MOBILE — 5 colunas */
+@media (max-width:760px){
+  .track-grid .track-actions,
+  .track-grid.view-thumbnails .track-actions,
+  .track-grid.view-details .track-actions,
+  .track-actions,
+  .view-thumbnails .track-actions,
+  .view-details .track-actions{
+    display:grid !important;
+    grid-template-columns: minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr)) !important;
+    gap:6px !important;
+    padding:8px 12px 14px !important;
+    align-items:center !important;
+  }
+  /* Todos os botões com mesma altura no mobile */
+  .track-actions .action-btn,
+  .track-actions .action-icon,
+  .track-actions .setlist-btn{
+    height:42px !important;
+    min-width:0 !important;
+    width:100% !important;
+    padding:0 !important;
+    font-size:15px !important;
+    border-radius:12px !important;
+  }
+  /* track-sub só cantor — sem overflow */
+  .track-sub{
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+}
+
+/* Telas estreitas */
+@media (max-width:380px){
+  .track-actions{
+    grid-template-columns: minmax(56px, 1.2fr) repeat(4, minmax(0, 1fr)) !important;
+    gap:5px !important;
+  }
+}

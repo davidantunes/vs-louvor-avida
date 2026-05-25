@@ -2767,15 +2767,13 @@ function renderTrackCard(t){
   const isInActiveSetlist = activeSetlist ? isTrackPresentInSetlist(activeSetlist, t.id) : false;
   const setlistTitle = activeSetlist ? `Adicionar a este repertório: ${activeSetlist.name}` : 'Adicionar ao repertório';
   const setlistLabel = activeSetlist ? 'Adicionar a este repertório' : 'Adicionar ao repertório';
-  // V94 — Download direto sempre disponível no card (tom original).
-  const downloadHref = downloadUrl(t.id, t.name, 0);
   return `
     <article class="track-card ${isInActiveSetlist ? 'track-in-active-setlist' : ''}" data-id="${esc(t.id)}">
       <div class="track-head">
         <div class="track-cover logo-cover" ${coverStyle}></div>
         <div class="track-main">
           <div class="track-title">${esc(t.name)}</div>
-          <div class="track-sub"><span>${esc(t.singer)}</span><span>•</span><span>${esc(t.fileName)}</span></div>
+          <div class="track-sub">${esc(t.singer)}</div>
         </div>
       </div>
       <div class="track-meta">
@@ -2786,7 +2784,6 @@ function renderTrackCard(t){
       <div class="tag-wrap">${(t.tags || []).map(tag => `<span class="tag">${esc(tag)}</span>`).join('')}</div>
       <div class="track-actions ${activeSetlist ? 'has-active-setlist' : ''}">
         <button class="action-btn primary play-btn" data-id="${esc(t.id)}" aria-label="Tocar" title="Tocar"></button>
-        <a class="action-icon download-btn" href="${esc(downloadHref)}" download data-id="${esc(t.id)}" data-name="${esc(t.name)}" title="Baixar música" aria-label="Baixar música">⤓</a>
         <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom" aria-label="Alterar tom">♬</button>
         <button class="action-icon fav-btn ${fav ? 'is-fav' : ''}" data-id="${esc(t.id)}" title="Favoritar" aria-label="Favoritar">${fav ? '♥' : '♡'}</button>
         <button class="action-icon setlist-btn ${activeSetlist ? 'is-active-target' : ''} ${isInActiveSetlist ? 'is-already-added' : ''}" data-id="${esc(t.id)}" title="${esc(setlistTitle)}" data-tooltip="${esc(setlistLabel)}" aria-label="${esc(setlistTitle)}"><span class="action-icon-glyph">${isInActiveSetlist ? '✓' : '+'}</span><span class="action-icon-label"></span></button>
@@ -2828,28 +2825,6 @@ function bindTrackCardEvents(container){
   container.querySelectorAll('.detail-btn:not([data-bound])').forEach(btn => {
     btn.dataset.bound = '1';
     btn.addEventListener('click', () => openSongModal(findTrack(btn.dataset.id)));
-  });
-
-  // V94 — Download direto no card (tom original). O <a download> dispara o download,
-  // só damos feedback ao usuário e registramos no histórico.
-  container.querySelectorAll('.download-btn:not([data-bound])').forEach(btn => {
-    btn.dataset.bound = '1';
-    btn.addEventListener('click', () => {
-      const t = findTrack(btn.dataset.id);
-      if (t) {
-        toast(`Baixando "${t.name}" no tom original.`);
-        try {
-          recordUsageEvent({
-            type: 'track_downloaded',
-            trackId: t.id,
-            trackName: t.name,
-            tone: t.key || '',
-            semitones: 0,
-            message: `Música "${t.name}" baixada (tom original).`
-          });
-        } catch (_) {}
-      }
-    });
   });
 }
 
