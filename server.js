@@ -599,12 +599,84 @@ app.get('/api/diagnostics/missing-keys', (req, res) => {
   });
 });
 
+
+/* ===================================================================
+   V110 — Log de acessos e listagem de usuários cadastrados
+   =================================================================== */
+
+// Log em memória — persiste enquanto o servidor está rodando.
+const ACCESS_LOG = [];
+const ACCESS_LOG_MAX = 1000;
+
+// POST /api/admin/access-log — recebe eventos de login/cadastro do frontend.
+app.post('/api/admin/access-log', (req, res) => {
+  try {
+    const { type, userId, name, email, at, ua } = req.body || {};
+    if (!type || !email) return res.status(400).json({ error: 'type e email são obrigatórios.' });
+    const entry = {
+      type,
+      userId: userId || null,
+      name: name || email,
+      email,
+      at: at || new Date().toISOString(),
+      ip: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '',
+      ua: (ua || '').slice(0, 200)
+    };
+    ACCESS_LOG.unshift(entry);
+    if (ACCESS_LOG.length > ACCESS_LOG_MAX) ACCESS_LOG.length = ACCESS_LOG_MAX;
+    console.log(`[acesso] ${entry.type} — ${entry.email} — ${entry.at}`);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/access-log — retorna o log em memória (requer API Key).
+app.get('/api/admin/access-log', (req, res) => {
+  if (!requireApiKey(res)) return;
+  const type = req.query.type; // filtro opcional: 'login' | 'register'
+  const entries = type ? ACCESS_LOG.filter(e => e.type === type) : ACCESS_LOG;
+  res.json({ count: entries.length, entries });
+});
+
+// GET /api/admin/users — lista todos os usuários cadastrados via Appwrite Users API.
+app.get('/api/admin/users', async (req, res) => {
+  if (!requireApiKey(res)) return;
+  if (!cloudReady()) return res.status(503).json({ error: 'Appwrite não configurado.' });
+  try {
+    const limit  = Math.min(Number(req.query.limit) || 100, 500);
+    const offset = Number(req.query.offset) || 0;
+    const search = req.query.search || '';
+    const params = new URLSearchParams({ limit, offset });
+    if (search) params.set('search', search);
+
+    const r = await fetch(`${APPWRITE_ENDPOINT}/users?${params}`, { headers: appwriteHeaders() });
+    if (!r.ok) return res.status(r.status).json({ error: await r.text() });
+
+    const data = await r.json();
+    const users = (data.users || []).map(u => ({
+      id: u.$id,
+      name: u.name || '',
+      email: u.email || '',
+      status: u.status,
+      emailVerification: u.emailVerification,
+      createdAt: u.$createdAt,
+      updatedAt: u.$updatedAt,
+      accessedAt: u.accessedAt,
+      prefs: u.prefs || {}
+    }));
+    res.json({ total: data.total, limit, offset, users });
+  } catch (e) {
+    console.error('[admin/users]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/audio/:id', async (req, res) => {
   try {
     if (!requireApiKey(res)) return;
     const id = req.params.id;
     const headers = {};
-    if (req.headers.range) headers.Range = req.headers.range;
 
     const response = await fetch(googleMediaUrl(id), { headers });
     if (!response.ok && response.status !== 206) {

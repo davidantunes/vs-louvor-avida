@@ -946,6 +946,27 @@ async function applyAuthUser(user){
   updateProfileModal();
   el.logoutBtn?.classList.remove('hidden');
   hideLogin();
+  // V110 — Registra acesso no histórico e no servidor
+  recordUsageEvent({
+    type: 'user_login',
+    userId: user.$id,
+    userName: user.name || user.email,
+    userEmail: user.email,
+    message: `Acesso: ${user.name || user.email} (${user.email})`
+  });
+  // Envia ping de acesso ao servidor para log centralizado
+  fetch('/api/admin/access-log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'login',
+      userId: user.$id,
+      name: user.name || user.email,
+      email: user.email,
+      at: new Date().toISOString(),
+      ua: navigator.userAgent.slice(0, 200)
+    })
+  }).catch(() => {});
   startLibraryLoadIfNeeded();
   await loadCloudState();
 }
@@ -1047,6 +1068,18 @@ async function createAccount(){
     validateAuthField('loginPassword');
     setAuthStatus('Cadastro criado com sucesso! Informe sua senha e clique em “Entrar”.', false);
     toast('Cadastro criado. Faça login para acessar sua conta.');
+    // V110 — Log de novo cadastro no servidor
+    fetch('/api/admin/access-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'register',
+        name,
+        email,
+        at: new Date().toISOString(),
+        ua: navigator.userAgent.slice(0, 200)
+      })
+    }).catch(() => {});
     setTimeout(() => el.loginPassword?.focus(), 80);
   } catch (error) {
     const msg = translateAppwriteError(error, 'cadastro');
