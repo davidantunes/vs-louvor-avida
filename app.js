@@ -750,7 +750,15 @@ function setAuthMode(mode = 'login'){
   if (el.enterSystemBtn) el.enterSystemBtn.textContent = isRegister ? '← Voltar ao login' : 'Entrar';
   if (el.createAccountBtn) el.createAccountBtn.textContent = isRegister ? 'Criar minha conta' : 'Criar cadastro';
   setAuthStatus('', false);
-  ['loginName','loginEmail','loginPassword'].forEach(validateAuthField);
+  // V111 — NÃO disparar validação automática ao trocar de modo.
+  // Antes: campos apareciam em vermelho antes do usuário digitar qualquer coisa.
+  // Agora: resetamos os estados para neutro ao trocar de modo.
+  if (el.loginNameField) setFieldState(el.loginNameField, 'neutral', 'Informe seu nome completo.');
+  if (el.loginEmailField) setFieldState(el.loginEmailField, 'neutral', '');
+  if (el.loginPasswordField) {
+    const hint = isRegister ? 'Mínimo 8 caracteres.' : '';
+    setFieldState(el.loginPasswordField, 'neutral', hint);
+  }
 }
 
 function togglePasswordVisibility(inputKey = 'loginPassword', buttonKey = 'togglePasswordBtn'){
@@ -791,8 +799,10 @@ function validateAuthField(key){
   }
   if (key === 'loginPassword') {
     if (!value) return setFieldState(el.loginPasswordField, 'invalid', 'Informe sua senha.'), false;
-    if (value.length < 6) return setFieldState(el.loginPasswordField, 'invalid', 'A senha deve ter pelo menos 6 caracteres.'), false;
-    setFieldState(el.loginPasswordField, 'valid', authMode === 'register' ? 'Senha válida para cadastro.' : 'Senha válida.');
+    // V111 — Appwrite exige mínimo 8 caracteres (não 6)
+    if (authMode === 'register' && value.length < 8) return setFieldState(el.loginPasswordField, 'invalid', 'A senha deve ter pelo menos 8 caracteres.'), false;
+    if (authMode !== 'register' && value.length < 6) return setFieldState(el.loginPasswordField, 'invalid', 'Informe sua senha.'), false;
+    setFieldState(el.loginPasswordField, 'valid', authMode === 'register' ? 'Senha válida.' : 'Senha válida.');
     return true;
   }
   return true;
@@ -997,8 +1007,13 @@ function translateAppwriteError(error, context = 'geral'){
   if (msg.includes('already exists') || msg.includes('already been taken') || code === 409) {
     return 'Este e-mail já possui um cadastro. Tente entrar ou recuperar sua senha.';
   }
-  if (msg.includes('password must be') || msg.includes('password should') || msg.includes('at least 8')) {
+  if (msg.includes('password must be') || msg.includes('password should') ||
+      msg.includes('at least 8') || msg.includes('password must have') ||
+      msg.includes('weak password') || msg.includes('password is too short')) {
     return 'A senha deve ter pelo menos 8 caracteres.';
+  }
+  if (msg.includes('password must include') || msg.includes('password must contain')) {
+    return 'A senha não atende aos requisitos de segurança. Use pelo menos 8 caracteres.';
   }
   if (msg.includes('invalid email') || msg.includes('email format')) {
     return 'O e-mail informado não é válido.';
@@ -1058,10 +1073,15 @@ async function createAccount(){
   const email = (el.loginEmail?.value || '').trim();
   const password = (el.loginPassword?.value || '').trim();
   if (!validateAuthForm('register')) return setAuthStatus('Revise os campos destacados para concluir o cadastro.', true);
-  if (!appwriteAccount || !window.Appwrite?.ID) return setAuthStatus('Serviço de autenticação indisponível. Tente novamente.', true);
+  if (!appwriteAccount) return setAuthStatus('Serviço de autenticação indisponível. Tente novamente.', true);
   try {
     setAuthStatus('Criando cadastro...', false);
-    await appwriteAccount.create(window.Appwrite.ID.unique(), email, password, name);
+    // V111 — Gera ID único com fallback: usa Appwrite.ID se disponível,
+    // caso contrário gera um UUID compatível localmente.
+    const uniqueId = window.Appwrite?.ID?.unique
+      ? window.Appwrite.ID.unique()
+      : 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+    await appwriteAccount.create(uniqueId, email, password, name);
     if (el.loginPassword) el.loginPassword.value = '';
     setAuthMode('login');
     validateAuthField('loginEmail');
