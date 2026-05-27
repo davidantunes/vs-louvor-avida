@@ -128,6 +128,9 @@ const el = {
   loadStatus: document.getElementById('loadStatus'),
   trackList: document.getElementById('trackList'),
   setlistsGrid: document.getElementById('setlistsGrid'),
+  archivedSetlistsSection: document.getElementById('archivedSetlistsSection'),
+  archivedSetlistsGrid: document.getElementById('archivedSetlistsGrid'),
+  archivedSetlistsCount: document.getElementById('archivedSetlistsCount'),
   clearHistoryBtn: document.getElementById('clearHistoryBtn'),
   historyTotalPlays: document.getElementById('historyTotalPlays'),
   historyUniqueTracks: document.getElementById('historyUniqueTracks'),
@@ -168,6 +171,7 @@ const el = {
   closeSetlist: document.getElementById('closeSetlist'),
   setlistTrackName: document.getElementById('setlistTrackName'),
   newSetlistName: document.getElementById('newSetlistName'),
+  newSetlistDate: document.getElementById('newSetlistDate'),
   createSetlistBtn: document.getElementById('createSetlistBtn'),
   setlistOptions: document.getElementById('setlistOptions'),
   activeSetlistBanner: document.getElementById('activeSetlistBanner'),
@@ -246,8 +250,7 @@ const el = {
   loadingStats: document.getElementById('loadingStats'),
   loadingProgressFill: document.getElementById('loadingProgressFill'),
   loadingSkipBtn: document.getElementById('loadingSkipBtn'),
-  loginScreen: document.getElementById('loginScreen'),
-  loginName: document.getElementById('loginName'),
+  loginScreen: document.getElementById('loginScreen'),  loginName: document.getElementById('loginName'),
   loginEmail: document.getElementById('loginEmail'),
   loginPassword: document.getElementById('loginPassword'),
   loginNameField: document.getElementById('loginNameField'),
@@ -306,6 +309,10 @@ bindEvents();
 initSchedule();
 applyTheme(loadJSON('vs_theme_v1', 'dark'));
 routeInternalPage();
+// V109 — loginScreen começa com .hidden → garante inert para não receber foco
+if (el.loginScreen?.classList.contains('hidden')) {
+  el.loginScreen.setAttribute('inert', '');
+}
 
 function setPlayButtonState(isPlaying){
   if (!el.playPauseBtn) return;
@@ -471,7 +478,7 @@ function bindEvents(){
     location.hash = '#biblioteca';
     routeInternalPage();
     render();
-    toast(`Repertório ativo: ${s.name}. Escolha as músicas na biblioteca.`);
+    toast(`Repertório “${s.name}” ativo. Adicione músicas na biblioteca.`);
   });
   if (el.changeSetlistPaletteBtn) el.changeSetlistPaletteBtn.addEventListener('click', () => {
     const s = setlists.find(x => x.id === currentSetlistDetailId);
@@ -737,7 +744,7 @@ function setAuthMode(mode = 'login'){
   // V105 — loginNote e textos dos botões refletem o fluxo em dois passos.
   if (el.loginNote) el.loginNote.textContent = isRegister
     ? 'Preencha nome, e-mail e senha para criar sua conta.'
-    : 'Usuários comuns não podem alterar a escala.';
+    : '';
   // Modo login:    [Entrar] [Criar cadastro →]
   // Modo registro: [← Voltar ao login] [Criar minha conta]
   if (el.enterSystemBtn) el.enterSystemBtn.textContent = isRegister ? '← Voltar ao login' : 'Entrar';
@@ -831,7 +838,7 @@ function showLoginMode(){
 function showPasswordRecoveryMode(){
   authMode = 'recovery';
   el.loginScreen?.classList.remove('hidden');
-  el.loginScreen?.setAttribute('aria-hidden', 'false');
+  el.loginScreen?.removeAttribute('inert');
   document.body.classList.add('app-locked');
   document.querySelector('.auth-mode-switch')?.classList.add('hidden');
   document.querySelector('.login-options-row')?.classList.add('hidden');
@@ -852,7 +859,7 @@ function validateRecoveryPassword(){
 
 async function confirmPasswordRecovery(){
   if (!validateRecoveryPassword()) return setAuthStatus('Revise os campos destacados para atualizar a senha.', true);
-  if (!appwriteAccount) return setAuthStatus('Appwrite não inicializado.', true);
+  if (!appwriteAccount) return setAuthStatus('Serviço de autenticação indisponível. Tente novamente.', true);
   const params = new URLSearchParams(location.search);
   const userId = params.get('userId');
   const secret = params.get('secret');
@@ -867,7 +874,7 @@ async function confirmPasswordRecovery(){
     showLoginMode();
     setAuthStatus('Senha atualizada com sucesso. Entre com sua nova senha.', false);
   } catch (error) {
-    setAuthStatus(error?.message || 'Não foi possível atualizar a senha.', true);
+    setAuthStatus(translateAppwriteError(error, 'senha'), true);
   }
 }
 
@@ -879,7 +886,7 @@ async function initSessionUI(){
   }
   if (!cloudReady || !appwriteAccount) {
     showLogin();
-    setAuthStatus('Appwrite não configurado. Verifique endpoint e project ID.', true);
+    setAuthStatus('Serviço de autenticação não configurado. Contate o administrador.', true);
     return;
   }
   try {
@@ -918,13 +925,13 @@ function showLogin(){
   document.querySelector('.auth-grid')?.classList.remove('hidden');
   setAuthMode(authMode || 'login');
   el.loginScreen?.classList.remove('hidden');
-  el.loginScreen?.setAttribute('aria-hidden', 'false');
+  el.loginScreen?.removeAttribute('inert');
   document.body.classList.add('app-locked');
   setTimeout(() => el.loginEmail?.focus(), 60);
 }
 function hideLogin(){
   el.loginScreen?.classList.add('hidden');
-  el.loginScreen?.setAttribute('aria-hidden', 'true');
+  el.loginScreen?.setAttribute('inert', '');
   document.body.classList.remove('app-locked');
 }
 async function applyAuthUser(user){
@@ -946,7 +953,7 @@ async function enterSystem(){
   const email = (el.loginEmail?.value || '').trim();
   const password = (el.loginPassword?.value || '').trim();
   if (!validateAuthForm('login')) return setAuthStatus('Revise os campos destacados para entrar.', true);
-  if (!appwriteAccount) return setAuthStatus('Appwrite não inicializado.', true);
+  if (!appwriteAccount) return setAuthStatus('Serviço de autenticação indisponível. Tente novamente.', true);
   try {
     setAuthStatus('Entrando...', false);
     await appwriteAccount.createEmailPasswordSession(email, password);
@@ -955,17 +962,84 @@ async function enterSystem(){
     setAuthStatus('', false);
     if (libraryLoaded) maybeLaunchTour();
   } catch (error) {
-    setAuthStatus(error?.message || 'Não foi possível entrar.', true);
+    setAuthStatus(translateAppwriteError(error, 'login'), true);
   }
 }
+// V106 — Traduz erros do Appwrite (em inglês) para português claro.
+// Cobre os erros mais comuns que o usuário pode encontrar nos fluxos de
+// login, cadastro e recuperação de senha.
+function translateAppwriteError(error, context = 'geral'){
+  const msg = String(error?.message || error || '').toLowerCase();
+  const code = error?.code || error?.status || 0;
+
+  // --- Cadastro ---
+  if (msg.includes('already exists') || msg.includes('already been taken') || code === 409) {
+    return 'Este e-mail já possui um cadastro. Tente entrar ou recuperar sua senha.';
+  }
+  if (msg.includes('password must be') || msg.includes('password should') || msg.includes('at least 8')) {
+    return 'A senha deve ter pelo menos 8 caracteres.';
+  }
+  if (msg.includes('invalid email') || msg.includes('email format')) {
+    return 'O e-mail informado não é válido.';
+  }
+  if (msg.includes('name is required') || msg.includes('name must')) {
+    return 'O nome é obrigatório para o cadastro.';
+  }
+
+  // --- Login ---
+  if (msg.includes('invalid credentials') || msg.includes('wrong password') ||
+      msg.includes('incorrect password') || code === 401) {
+    return 'E-mail ou senha incorretos. Verifique e tente novamente.';
+  }
+  if (msg.includes('user not found') || msg.includes('no user') || code === 404) {
+    return 'E-mail não encontrado. Verifique ou crie um novo cadastro.';
+  }
+  if (msg.includes('too many requests') || msg.includes('rate limit') || code === 429) {
+    return 'Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.';
+  }
+  if (msg.includes('session') && msg.includes('not found')) {
+    return 'Sua sessão expirou. Faça login novamente.';
+  }
+  if (msg.includes('blocked') || msg.includes('disabled') || msg.includes('suspended')) {
+    return 'Conta bloqueada ou desativada. Entre em contato com o administrador.';
+  }
+
+  // --- Recuperação de senha ---
+  if (msg.includes('recovery') && (msg.includes('not found') || msg.includes('expired'))) {
+    return 'Link de recuperação expirado ou inválido. Solicite um novo.';
+  }
+  if (msg.includes('token') && msg.includes('expired')) {
+    return 'O código de recuperação expirou. Solicite um novo e-mail de recuperação.';
+  }
+
+  // --- Rede / servidor ---
+  if (msg.includes('network') || msg.includes('fetch') || msg.includes('failed to fetch') ||
+      msg.includes('networkerror') || code === 0) {
+    return 'Sem conexão com o servidor. Verifique sua internet e tente novamente.';
+  }
+  if (code >= 500) {
+    return 'Erro no servidor. Tente novamente em alguns instantes.';
+  }
+
+  // --- Fallback por contexto ---
+  const fallbacks = {
+    login:    'Não foi possível entrar. Verifique e-mail e senha.',
+    cadastro: 'Não foi possível criar o cadastro. Tente novamente.',
+    recuperar:'Não foi possível enviar o e-mail de recuperação.',
+    senha:    'Não foi possível atualizar a senha. Tente novamente.',
+    geral:    'Ocorreu um erro inesperado. Tente novamente.'
+  };
+  return fallbacks[context] || fallbacks.geral;
+}
+
 async function createAccount(){
   const name = (el.loginName?.value || '').trim();
   const email = (el.loginEmail?.value || '').trim();
   const password = (el.loginPassword?.value || '').trim();
   if (!validateAuthForm('register')) return setAuthStatus('Revise os campos destacados para concluir o cadastro.', true);
-  if (!appwriteAccount || !window.Appwrite?.ID) return setAuthStatus('Appwrite não inicializado.', true);
+  if (!appwriteAccount || !window.Appwrite?.ID) return setAuthStatus('Serviço de autenticação indisponível. Tente novamente.', true);
   try {
-    setAuthStatus('Criando cadastro no banco de dados...', false);
+    setAuthStatus('Criando cadastro...', false);
     await appwriteAccount.create(window.Appwrite.ID.unique(), email, password, name);
     if (el.loginPassword) el.loginPassword.value = '';
     setAuthMode('login');
@@ -975,7 +1049,14 @@ async function createAccount(){
     toast('Cadastro criado. Faça login para acessar sua conta.');
     setTimeout(() => el.loginPassword?.focus(), 80);
   } catch (error) {
-    setAuthStatus(error?.message || 'Não foi possível criar o cadastro.', true);
+    const msg = translateAppwriteError(error, 'cadastro');
+    setAuthStatus(msg, true);
+    // V106 — Se e-mail duplicado: destaca o campo e orienta o usuário.
+    if (msg.includes('já possui um cadastro')) {
+      if (typeof setFieldState === 'function' && el.loginEmailField)
+        setFieldState(el.loginEmailField, 'error', 'Este e-mail já tem cadastro.');
+      if (el.loginNote) el.loginNote.textContent = 'Já tem conta? Clique em "← Voltar ao login" e entre com sua senha, ou use "Esqueci minha senha".';
+    }
   }
 }
 
@@ -1011,14 +1092,14 @@ async function recoverPassword(){
     validateAuthField('loginEmail');
     return setAuthStatus('Informe um e-mail válido para recuperar a senha.', true);
   }
-  if (!appwriteAccount) return setAuthStatus('Appwrite não inicializado.', true);
+  if (!appwriteAccount) return setAuthStatus('Serviço de autenticação indisponível. Tente novamente.', true);
   try {
     setAuthStatus('Enviando instruções de recuperação...', false);
     const recoveryUrl = `${location.origin}${location.pathname}`;
     await appwriteAccount.createRecovery(email, recoveryUrl);
     setAuthStatus('Enviamos as instruções de recuperação para o e-mail informado.', false);
   } catch (error) {
-    setAuthStatus(error?.message || 'Não foi possível iniciar a recuperação de senha.', true);
+    setAuthStatus(translateAppwriteError(error, 'recuperar'), true);
   }
 }
 async function logoutSession(){
@@ -1078,7 +1159,7 @@ async function loadCloudState(){
     render();
   } catch (error) {
     console.warn('Estado online não carregado:', error);
-    toast('Não foi possível sincronizar com Appwrite. Usando dados locais.');
+    toast('Sem sincronização online. Usando dados salvos no dispositivo.');
   }
 }
 async function getSharedState(key){
@@ -1278,7 +1359,7 @@ function renderActiveSetlistBanner(){
   el.activeSetlistName.textContent = active.name;
   if (el.activeSetlistMiniName) el.activeSetlistMiniName.textContent = active.name;
   const count = (active.trackIds || []).length;
-  el.activeSetlistMeta.textContent = `${count} música(s) adicionada(s) • Use o botão de repertório nos cards e depois conclua para escolher a paleta.`;
+  el.activeSetlistMeta.textContent = `${count} música(s) no repertório.`;
 }
 
 function renderPaletteSelectionTarget(){
@@ -1465,7 +1546,7 @@ function activateSetlistAndOpenLibrary(setlist){
   routeInternalPage();
   render();
   recordUsageEvent({ type: 'setlist_active', setlistId: setlist.id, setlistName: setlist.name, message: `Repertório ativo: "${setlist.name}".` });
-  toast(`Repertório ativo: ${setlist.name}. Agora escolha as músicas na biblioteca.`);
+  toast(`Repertório “${setlist.name}” ativo. Adicione músicas na biblioteca.`);
 }
 function addTrackToSetlist(setlist, track, toneInfo = { semitones: 0, tone: '' }, options = {}){
   if (!setlist || !track) return false;
@@ -1532,7 +1613,7 @@ async function seedScheduleDataIfNeeded(cloudMembers, cloudSchedule){
   if (!tasks.length) return;
   try {
     await Promise.all(tasks);
-    toast('Membros e escala inicial sincronizados no Appwrite.');
+    toast('Escala inicial configurada com sucesso.');
   } catch (error) {
     console.warn('Dados iniciais da escala não sincronizados:', error);
   }
@@ -1557,7 +1638,7 @@ async function saveScheduleState(showToast = false){
   } catch (error) {
     console.error(error);
     setScheduleEditStatus(`Erro ao salvar: ${error.message}`, 'error');
-    toast('Não foi possível salvar a escala no Appwrite.');
+    toast('Não foi possível salvar a escala. Tente novamente.');
   }
 }
 function setScheduleEditStatus(message, mode = ''){
@@ -2381,7 +2462,7 @@ async function loadFolderProgressive(folderId, singerName = '', inheritedCover =
       if (!firstProgressBatchReleased && targetTracks.length >= 12) {
         firstProgressBatchReleased = true;
         hideLoading();
-        toast('Biblioteca liberada. Continuamos indexando o restante em segundo plano.');
+        toast('Músicas aparecerão conforme carregam.');
       }
       scheduleProgressiveLibraryRender();
     }
@@ -2413,7 +2494,7 @@ async function refreshLibraryInBackground(){
             allTracks = fresh;
             saveJSON('vs_drive_cache_v79', { updatedAt: Date.now(), tracks: allTracks });
             afterLibraryLoaded();
-            el.status.textContent = 'Biblioteca sincronizada em segundo plano.';
+            el.status.textContent = 'Biblioteca atualizada.';
             return;
           }
         }
@@ -2430,7 +2511,7 @@ async function refreshLibraryInBackground(){
       allTracks = deduped;
       saveJSON('vs_drive_cache_v79', { updatedAt: Date.now(), tracks: allTracks });
       afterLibraryLoaded();
-      el.status.textContent = 'Biblioteca sincronizada em segundo plano.';
+      el.status.textContent = 'Biblioteca atualizada.';
     }
   } catch (error) {
     console.warn('Atualização em segundo plano falhou:', error);
@@ -2460,7 +2541,7 @@ async function loadLibrary(force = false){
           return t;
         });
         afterLibraryLoaded();
-        el.status.textContent = 'Biblioteca carregada do cache. Atualizando em segundo plano...';
+        el.status.textContent = 'Biblioteca pronta.';
         hideLoading();
         precacheSetlistAudios();
         refreshLibraryInBackground();
@@ -2498,12 +2579,12 @@ async function loadLibrary(force = false){
 
     allTracks = [];
     afterLibraryLoaded();
-    el.status.textContent = 'Biblioteca sendo indexada em segundo plano...';
+    el.status.textContent = 'Carregando músicas...';
 
     setTimeout(() => {
       if (!firstProgressBatchReleased) {
         hideLoading();
-        toast('Acesso liberado. As músicas aparecerão conforme forem indexadas.');
+        toast('Músicas aparecerão conforme carregam.');
       }
     }, 1400);
 
@@ -3073,6 +3154,32 @@ function openSetlistModal(track, toneInfo = { semitones: 0, tone: '' }){
   el.setlistModal.classList.remove('hidden');
 }
 function closeSetlistModal(){ el.setlistModal.classList.add('hidden'); }
+// V108 — Verifica se um repertório deve ser arquivado automaticamente.
+// Regras: tem eventDate E a data já passou (antes de hoje à meia-noite).
+function isSetlistAutoArchived(setlist){
+  if (setlist.archived) return true;  // arquivado manualmente
+  if (!setlist.eventDate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const event = new Date(setlist.eventDate + 'T00:00:00');
+  return event < today;
+}
+
+// Arquiva ou desarquiva manualmente um repertório.
+function toggleSetlistArchive(setlistId){
+  const s = setlists.find(x => x.id === setlistId);
+  if (!s) return;
+  if (!canEditSetlist(s)) {
+    toast('Somente quem criou este repertório pode arquivá-lo.');
+    return;
+  }
+  s.archived = !s.archived;
+  s.updatedAt = new Date().toISOString();
+  saveSetlistsState();
+  renderSetlists();
+  toast(s.archived ? 'Repertório arquivado.' : 'Repertório restaurado para ativos.');
+}
+
 function createSetlistFromInput(){
   if (!canCreateSetlists()) {
     toast('Faça login para criar repertórios.');
@@ -3081,6 +3188,7 @@ function createSetlistFromInput(){
   const name = el.newSetlistName.value.trim();
   if (!name) return toast('Informe o nome do repertório para continuar.');
   const creator = currentUserIdentity();
+  const eventDate = el.newSetlistDate?.value || '';  // V108 — data do culto
   const s = {
     id: String(Date.now()),
     name,
@@ -3089,7 +3197,9 @@ function createSetlistFromInput(){
     createdByEmail: creator.email,
     createdByName: creator.name,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    eventDate,   // V108 — "YYYY-MM-DD" ou vazio
+    archived: false
   };
   setlists.push(s);
   saveSetlistsState();
@@ -3097,9 +3207,10 @@ function createSetlistFromInput(){
   renderSetlists();
   renderSetlistOptions();
   el.newSetlistName.value = '';
+  if (el.newSetlistDate) el.newSetlistDate.value = '';  // V108
   recordUsageEvent({ type: 'setlist_created', setlistId: s.id, setlistName: s.name, trackCount: s.trackIds.length, message: `Repertório "${s.name}" criado.` });
   activateSetlistAndOpenLibrary(s);
-  toast('Repertório criado. Agora escolha as músicas na Biblioteca.');
+  toast('Repertório criado. Adicione músicas na biblioteca.');
 }
 function renderSetlistOptions(){
   if (!setlists.length) {
@@ -3128,14 +3239,33 @@ function renderSetlistOptions(){
 
 function renderSetlists(){
   const permissionNotice = authUser
-    ? 'Todos podem ver e tocar os repertórios. Somente quem criou um repertório pode editá-lo ou excluí-lo.'
-    : 'Faça login para criar repertórios. Repertórios publicados ficam visíveis para todos.';
-  if (!setlists.length) {
-    el.setlistsGrid.innerHTML = `<div class="empty empty-polished"><strong>Nenhum repertório criado ainda.</strong><span>${permissionNotice}</span><button class="btn btn-primary btn-compact" type="button" onclick="document.getElementById('newSetlistBtn')?.click()">+ Criar repertório</button></div>`;
-    return;
-  }
-  el.setlistsGrid.innerHTML = `<div class="setlist-permission-note">${permissionNotice}</div>` + setlists.map(s => {
+    ? 'Todos podem ver e tocar os repertórios. Somente quem criou pode editar ou excluir.'
+    : 'Faça login para criar repertórios.';
+
+  // V108 — separa ativos e arquivados
+  const active   = setlists.filter(s => !isSetlistAutoArchived(s));
+  const archived = setlists.filter(s =>  isSetlistAutoArchived(s));
+
+  // Ordena ativos: com data futura (mais próxima primeiro) → sem data (mais recente primeiro)
+  active.sort((a, b) => {
+    const aHas = !!a.eventDate, bHas = !!b.eventDate;
+    if (aHas && bHas) return new Date(a.eventDate) - new Date(b.eventDate);
+    if (aHas) return -1;
+    if (bHas) return  1;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+  // Ordena arquivados: mais recente primeiro
+  archived.sort((a, b) => {
+    const ad = a.eventDate || a.updatedAt || a.createdAt;
+    const bd = b.eventDate || b.updatedAt || b.createdAt;
+    return new Date(bd) - new Date(ad);
+  });
+
+  function setlistCardHTML(s, isArchived = false){
     const owner = isSetlistOwner(s);
+    const dateLabel = s.eventDate
+      ? new Date(s.eventDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit', year:'numeric' })
+      : '';
     const paletteMarkup = s.paletteTitle ? `
       <div class="setlist-palette">
         <img src="${esc(s.paletteImage || 'assets/logo-avida.jpg')}" alt="${esc(s.paletteTitle)}">
@@ -3152,9 +3282,10 @@ function renderSetlists(){
         </div>
       </div>`;
     return `
-      <article class="setlist-card ${owner ? 'is-owner' : 'is-readonly'}">
+      <article class="setlist-card ${owner ? 'is-owner' : 'is-readonly'} ${isArchived ? 'is-archived' : ''}">
         <strong>${esc(s.name)}</strong>
-        <div class="muted">${s.trackIds.length} música(s) • Criado por ${esc(getSetlistCreatorName(s))}</div>
+        ${dateLabel ? `<div class="setlist-event-date"><span class="setlist-date-chip">📅 ${esc(dateLabel)}</span></div>` : ''}
+        <div class="muted">${s.trackIds.length} música(s) • ${esc(getSetlistCreatorName(s))}</div>
         <div class="setlist-inline-meta">
           <span class="setlist-chip ${s.paletteTitle ? '' : 'is-empty'}">${s.paletteTitle ? `Paleta: ${esc(s.paletteTitle)}` : 'Paleta pendente'}</span>
         </div>
@@ -3164,42 +3295,62 @@ function renderSetlists(){
           <button class="mini-btn open-setlist" data-id="${esc(s.id)}">Playlist</button>
           <button class="mini-btn share-setlist" data-id="${esc(s.id)}">Compartilhar</button>
           <button class="mini-btn notify-setlist" data-id="${esc(s.id)}">Notificar</button>
+          ${owner ? `<button class="mini-btn archive-setlist" data-id="${esc(s.id)}" title="${isArchived ? 'Restaurar' : 'Arquivar'}">${isArchived ? '↩ Restaurar' : '📦 Arquivar'}</button>` : ''}
           ${owner ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>` : ''}
         </div>
       </article>
     `;
-  }).join('');
+  }
 
-  el.setlistsGrid.querySelectorAll('.play-setlist').forEach(btn => btn.addEventListener('click', () => playSetlistById(btn.dataset.id)));
-  el.setlistsGrid.querySelectorAll('.open-setlist').forEach(btn => btn.addEventListener('click', () => { sharedSetlistContextId = null; openSetlistDetail(btn.dataset.id); }));
-  el.setlistsGrid.querySelectorAll('.share-setlist').forEach(btn => btn.addEventListener('click', () => {
-    const setlist = setlists.find(s => s.id === btn.dataset.id);
-    if (setlist) shareSetlistWithPaletteCheck(setlist);
-  }));
-  el.setlistsGrid.querySelectorAll('.notify-setlist').forEach(btn => btn.addEventListener('click', () => {
-    const setlist = setlists.find(s => s.id === btn.dataset.id);
-    notifySetlistDefined(setlist);
-  }));
-  el.setlistsGrid.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
-    const setlist = setlists.find(s => s.id === btn.dataset.id);
-    if (!canDeleteSetlist(setlist)) {
-      toast('Somente quem criou este repertório pode excluí-lo.');
-      return;
+  function bindSetlistGrid(container){
+    container.querySelectorAll('.play-setlist').forEach(btn => btn.addEventListener('click', () => playSetlistById(btn.dataset.id)));
+    container.querySelectorAll('.open-setlist').forEach(btn => btn.addEventListener('click', () => { sharedSetlistContextId = null; openSetlistDetail(btn.dataset.id); }));
+    container.querySelectorAll('.share-setlist').forEach(btn => btn.addEventListener('click', () => {
+      const setlist = setlists.find(s => s.id === btn.dataset.id);
+      if (setlist) shareSetlistWithPaletteCheck(setlist);
+    }));
+    container.querySelectorAll('.notify-setlist').forEach(btn => btn.addEventListener('click', () => {
+      notifySetlistDefined(setlists.find(s => s.id === btn.dataset.id));
+    }));
+    container.querySelectorAll('.archive-setlist').forEach(btn => btn.addEventListener('click', () => toggleSetlistArchive(btn.dataset.id)));
+    container.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
+      const setlist = setlists.find(s => s.id === btn.dataset.id);
+      if (!canDeleteSetlist(setlist)) { toast('Somente quem criou este repertório pode excluí-lo.'); return; }
+      if (!confirm('Excluir este repertório permanentemente?')) return;
+      const deletedId = btn.dataset.id;
+      setlists = setlists.filter(s => s.id !== deletedId);
+      if (activeSetlistId === deletedId) clearActiveSetlist();
+      saveSetlistsState();
+      updateStats();
+      renderSetlists();
+      render();
+    }));
+    container.querySelectorAll('.setlist-card').forEach(card => card.addEventListener('click', e => {
+      if (e.target.closest('button')) return;
+      const openBtn = card.querySelector('.open-setlist');
+      if (openBtn?.dataset?.id) openSetlistDetail(openBtn.dataset.id);
+    }));
+  }
+
+  // Renderiza seção de ativos
+  if (!active.length) {
+    el.setlistsGrid.innerHTML = `<div class="empty empty-polished"><strong>Nenhum repertório ativo.</strong><span>${permissionNotice}</span>${authUser ? '<button class="btn btn-primary btn-compact" type="button" onclick="document.getElementById(\'newSetlistBtn\')?.click()">+ Criar repertório</button>' : ''}</div>`;
+  } else {
+    el.setlistsGrid.innerHTML = `<div class="setlist-permission-note">${permissionNotice}</div>` + active.map(s => setlistCardHTML(s, false)).join('');
+    bindSetlistGrid(el.setlistsGrid);
+  }
+
+  // Renderiza seção de arquivados
+  if (el.archivedSetlistsSection && el.archivedSetlistsGrid) {
+    if (!archived.length) {
+      el.archivedSetlistsSection.style.display = 'none';
+    } else {
+      el.archivedSetlistsSection.style.display = '';
+      if (el.archivedSetlistsCount) el.archivedSetlistsCount.textContent = String(archived.length);
+      el.archivedSetlistsGrid.innerHTML = archived.map(s => setlistCardHTML(s, true)).join('');
+      bindSetlistGrid(el.archivedSetlistsGrid);
     }
-    if (!confirm('Excluir este repertório?')) return;
-    const deletedId = btn.dataset.id;
-    setlists = setlists.filter(s => s.id !== deletedId);
-    if (activeSetlistId === deletedId) clearActiveSetlist();
-    saveSetlistsState();
-    updateStats();
-    renderSetlists();
-    render();
-  }));
-  el.setlistsGrid.querySelectorAll('.setlist-card').forEach(card => card.addEventListener('click', e => {
-    if (e.target.closest('button')) return;
-    const openBtn = card.querySelector('.open-setlist');
-    if (openBtn?.dataset?.id) openSetlistDetail(openBtn.dataset.id);
-  }));
+  }
 }
 function playSetlistById(id){
   const setlist = setlists.find(s => s.id === id);
@@ -3449,7 +3600,7 @@ function openSongModal(track){
   songModalTarget = track;
   el.songModalCover.src = track.coverUrl || 'assets/logo-avida.jpg';
   el.songModalTitle.textContent = track.name;
-  el.songModalSubtitle.textContent = `${track.singer} • ${track.fileName}`;
+  el.songModalSubtitle.textContent = track.singer;
   const alteredTone = track.repertoireTone || '';
   el.songModalMeta.innerHTML = `
     <span class="meta key">Tom original: ${esc(formatKeyLabel(track.key || '—'))}</span>

@@ -6894,3 +6894,121 @@ body.player-visible #setlistDetailModal .modal-card{
     padding-right:10px !important;
   }
 }
+
+/* ============================================================
+   V108 — Arquivamento de repertórios
+   ============================================================ */
+
+/* Campo de data no formulário de criação */
+#newSetlistDate{
+  height:44px;
+  padding:0 12px;
+  border-radius:14px;
+  border:1px solid var(--line-soft);
+  background:rgba(255,255,255,.04);
+  color:var(--text);
+  font-size:14px;
+  min-width:140px;
+  cursor:pointer;
+}
+#newSetlistDate:focus{
+  outline:none;
+  border-color:var(--teal);
+  box-shadow:0 0 0 3px rgba(41,217,208,.12);
+}
+/* Layout do create-inline com 3 filhos (nome + data + botão) */
+.create-inline{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  gap:8px;
+  align-items:center;
+}
+
+/* Chip de data no card */
+.setlist-event-date{
+  margin:4px 0 2px;
+}
+.setlist-date-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:4px 10px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:700;
+  background:rgba(41,217,208,.10);
+  color:var(--teal);
+  border:1px solid rgba(41,217,208,.22);
+}
+
+/* Card arquivado — mais discreto */
+.setlist-card.is-archived{
+  opacity:.65;
+  filter:grayscale(.4);
+  border-color:rgba(255,255,255,.06) !important;
+}
+.setlist-card.is-archived:hover{
+  opacity:.85;
+  filter:grayscale(0);
+}
+
+/* Seção Arquivados — details/summary */
+.archived-setlists-section{
+  margin-top:28px;
+  border-top:1px solid var(--line-soft);
+  padding-top:16px;
+}
+.archived-setlists-toggle{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  cursor:pointer;
+  list-style:none;
+  font-size:15px;
+  font-weight:700;
+  color:var(--muted);
+  padding:8px 0;
+  user-select:none;
+}
+.archived-setlists-toggle::-webkit-details-marker{ display:none; }
+.archived-setlists-toggle::before{
+  content:'▶';
+  font-size:11px;
+  transition:.15s ease;
+  opacity:.5;
+}
+details[open] .archived-setlists-toggle::before{
+  transform:rotate(90deg);
+}
+.archived-setlists-toggle:hover{
+  color:var(--text);
+}
+.archived-count-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  height:20px;
+  padding:0 6px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:900;
+  background:rgba(255,255,255,.08);
+  color:var(--muted);
+}
+.archived-grid{
+  margin-top:14px;
+}
+
+/* Mobile: campo de data ocupa linha própria */
+@media (max-width:760px){
+  .create-inline{
+    grid-template-columns:1fr auto !important;
+    grid-template-rows:auto auto !important;
+  }
+  #newSetlistDate{
+    grid-column:1 / -1;
+    min-width:0;
+    width:100%;
+  }
+}

@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Biblioteca de Louvor — Igreja Amor e Vida</title>
   <meta name="theme-color" content="#0a1014" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Louvor Ávida" />
   <link rel="icon" href="assets/logo-avida.jpg" />
@@ -55,7 +54,7 @@
     </div>
   </div>
 
-  <div id="loginScreen" class="login-screen hidden" aria-hidden="true" data-auth-mode="login">
+  <div id="loginScreen" class="login-screen hidden" data-auth-mode="login">
     <div class="login-backdrop"></div>
     <div class="login-card glass">
       <div class="login-brand">
@@ -98,7 +97,7 @@
         <button id="enterSystemBtn" class="btn btn-primary" type="button">Entrar</button>
         <button id="createAccountBtn" class="btn btn-secondary" type="button">Criar cadastro</button>
       </div>
-      <small class="login-note" id="loginNote">Usuários comuns não podem alterar a escala.</small>
+      <small class="login-note" id="loginNote"></small>
     </div>
   </div>
 
@@ -264,7 +263,7 @@
           <div>
             <span class="kicker">Uniforme do culto</span>
             <h2>Paleta de Cores</h2>
-            <p class="section-subtitle">Sugestões visuais para o ministrante definir o uniforme do culto com unidade, organização e identidade da Igreja Amor e Vida.</p>
+            <p class="section-subtitle">Referência visual para o uniforme do culto.</p>
           </div>
         </div>
         <div class="palette-intro glass-lite">
@@ -489,6 +488,15 @@
           <button id="newSetlistBtn" class="btn btn-secondary btn-compact">+ Novo repertório</button>
         </div>
         <div id="setlistsGrid" class="setlist-grid"></div>
+
+        <!-- V108 — Repertórios arquivados (data passada ou arquivamento manual) -->
+        <details id="archivedSetlistsSection" class="archived-setlists-section" style="display:none">
+          <summary class="archived-setlists-toggle">
+            <span>Arquivados</span>
+            <span id="archivedSetlistsCount" class="archived-count-badge">0</span>
+          </summary>
+          <div id="archivedSetlistsGrid" class="setlist-grid archived-grid"></div>
+        </details>
       </section>
 
 
@@ -705,6 +713,7 @@
       <p id="setlistTrackName">Escolha um repertório abaixo.</p>
       <div class="create-inline">
         <input id="newSetlistName" type="text" placeholder="Ex.: Culto Domingo Noite">
+        <input id="newSetlistDate" type="date" title="Data do culto (opcional — para arquivamento automático)">
         <button id="createSetlistBtn" class="btn btn-primary">Criar</button>
       </div>
       <div id="setlistOptions" class="stack-list"></div>
@@ -782,7 +791,7 @@
         <div class="song-modal-body">
           <span class="kicker">Detalhes da música</span>
           <h3 id="songModalTitle">Música</h3>
-          <p id="songModalSubtitle">Cantor/Pasta</p>
+          <p id="songModalSubtitle"></p>
           <div id="songModalMeta" class="song-meta"></div>
           <div id="songModalTags" class="tag-cluster"></div>
           <div class="modal-actions">
