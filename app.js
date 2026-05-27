@@ -552,8 +552,22 @@ function bindEvents(){
   window.addEventListener('resize', () => { if (!el.tourOverlay?.classList.contains('hidden')) renderTourStep(); });
   window.addEventListener('scroll', () => { if (!el.tourOverlay?.classList.contains('hidden')) positionTourToTarget(document.querySelector(TOUR_STEPS[tourStepIndex]?.selector)); }, { passive: true });
 
-  if (el.enterSystemBtn) el.enterSystemBtn.addEventListener('click', enterSystem);
-  if (el.createAccountBtn) el.createAccountBtn.addEventListener('click', createAccount);
+  if (el.enterSystemBtn) el.enterSystemBtn.addEventListener('click', () => {
+    if (authMode === 'register') {
+      setAuthMode('login');
+    } else {
+      enterSystem();
+    }
+  });
+  // 1) Se estiver no modo login: muda para modo registro (mostra campo Nome).
+  // 2) Se estiver no modo registro: executa o cadastro.
+  if (el.createAccountBtn) el.createAccountBtn.addEventListener('click', () => {
+    if (authMode === 'register') {
+      createAccount();
+    } else {
+      setAuthMode('register');
+    }
+  });
   if (el.modeLoginBtn) el.modeLoginBtn.addEventListener('click', () => setAuthMode('login'));
   if (el.modeRegisterBtn) el.modeRegisterBtn.addEventListener('click', () => setAuthMode('register'));
   if (el.togglePasswordBtn) el.togglePasswordBtn.addEventListener('click', () => togglePasswordVisibility('loginPassword', 'togglePasswordBtn'));
@@ -720,13 +734,13 @@ function setAuthMode(mode = 'login'){
   el.recoverPasswordBtn?.classList.toggle('hidden', isRegister);
   // V102 — authModeHint foi removido do HTML (era redundante com loginNote)
   if (el.authModeHint) el.authModeHint.style.display = 'none';
-  // V102 — loginNote curto e direto ao ponto
+  // V105 — loginNote e textos dos botões refletem o fluxo em dois passos.
   if (el.loginNote) el.loginNote.textContent = isRegister
-    ? 'Informe nome, e-mail e senha para criar sua conta.'
+    ? 'Preencha nome, e-mail e senha para criar sua conta.'
     : 'Usuários comuns não podem alterar a escala.';
-  // V102 — botão secundário muda de texto conforme modo;
-  // o primário "Entrar" sempre loga, "Criar minha conta" sempre registra.
-  if (el.enterSystemBtn) el.enterSystemBtn.textContent = 'Entrar';
+  // Modo login:    [Entrar] [Criar cadastro →]
+  // Modo registro: [← Voltar ao login] [Criar minha conta]
+  if (el.enterSystemBtn) el.enterSystemBtn.textContent = isRegister ? '← Voltar ao login' : 'Entrar';
   if (el.createAccountBtn) el.createAccountBtn.textContent = isRegister ? 'Criar minha conta' : 'Criar cadastro';
   setAuthStatus('', false);
   ['loginName','loginEmail','loginPassword'].forEach(validateAuthField);
@@ -957,7 +971,7 @@ async function createAccount(){
     setAuthMode('login');
     validateAuthField('loginEmail');
     validateAuthField('loginPassword');
-    setAuthStatus('Cadastro criado com sucesso. Agora informe sua senha e clique em “Entrar na conta”.', false);
+    setAuthStatus('Cadastro criado com sucesso! Informe sua senha e clique em “Entrar”.', false);
     toast('Cadastro criado. Faça login para acessar sua conta.');
     setTimeout(() => el.loginPassword?.focus(), 80);
   } catch (error) {
