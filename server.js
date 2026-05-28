@@ -60,7 +60,14 @@ const APPWRITE_DATABASE_ID = process.env.APPWRITE_DATABASE_ID || 'louvor_avida';
 const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY || '';
 const APPWRITE_APP_STATE_COLLECTION_ID = process.env.APPWRITE_APP_STATE_COLLECTION_ID || 'app_state';
 const APPWRITE_USER_STATE_COLLECTION_ID = process.env.APPWRITE_USER_STATE_COLLECTION_ID || 'user_state';
-const APPWRITE_ADMIN_EMAILS = (process.env.APPWRITE_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+// V116 — Admins configurados via variável de ambiente no Render.
+// APPWRITE_ADMIN_EMAILS = "david.o.antunes@gmail.com,outro@email.com"
+// Fallback: se a variável não estiver configurada, usa o e-mail do criador do sistema.
+const ADMIN_FALLBACK = ['david.o.antunes@gmail.com'];
+const APPWRITE_ADMIN_EMAILS_RAW = (process.env.APPWRITE_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+const APPWRITE_ADMIN_EMAILS = APPWRITE_ADMIN_EMAILS_RAW.length
+  ? APPWRITE_ADMIN_EMAILS_RAW
+  : ADMIN_FALLBACK;
 
 function appwriteReady() {
   return Boolean(APPWRITE_ENDPOINT && APPWRITE_PROJECT_ID && APPWRITE_DATABASE_ID && APPWRITE_API_KEY);
@@ -101,7 +108,7 @@ async function upsertState(collectionId, matcher, data) {
   return appwriteRequest('POST', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents`, { documentId: 'unique()', data });
 }
 app.get('/api/appwrite/config', (req, res) => {
-  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: APPWRITE_ADMIN_EMAILS.length > 0 });
+  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: true });
 });
 
 app.get('/api/appwrite/bootstrap/:userId', async (req, res) => {

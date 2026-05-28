@@ -743,8 +743,14 @@ async function loadAppwriteServerConfig(){
     const data = await res.json();
     if (Array.isArray(data.adminEmails)) cloudAdminEmails = data.adminEmails.map(e => String(e).toLowerCase());
     cloudAdminConfigured = Boolean(data.adminConfigured);
+    // V116 — Re-renderiza após carregar os adminEmails para que os botões
+    // de admin (Excluir, Arquivar, Importar) apareçam corretamente.
+    if (authUser) {
+      renderSetlists();
+      renderSchedule();
+    }
   } catch (error) {
-    console.warn('Configuração Appwrite do servidor não carregada:', error);
+    console.warn('Configuração do servidor não carregada:', error);
   }
 }
 
@@ -3632,8 +3638,8 @@ function renderSetlists(){
           <button class="mini-btn open-setlist" data-id="${esc(s.id)}">Playlist</button>
           <button class="mini-btn share-setlist" data-id="${esc(s.id)}">Compartilhar</button>
           <button class="mini-btn notify-setlist" data-id="${esc(s.id)}">Notificar</button>
-          ${owner ? `<button class="mini-btn archive-setlist" data-id="${esc(s.id)}" title="${isArchived ? 'Restaurar' : 'Arquivar'}">${isArchived ? '↩ Restaurar' : '📦 Arquivar'}</button>` : ''}
-          ${owner ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>` : ''}
+          ${canEditSetlist(s) ? `<button class="mini-btn archive-setlist" data-id="${esc(s.id)}" title="${isArchived ? 'Restaurar' : 'Arquivar'}">${isArchived ? '↩ Restaurar' : '📦 Arquivar'}</button>` : ''}
+          ${canDeleteSetlist(s) ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>` : ''}
         </div>
       </article>
     `;
