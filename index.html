@@ -198,14 +198,19 @@
         <div class="section-head schedule-head">
           <div>
             <span class="kicker">Escala mensal</span>
-            <h2>Escala Louvor Ávida — Maio 2026</h2>
+            <h2 id="scheduleTitle">Escala Louvor Ávida</h2>
           </div>
           <div class="schedule-actions">
             <button id="schedulePrintBtn" class="btn btn-secondary btn-compact" type="button">Imprimir</button>
             <button id="scheduleClearBtn" class="btn btn-secondary btn-compact" type="button">Limpar filtros</button>
+            <button id="scheduleImportBtn" class="btn btn-secondary btn-compact hidden" type="button">📥 Importar Excel</button>
+            <input id="scheduleImportInput" type="file" accept=".xlsx,.xls" style="display:none">
             <button id="scheduleSaveBtn" class="btn btn-primary btn-compact hidden" type="button">Salvar escala</button>
           </div>
         </div>
+
+        <!-- V112 — Navegação por mês -->
+        <div id="scheduleMonthNav" class="schedule-month-nav"></div>
 
         <div class="schedule-toolbar">
           <label><span>Buscar pessoa</span><input id="scheduleSearch" type="search" placeholder="Digite um nome da escala..." /></label>
@@ -214,7 +219,6 @@
         </div>
 
         <div id="scheduleEditStatus" class="schedule-edit-status"></div>
-
         <div class="schedule-summary" id="scheduleSummary"></div>
 
         <div class="schedule-table-wrap">
@@ -807,6 +811,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/appwrite@16.1.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="config.js"></script>
 
   <div id="tourOverlay" class="tour-overlay hidden" aria-hidden="true">

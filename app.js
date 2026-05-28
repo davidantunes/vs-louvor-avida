@@ -60,6 +60,28 @@ const DEFAULT_scheduleRows = [
   { day:'Quinta', date:'28/05', minister:'Márcia', back1:'Thelma', back2:'Thiagão', back3:'Daniele', bass:'Pr Douglas', drums:'Mayra', guitar:'Alessandro', keyboard:'Douglas', sound:'Edmilson' },
   { day:'Domingo', date:'31/05', minister:'Dafnis', back1:'Izabel', back2:'Edimar', back3:'Tales', bass:'Pr Douglas', drums:'Daniel', guitar:'Fábio', keyboard:'Thiago Matos', sound:'Edvanio' }
 ];
+
+// V112 — Escala de Junho 2026 (importada do Excel Escala_Louvor_Junho_2026.xlsx)
+const JUNHO_2026_ROWS = [
+  { day:'Quinta', date:'04/06', minister:'Rayssa', back1:'Daniele', back2:'Edimar', back3:'Ludmilla', bass:'Luis', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Pr Douglas' },
+  { day:'Domingo', date:'07/06', minister:'Izabel', back1:'Ana Caroline', back2:'Leandro', back3:'Thelma', bass:'Marcinho', drums:'Mayra', guitar:'Fábio', keyboard:'Douglas', sound:'Edvanio' },
+  { day:'Quinta', date:'11/06', minister:'Laryssa', back1:'Márcia', back2:'Thiagão', back3:'Mariah', bass:'Pr Douglas', drums:'', guitar:'Alessandro', keyboard:'Douglas', sound:'Antônio' },
+  { day:'Domingo', date:'14/06', minister:'Dafnis', back1:'Mariah', back2:'Edimar', back3:'Caroline', bass:'Luis', drums:'Daniel', guitar:'Alessandro', keyboard:'Thiago Matos', sound:'Edvanio' },
+  { day:'Quinta', date:'18/06', minister:'Daniele', back1:'Thelma', back2:'Laryssa', back3:'Letícia', bass:'Luis', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Edmilson' },
+  { day:'Domingo', date:'21/06', minister:'Márcia', back1:'Ana Caroline', back2:'Leandro', back3:'Tales', bass:'Marcinho', drums:'Mayra', guitar:'Fábio', keyboard:'Douglas', sound:'Edvanio' },
+  { day:'Quinta', date:'25/06', minister:'Luis', back1:'Márcia', back2:'Izabel', back3:'Letícia', bass:'Pr Douglas', drums:'Mayra', guitar:'Fábio', keyboard:'Douglas', sound:'Antônio' },
+  { day:'Domingo', date:'28/06', minister:'Thiagão', back1:'Thelma', back2:'Rayssa', back3:'Caroline', bass:'Pr Douglas', drums:'Daniel', guitar:'Alessandro', keyboard:'Douglas', sound:'Edvanio' }
+];
+
+// V112 — Estrutura multi-mês: chave "YYYY-MM", valor = array de rows.
+// Permite navegação por mês e importação de escalas futuras sem perder as anteriores.
+const DEFAULT_ALL_MONTHS = {
+  '2026-05': DEFAULT_scheduleRows,
+  '2026-06': JUNHO_2026_ROWS
+};
+
+let allScheduleMonths = {}; // populado no initSchedule
+let activeScheduleMonth = ''; // "YYYY-MM" do mês sendo exibido
 const DEFAULT_MEMBERS = ["Alessandro", "Ana Caroline", "Antônio", "Caroline", "Dafnis", "Daniel", "Daniele", "Douglas", "Edimar", "Edmilson", "Edvanio", "Fábio", "Izabel", "Laryssa", "Leandro", "Letícia", "Ludmilla", "Luis", "Márcia", "Marcinho", "Mariah", "Mayra", "Pr Douglas", "Rayssa", "Tales", "Thelma", "Thiagão", "Thiago Matos"];
 let scheduleRows = DEFAULT_scheduleRows.map(row => ({...row}));
 let members = [...DEFAULT_MEMBERS];
@@ -298,7 +320,11 @@ const el = {
   scheduleEditStatus: document.getElementById('scheduleEditStatus'),
   scheduleSummary: document.getElementById('scheduleSummary'),
   scheduleCards: document.getElementById('scheduleCards'),
-  scheduleTableBody: document.getElementById('scheduleTableBody')
+  scheduleTableBody: document.getElementById('scheduleTableBody'),
+  scheduleMonthNav: document.getElementById('scheduleMonthNav'),
+  scheduleTitle: document.getElementById('scheduleTitle'),
+  scheduleImportBtn: document.getElementById('scheduleImportBtn'),
+  scheduleImportInput: document.getElementById('scheduleImportInput'),
 };
 
 document.title = cfg.APP_TITLE;
@@ -1198,6 +1224,15 @@ async function loadCloudState(){
     if (Array.isArray(cloudMembers) && cloudMembers.length) members = normalizeMembers(cloudMembers);
     if (Array.isArray(cloudSchedule) && cloudSchedule.length) scheduleRows = normalizeScheduleRows(cloudSchedule);
     if (Array.isArray(cloudHistory)) usageHistory = cloudHistory;
+    // V112 — carrega mapa multi-mês da nuvem
+    try {
+      const cloudMonths = await getSharedState('allScheduleMonths');
+      if (cloudMonths && typeof cloudMonths === 'object' && !Array.isArray(cloudMonths)) {
+        allScheduleMonths = { ...DEFAULT_ALL_MONTHS, ...cloudMonths };
+        scheduleRows = allScheduleMonths[activeScheduleMonth] || scheduleRows;
+        saveJSON('vs_schedule_months_v1', allScheduleMonths);
+      }
+    } catch(_) {}
     saveJSON('vs_setlists_v1', setlists);
     saveJSON('vs_favorites_v1', favorites);
     saveJSON('vs_members_v1', members);
@@ -1677,16 +1712,20 @@ async function saveScheduleState(showToast = false){
     return;
   }
   try {
-    setScheduleEditStatus('Salvando escala no Appwrite...', 'saving');
+    setScheduleEditStatus('Salvando escala...', 'saving');
+    // V112 — salva o mês ativo no mapa e persiste tudo
+    allScheduleMonths[activeScheduleMonth] = scheduleRows;
     await Promise.all([
       setAdminSharedState('members', members),
-      setAdminSharedState('monthlySchedule', scheduleRows)
+      setAdminSharedState('monthlySchedule', scheduleRows),
+      setAdminSharedState('allScheduleMonths', allScheduleMonths)
     ]);
     scheduleDirty = false;
     saveJSON('vs_members_v1', members);
     saveJSON('vs_schedule_rows_v1', scheduleRows);
+    saveJSON('vs_schedule_months_v1', allScheduleMonths);
     saveJSON('vs_usage_history_v51', usageHistory);
-    setScheduleEditStatus('Escala salva no banco de dados Appwrite.', 'admin');
+    setScheduleEditStatus('Escala salva com sucesso.', 'admin');
     if (showToast) toast('Escala salva com sucesso.');
   } catch (error) {
     console.error(error);
@@ -1979,11 +2018,246 @@ function finishGuidedTour(){
 
 function initSchedule(){
   const localMembers = loadJSON('vs_members_v1', null);
-  const localSchedule = loadJSON('vs_schedule_rows_v1', null);
+  const localMonths  = loadJSON('vs_schedule_months_v1', null);
+
   if (Array.isArray(localMembers)) members = normalizeMembers(localMembers);
-  if (Array.isArray(localSchedule)) scheduleRows = normalizeScheduleRows(localSchedule);
+
+  // V112 — carrega estrutura multi-mês do storage local; fallback para defaults
+  if (localMonths && typeof localMonths === 'object' && !Array.isArray(localMonths)) {
+    allScheduleMonths = localMonths;
+    // Migra meses do formato antigo (scheduleRows) se necessário
+    const legacyRows = loadJSON('vs_schedule_rows_v1', null);
+    if (Array.isArray(legacyRows) && legacyRows.length) {
+      const monthKey = inferMonthKeyFromRows(legacyRows);
+      if (monthKey && !allScheduleMonths[monthKey]) allScheduleMonths[monthKey] = legacyRows;
+    }
+  } else {
+    // Fallback ao formato legado
+    const legacyRows = loadJSON('vs_schedule_rows_v1', null);
+    allScheduleMonths = { ...DEFAULT_ALL_MONTHS };
+    if (Array.isArray(legacyRows) && legacyRows.length) {
+      const monthKey = inferMonthKeyFromRows(legacyRows);
+      if (monthKey) allScheduleMonths[monthKey] = legacyRows;
+    }
+  }
+
+  // Garante que os defaults existam
+  Object.entries(DEFAULT_ALL_MONTHS).forEach(([k, v]) => {
+    if (!allScheduleMonths[k]) allScheduleMonths[k] = v;
+  });
+
+  // Define o mês ativo: o mais recente que ainda não passou ou o mais próximo
+  activeScheduleMonth = chooseBestMonth();
+
+  // Atualiza scheduleRows para compatibilidade com o código existente
+  scheduleRows = allScheduleMonths[activeScheduleMonth] || [];
+
+  populateScheduleFilters();
+  renderMonthNav();
+  renderSchedule();
+
+  // Bind importação de Excel
+  if (el.scheduleImportBtn) {
+    el.scheduleImportBtn.addEventListener('click', () => el.scheduleImportInput?.click());
+  }
+  if (el.scheduleImportInput) {
+    el.scheduleImportInput.addEventListener('change', handleScheduleExcelImport);
+  }
+}
+
+// V112 — Escolhe o mês mais relevante para exibir por padrão
+function chooseBestMonth(){
+  const keys = Object.keys(allScheduleMonths).sort();
+  if (!keys.length) return '';
+  const now = new Date();
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  if (keys.includes(currentKey)) return currentKey;
+  // Próximo mês futuro
+  const future = keys.filter(k => k >= currentKey);
+  if (future.length) return future[0];
+  // Mais recente passado
+  return keys[keys.length - 1];
+}
+
+// V112 — Tenta inferir "YYYY-MM" a partir das datas de um array de rows legados
+function inferMonthKeyFromRows(rows){
+  for (const row of rows) {
+    if (!row.date) continue;
+    const parts = row.date.split('/');
+    if (parts.length >= 2) {
+      const day = parts[0], month = parts[1];
+      const year = parts[2] || new Date().getFullYear();
+      return `${year}-${String(month).padStart(2,'0')}`;
+    }
+  }
+  return null;
+}
+
+// V112 — Nome do mês por extenso a partir de "YYYY-MM"
+function monthKeyToLabel(key){
+  if (!key) return '';
+  const [year, month] = key.split('-');
+  const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  return `${months[parseInt(month,10)-1]} ${year}`;
+}
+
+// V112 — Renderiza a barra de botões de navegação por mês
+function renderMonthNav(){
+  if (!el.scheduleMonthNav) return;
+  const keys = Object.keys(allScheduleMonths).sort();
+  if (keys.length <= 1) {
+    el.scheduleMonthNav.style.display = 'none';
+    return;
+  }
+  el.scheduleMonthNav.style.display = '';
+  el.scheduleMonthNav.innerHTML = keys.map(key => `
+    <button class="month-btn ${key === activeScheduleMonth ? 'active' : ''}" data-month="${esc(key)}">
+      ${esc(monthKeyToLabel(key))}
+    </button>
+  `).join('');
+  el.scheduleMonthNav.querySelectorAll('.month-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchScheduleMonth(btn.dataset.month));
+  });
+}
+
+// V112 — Muda para o mês selecionado
+function switchScheduleMonth(key){
+  if (!allScheduleMonths[key]) return;
+  activeScheduleMonth = key;
+  scheduleRows = allScheduleMonths[key] || [];
+  renderMonthNav();
   populateScheduleFilters();
   renderSchedule();
+  // Scroll suave até a seção de escala no mobile
+  document.getElementById('escalaMensal')?.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// V112 — Salva todos os meses no storage local e na nuvem
+async function saveAllScheduleMonths(showToast = false){
+  allScheduleMonths[activeScheduleMonth] = scheduleRows;
+  saveJSON('vs_schedule_months_v1', allScheduleMonths);
+  // Mantém compatibilidade com formato legado
+  saveJSON('vs_schedule_rows_v1', scheduleRows);
+  if (showToast) toast('Escala salva com sucesso.');
+  try {
+    await setAdminSharedState('allScheduleMonths', allScheduleMonths);
+    await setAdminSharedState('monthlySchedule', scheduleRows);
+  } catch(e) {
+    console.warn('Escala não sincronizada na nuvem:', e);
+  }
+}
+
+// V112 — Importação de Excel via SheetJS
+async function handleScheduleExcelImport(event){
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!isScheduleAdmin()) {
+    toast('Somente administradores podem importar escalas.');
+    return;
+  }
+  if (!window.XLSX) {
+    toast('Biblioteca de leitura de Excel ainda não carregou. Tente novamente em segundos.');
+    return;
+  }
+  try {
+    toast('Lendo arquivo Excel...');
+    const buffer = await file.arrayBuffer();
+    const wb = window.XLSX.read(buffer, { type:'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = window.XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+
+    const rows = parseExcelScheduleRows(raw);
+    if (!rows.length) {
+      toast('Nenhuma linha de escala encontrada no arquivo. Verifique o formato.');
+      return;
+    }
+
+    // Detecta o mês do arquivo pelos dados
+    const monthKey = inferMonthKeyFromRows(rows) || activeScheduleMonth;
+    const label = monthKeyToLabel(monthKey);
+
+    if (!confirm(`Importar ${rows.length} datas para ${label}? Os dados existentes desse mês serão substituídos.`)) return;
+
+    allScheduleMonths[monthKey] = rows;
+    activeScheduleMonth = monthKey;
+    scheduleRows = rows;
+
+    // Atualiza membros com nomes novos
+    const allNames = new Set(members);
+    rows.forEach(row => {
+      Object.keys(SCHEDULE_ROLE_LABELS).forEach(field => {
+        const val = (row[field] || '').trim();
+        if (val && val !== '—') allNames.add(val);
+      });
+    });
+    members = [...allNames].sort((a,b) => a.localeCompare(b,'pt-BR'));
+    saveJSON('vs_members_v1', members);
+
+    renderMonthNav();
+    populateScheduleFilters();
+    renderSchedule();
+    await saveAllScheduleMonths(true);
+    toast(`✓ Escala de ${label} importada com sucesso — ${rows.length} datas.`);
+  } catch(e) {
+    console.error('[importExcel]', e);
+    toast('Erro ao ler o arquivo Excel. Verifique se o formato está correto.');
+  } finally {
+    if (el.scheduleImportInput) el.scheduleImportInput.value = '';
+  }
+}
+
+// V112 — Parseia as linhas brutas do Excel para o formato de scheduleRow
+function parseExcelScheduleRows(rawRows){
+  const DAYS_PT = { 'Quinta':true, 'Domingo':true, 'Segunda':true, 'Terça':true, 'Quarta':true, 'Sexta':true, 'Sábado':true };
+  const EXCEL_EPOCH = new Date(1899, 11, 30);
+
+  // Procura o cabeçalho: linha com "Ministro" ou "Minister"
+  let headerIdx = -1;
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = rawRows[i].map(c => String(c).toLowerCase());
+    if (row.some(c => c.includes('ministro') || c.includes('minister'))) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  const rows = [];
+  // Percorre linhas após o cabeçalho (ou da linha 1 se não achou header)
+  const startIdx = headerIdx >= 0 ? headerIdx + 1 : 1;
+
+  for (let i = startIdx; i < rawRows.length; i++) {
+    const cells = rawRows[i];
+    if (!cells || cells.length < 3) continue;
+
+    // Coluna 0: dia da semana (texto) — pode estar vazio (mesclado no Excel)
+    let day = String(cells[0] || '').trim();
+    // Coluna 1: data (pode ser serial numérico do Excel ou "DD/MM")
+    let dateRaw = cells[1];
+    let dateStr = '';
+    if (typeof dateRaw === 'number' && dateRaw > 40000) {
+      // Serial do Excel → data real
+      const d = new Date(EXCEL_EPOCH.getTime() + dateRaw * 86400000);
+      const dd = String(d.getDate()).padStart(2,'0');
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      dateStr = `${dd}/${mm}`;
+      if (!day || !DAYS_PT[day]) {
+        const diasSemana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+        day = diasSemana[d.getDay()];
+      }
+    } else {
+      dateStr = String(dateRaw || '').trim();
+    }
+
+    if (!dateStr) continue;
+
+    // Mapeia as colunas restantes para os campos da escala
+    const [, , minister='', back1='', back2='', back3='', bass='', drums='', guitar='', keyboard='', sound=''] =
+      cells.map(c => String(c || '').trim());
+
+    rows.push({ day, date:dateStr, minister, back1, back2, back3, bass, drums, guitar, keyboard, sound });
+  }
+  return rows;
 }
 function populateScheduleFilters(){
   if (!el.scheduleDayFilter) return;
@@ -2022,6 +2296,14 @@ function updateScheduleEditUI(){
 }
 function renderSchedule(){
   if (!el.scheduleTableBody) return;
+  // V112 — atualiza o título com o mês ativo
+  if (el.scheduleTitle) {
+    el.scheduleTitle.textContent = activeScheduleMonth
+      ? `Escala Louvor Ávida — ${monthKeyToLabel(activeScheduleMonth)}`
+      : 'Escala Louvor Ávida';
+  }
+  // V112 — botão importar visível apenas para admins
+  if (el.scheduleImportBtn) el.scheduleImportBtn.classList.toggle('hidden', !isScheduleAdmin());
   updateScheduleEditUI();
   const rows = getFilteredScheduleRows();
   const q = normalize(el.scheduleSearch?.value || '');

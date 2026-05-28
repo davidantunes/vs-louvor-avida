@@ -7012,3 +7012,59 @@ details[open] .archived-setlists-toggle::before{
     width:100%;
   }
 }
+
+/* ============================================================
+   V112 — Navegação de meses na Escala
+   ============================================================ */
+
+.schedule-month-nav{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:20px;
+}
+.month-btn{
+  padding:8px 18px;
+  border-radius:999px;
+  border:1px solid var(--line-soft);
+  background:rgba(255,255,255,.04);
+  color:var(--text);
+  font-size:14px;
+  font-weight:600;
+  cursor:pointer;
+  transition:.15s ease;
+  white-space:nowrap;
+}
+.month-btn:hover{
+  background:rgba(41,217,208,.10);
+  border-color:rgba(41,217,208,.3);
+  color:var(--teal);
+}
+.month-btn.active{
+  background:linear-gradient(135deg,var(--teal),var(--teal-2));
+  color:#001110;
+  border-color:transparent;
+  box-shadow:0 2px 12px rgba(41,217,208,.25);
+}
+
+/* Mobile: botões de mês maiores e mais fáceis de tocar */
+@media (max-width:760px){
+  .schedule-month-nav{
+    gap:6px;
+    margin-bottom:14px;
+    /* Scroll horizontal quando há muitos meses */
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:4px;
+    scrollbar-width:none;
+  }
+  .schedule-month-nav::-webkit-scrollbar{ display:none; }
+  .month-btn{
+    flex:0 0 auto;
+    padding:10px 20px;
+    font-size:15px;
+    min-height:44px;
+    border-radius:999px;
+  }
+}
