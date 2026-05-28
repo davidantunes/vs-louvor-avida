@@ -7364,3 +7364,36 @@ details[open] .archived-setlists-toggle::before{
     flex:1 1 calc(50% - 6px) !important;
   }
 }
+
+/* ============================================================
+   V119 — Anular o ::before do play-setlist no card de repertório.
+   A regra V90 força content:'▶' em todo .mini-btn.play-setlist::before.
+   Esta regra tem especificidade maior e anula o pseudo-elemento.
+   ============================================================ */
+.setlist-card .mini-btn.play-setlist-text::before,
+.setlist-card .mini-btn.play-setlist.play-setlist-text::before,
+.setlist-grid .mini-btn.play-setlist-text::before,
+.setlist-grid .mini-btn.play-setlist.play-setlist-text::before,
+.archived-grid .mini-btn.play-setlist-text::before,
+.archived-grid .mini-btn.play-setlist.play-setlist-text::before{
+  content:none !important;
+  display:none !important;
+  position:static !important;
+  width:0 !important;
+  height:0 !important;
+  font-size:0 !important;
+}
+
+/* Garante que o botão Tocar mostra o texto corretamente */
+.setlist-card .mini-btn.play-setlist-text,
+.setlist-grid .mini-btn.play-setlist-text,
+.archived-grid .mini-btn.play-setlist-text{
+  font-size:12px !important;
+  color:var(--teal) !important;
+  text-indent:0 !important;
+  position:static !important;
+  overflow:visible !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
