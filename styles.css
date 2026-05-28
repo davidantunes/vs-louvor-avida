@@ -7192,3 +7192,86 @@ details[open] .archived-setlists-toggle::before{
     transform:translateX(1px);
   }
 }
+
+/* ============================================================
+   V117 — Layout dos botões do card de repertório em linha única.
+   Substitui V115 que não vencia as regras de flex anteriores.
+   ============================================================ */
+
+/* DESKTOP — todos os botões em uma linha com flex nowrap */
+@media (min-width:761px){
+  .setlist-card .setlist-actions,
+  .setlist-grid .setlist-actions,
+  .archived-grid .setlist-actions{
+    display:flex !important;
+    flex-wrap:nowrap !important;
+    gap:6px !important;
+    margin-top:14px !important;
+    align-items:center !important;
+    overflow:visible !important;
+  }
+  /* Todos os botões: altura uniforme, sem quebra de texto */
+  .setlist-card .setlist-actions .mini-btn{
+    height:36px !important;
+    font-size:12px !important;
+    font-weight:700 !important;
+    padding:0 12px !important;
+    white-space:nowrap !important;
+    flex-shrink:0 !important;
+    border-radius:10px !important;
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+  }
+  /* Play: quadrado perfeito */
+  .setlist-card .setlist-actions .mini-btn.play-setlist,
+  .setlist-card .setlist-actions .mini-btn.play-one{
+    width:36px !important;
+    height:36px !important;
+    min-width:36px !important;
+    padding:0 !important;
+    position:relative !important;
+    overflow:hidden !important;
+    flex-shrink:0 !important;
+  }
+  .setlist-card .setlist-actions .mini-btn.play-setlist::before,
+  .setlist-card .setlist-actions .mini-btn.play-one::before{
+    content:'▶' !important;
+    position:absolute !important;
+    inset:0 !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    font-size:13px !important;
+    font-weight:900 !important;
+    text-indent:0 !important;
+    color:var(--text) !important;
+    transform:translateX(1px);
+  }
+}
+
+/* MOBILE — wrap normal, mas play continua quadrado */
+@media (max-width:760px){
+  .setlist-card .setlist-actions .mini-btn.play-setlist,
+  .setlist-card .setlist-actions .mini-btn.play-one{
+    width:40px !important;
+    height:40px !important;
+    min-width:40px !important;
+    padding:0 !important;
+    position:relative !important;
+    overflow:hidden !important;
+  }
+  .setlist-card .setlist-actions .mini-btn.play-setlist::before,
+  .setlist-card .setlist-actions .mini-btn.play-one::before{
+    content:'▶' !important;
+    position:absolute !important;
+    inset:0 !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    font-size:14px !important;
+    font-weight:900 !important;
+    text-indent:0 !important;
+    transform:translateX(1px);
+  }
+}
