@@ -7068,3 +7068,36 @@ details[open] .archived-setlists-toggle::before{
     border-radius:999px;
   }
 }
+
+/* ============================================================
+   V114 — Centralização do ícone ▶ nos botões play da guia
+   Repertórios (.mini-btn.play-setlist e .mini-btn.play-one).
+   Causa: padding:10px 12px do .mini-btn base cria assimetria
+   visual quando o ::before usa position:absolute; inset:0.
+   Solução: zera padding, mantém o absolute que já funciona.
+   ============================================================ */
+@media (min-width:761px){
+  .mini-btn.play-setlist,
+  .mini-btn.play-one{
+    padding:0 !important;
+    min-width:44px !important;
+    width:44px !important;
+    height:44px !important;
+    text-indent:0 !important;
+    position:relative !important;
+    overflow:hidden !important;
+  }
+  .mini-btn.play-setlist::before,
+  .mini-btn.play-one::before{
+    content:'▶' !important;
+    position:absolute !important;
+    inset:0 !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    font-size:15px !important;
+    font-weight:900 !important;
+    text-indent:0 !important;
+    transform:translateX(1px); /* ajuste óptico padrão do glyph ▶ */
+  }
+}

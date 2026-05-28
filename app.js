@@ -1339,10 +1339,12 @@ function isSetlistOwner(setlist){
   return Boolean((creatorId && creatorId === user.id) || (creatorEmail && creatorEmail === user.email));
 }
 function canDeleteSetlist(setlist){
-  return isSetlistOwner(setlist);
+  // V113 — admin do sistema pode excluir qualquer repertório
+  return isSetlistOwner(setlist) || isScheduleAdmin();
 }
 function canEditSetlist(setlist){
-  return isSetlistOwner(setlist);
+  // V113 — admin do sistema pode editar qualquer repertório
+  return isSetlistOwner(setlist) || isScheduleAdmin();
 }
 
 function canCreateSetlists(){
@@ -3574,7 +3576,7 @@ function renderSetlistOptions(){
 
 function renderSetlists(){
   const permissionNotice = authUser
-    ? 'Todos podem ver e tocar os repertórios. Somente quem criou pode editar ou excluir.'
+    ? 'Todos podem ver e tocar os repertórios. Somente quem criou (ou administradores) pode editar ou excluir.'
     : 'Faça login para criar repertórios.';
 
   // V108 — separa ativos e arquivados
