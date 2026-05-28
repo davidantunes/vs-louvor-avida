@@ -3633,14 +3633,17 @@ function renderSetlists(){
           <span class="setlist-chip ${s.paletteTitle ? '' : 'is-empty'}">${s.paletteTitle ? `Paleta: ${esc(s.paletteTitle)}` : 'Paleta pendente'}</span>
         </div>
         ${paletteMarkup}
-        <div class="setlist-actions">
-          <button class="mini-btn play-setlist" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório"></button>
+        <div class="setlist-actions setlist-actions-row1">
+          <button class="mini-btn play-setlist play-setlist-text" data-id="${esc(s.id)}" aria-label="Tocar repertório" title="Tocar repertório">▶ Tocar</button>
           <button class="mini-btn open-setlist" data-id="${esc(s.id)}">Playlist</button>
           <button class="mini-btn share-setlist" data-id="${esc(s.id)}">Compartilhar</button>
           <button class="mini-btn notify-setlist" data-id="${esc(s.id)}">Notificar</button>
-          ${canEditSetlist(s) ? `<button class="mini-btn archive-setlist" data-id="${esc(s.id)}" title="${isArchived ? 'Restaurar' : 'Arquivar'}">${isArchived ? '↩ Restaurar' : '📦 Arquivar'}</button>` : ''}
-          ${canDeleteSetlist(s) ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">Excluir</button>` : ''}
         </div>
+        ${canEditSetlist(s) || canDeleteSetlist(s) ? `
+        <div class="setlist-actions setlist-actions-row2">
+          ${canEditSetlist(s) ? `<button class="mini-btn archive-setlist" data-id="${esc(s.id)}" title="${isArchived ? 'Restaurar' : 'Arquivar'}">${isArchived ? '↩ Restaurar' : '📦 Arquivar'}</button>` : ''}
+          ${canDeleteSetlist(s) ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">🗑 Excluir</button>` : ''}
+        </div>` : ''}
       </article>
     `;
   }

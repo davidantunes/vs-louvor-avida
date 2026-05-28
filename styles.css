@@ -7275,3 +7275,92 @@ details[open] .archived-setlists-toggle::before{
     transform:translateX(1px);
   }
 }
+
+/* ============================================================
+   V118 — Cards de repertório: 2 linhas de botões + "Tocar" com texto
+   Linha 1: ▶ Tocar | Playlist | Compartilhar | Notificar
+   Linha 2: 📦 Arquivar | 🗑 Excluir  (só para admin/criador)
+   ============================================================ */
+
+/* Container geral do card: garante que as 2 linhas ficam dentro */
+.setlist-card .setlist-actions-row1,
+.setlist-card .setlist-actions-row2,
+.setlist-grid .setlist-actions-row1,
+.setlist-grid .setlist-actions-row2,
+.archived-grid .setlist-actions-row1,
+.archived-grid .setlist-actions-row2{
+  display:flex !important;
+  flex-wrap:nowrap !important;
+  gap:6px !important;
+  align-items:center !important;
+  width:100% !important;
+}
+.setlist-card .setlist-actions-row1{
+  margin-top:14px !important;
+}
+.setlist-card .setlist-actions-row2{
+  margin-top:6px !important;
+}
+
+/* Todos os mini-btn nas linhas: altura uniforme */
+.setlist-card .setlist-actions-row1 .mini-btn,
+.setlist-card .setlist-actions-row2 .mini-btn,
+.setlist-grid .setlist-actions-row1 .mini-btn,
+.setlist-grid .setlist-actions-row2 .mini-btn{
+  height:36px !important;
+  font-size:12px !important;
+  font-weight:700 !important;
+  padding:0 12px !important;
+  white-space:nowrap !important;
+  flex:1 1 auto !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  border-radius:10px !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+}
+
+/* Botão "Tocar" — usa texto, não ícone: reset do play-setlist */
+.setlist-card .play-setlist-text,
+.setlist-grid .play-setlist-text{
+  position:static !important;
+  font-size:12px !important;
+  color:var(--text) !important;
+  text-indent:0 !important;
+  padding:0 14px !important;
+  flex:0 0 auto !important;
+  min-width:72px !important;
+  background:rgba(41,217,208,.12) !important;
+  border-color:rgba(41,217,208,.25) !important;
+  color:var(--teal) !important;
+}
+.setlist-card .play-setlist-text::before,
+.setlist-grid .play-setlist-text::before{
+  content:none !important;
+  display:none !important;
+}
+
+/* Linha 2: botões destrutivos mais discretos */
+.setlist-card .setlist-actions-row2 .delete-setlist{
+  background:rgba(220,50,50,.08) !important;
+  border-color:rgba(220,50,50,.25) !important;
+  color:#ff8080 !important;
+}
+.setlist-card .setlist-actions-row2 .delete-setlist:hover{
+  background:rgba(220,50,50,.18) !important;
+}
+
+/* Mobile: permite wrap nas 2 linhas */
+@media (max-width:760px){
+  .setlist-card .setlist-actions-row1,
+  .setlist-card .setlist-actions-row2{
+    flex-wrap:wrap !important;
+  }
+  .setlist-card .setlist-actions-row1 .mini-btn,
+  .setlist-card .setlist-actions-row2 .mini-btn{
+    height:40px !important;
+    font-size:13px !important;
+    flex:1 1 calc(50% - 6px) !important;
+  }
+}
