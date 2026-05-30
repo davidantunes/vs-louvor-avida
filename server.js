@@ -566,6 +566,9 @@ app.get('/api/library', async (req, res) => {
 });
 
 // Health check leve, útil para pings de uptime gratuitos (cron-job.org / UptimeRobot)
+// /ping — keep-alive minimalista para cron-job.org (2 bytes, nunca dá "Response too big")
+app.get('/ping', (req, res) => res.send('ok'));
+
 app.get('/healthz', (req, res) => {
   let withKey = 0, withoutKey = 0;
   if (libraryCache && libraryCache.tracks) {
