@@ -7397,3 +7397,105 @@ details[open] .archived-setlists-toggle::before{
   align-items:center !important;
   justify-content:center !important;
 }
+
+/* ============================================================
+   V120 — Painel Admin
+   ============================================================ */
+#adminPage{
+  max-width:1100px;
+  margin:0 auto;
+  padding:20px 16px 80px;
+  width:100%;
+}
+#adminPage .section{
+  padding:28px 24px;
+}
+
+/* Tabela de membros */
+.admin-table-wrap{
+  overflow-x:auto;
+  margin-top:16px;
+  border-radius:14px;
+  border:1px solid var(--line-soft);
+}
+.admin-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
+.admin-table thead th{
+  background:rgba(255,255,255,.04);
+  padding:10px 16px;
+  text-align:left;
+  font-size:12px;
+  font-weight:700;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.05em;
+  white-space:nowrap;
+  border-bottom:1px solid var(--line-soft);
+}
+.admin-table tbody tr{
+  border-bottom:1px solid rgba(255,255,255,.04);
+  transition:.12s;
+}
+.admin-table tbody tr:hover{
+  background:rgba(255,255,255,.03);
+}
+.admin-table tbody tr:last-child{
+  border-bottom:none;
+}
+.admin-table td{
+  padding:12px 16px;
+  vertical-align:middle;
+}
+.admin-email{
+  color:var(--muted);
+  font-size:12.5px;
+}
+
+/* Badges */
+.admin-badge{
+  display:inline-flex;
+  align-items:center;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+  margin-left:4px;
+}
+.admin-badge-ok{ background:rgba(41,217,208,.12); color:var(--teal); }
+.admin-badge-off{ background:rgba(255,80,80,.10); color:#ff8080; }
+.admin-badge-admin{ background:rgba(255,180,0,.12); color:#ffb400; }
+.admin-badge-new{ background:rgba(120,80,255,.12); color:#a080ff; }
+
+/* Log de acessos */
+.admin-log-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.admin-log-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 12px;
+  background:rgba(255,255,255,.03);
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.05);
+  font-size:13px;
+  flex-wrap:wrap;
+}
+.admin-log-time{
+  margin-left:auto;
+  color:var(--muted);
+  font-size:12px;
+  white-space:nowrap;
+}
+
+/* Mobile */
+@media (max-width:760px){
+  #adminPage{ padding:12px 8px 80px; }
+  .admin-table td, .admin-table th{ padding:8px 10px; font-size:12px; }
+  .admin-log-time{ margin-left:0; width:100%; }
+}

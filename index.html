@@ -119,6 +119,7 @@
         <a href="#repertorios"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></span><span>Repertórios</span></a>
         <a href="#historico"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5l3 2"/><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></span><span>Histórico</span></a>
         <a href="#tutorialPage"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><span>Tutorial</span></a>
+        <a href="#adminPage" id="adminNavLink" class="hidden"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span>Membros</span></a>
       </nav>
 
       <div class="sidebar-card">
@@ -634,6 +635,46 @@
         <div id="trackList" class="track-grid view-thumbnails"></div>
         <div id="loadSentinel" class="load-sentinel">
           <span id="loadStatus">Role para carregar mais músicas</span>
+        </div>
+      </section>
+    </main>
+
+    <!-- V120 — Painel Admin: membros cadastrados + log de acessos -->
+    <main id="adminPage" class="page hidden" aria-hidden="true">
+      <section class="section glass reveal">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Administração</span>
+            <h2>Membros cadastrados</h2>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="adminRefreshBtn" class="btn btn-secondary btn-compact">↻ Atualizar</button>
+            <span id="adminUserCount" class="archived-count-badge" style="font-size:14px;padding:4px 12px;">—</span>
+          </div>
+        </div>
+
+        <div id="adminLoadingMsg" style="padding:20px 0;color:var(--muted);">Carregando membros...</div>
+
+        <!-- Tabela de membros -->
+        <div class="admin-table-wrap" id="adminUsersWrap" style="display:none">
+          <table class="admin-table" id="adminUsersTable">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>Cadastrado em</th>
+                <th>Último acesso</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Log de acessos -->
+        <div style="margin-top:32px;">
+          <h3 style="font-size:16px;margin-bottom:12px;">Log de acessos recentes</h3>
+          <div id="adminAccessLog" class="admin-log-wrap"></div>
         </div>
       </section>
     </main>

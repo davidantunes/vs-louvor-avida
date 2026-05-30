@@ -252,6 +252,14 @@ const el = {
   songModalShare: document.getElementById('songModalShare'),
   tutorialStartBtn: document.getElementById('tutorialStartBtn'),
   tutorialPageStartBtn: document.getElementById('tutorialPageStartBtn'),
+  adminNavLink: document.getElementById('adminNavLink'),
+  adminPage: document.getElementById('adminPage'),
+  adminRefreshBtn: document.getElementById('adminRefreshBtn'),
+  adminUsersBody: document.getElementById('adminUsersBody'),
+  adminUsersWrap: document.getElementById('adminUsersWrap'),
+  adminUserCount: document.getElementById('adminUserCount'),
+  adminLoadingMsg: document.getElementById('adminLoadingMsg'),
+  adminAccessLog: document.getElementById('adminAccessLog'),
   tourOverlay: document.getElementById('tourOverlay'),
   tourTitle: document.getElementById('tourTitle'),
   tourDescription: document.getElementById('tourDescription'),
@@ -333,6 +341,7 @@ initAppwriteClient();
 loadAppwriteServerConfig().finally(initSessionUI);
 bindEvents();
 initSchedule();
+initAdminPage();
 applyTheme(loadJSON('vs_theme_v1', 'dark'));
 routeInternalPage();
 // V109 — loginScreen começa com .hidden → garante inert para não receber foco
@@ -675,6 +684,7 @@ function getPageFromHash(){
   if (hash === 'paletas' || hash === 'paletaCores') return 'palettes';
   if (hash === 'historico' || hash === 'history') return 'history';
   if (hash === 'tutorialPage' || hash === 'tutorial' || hash === 'quickGuide') return 'tutorial';
+  if (hash === 'adminPage') return 'admin';
   return 'home';
 }
 
@@ -683,7 +693,25 @@ function routeInternalPage(){
   const content = document.querySelector('.content');
   if (!content) return;
 
-  content.classList.remove('page-mode-home','page-mode-library','page-mode-schedule','page-mode-setlists','page-mode-palettes','page-mode-history','page-mode-tutorial','page-mode-player-removed');
+  // V120 — Alterna visibilidade entre o main principal e o adminPage
+  const mainContent = document.querySelector('.content');
+  const adminPageEl = el.adminPage;
+  if (page === 'admin') {
+    if (mainContent) mainContent.style.display = 'none';
+    if (adminPageEl) { adminPageEl.classList.remove('hidden'); adminPageEl.removeAttribute('inert'); }
+    updateAdminNavVisibility();
+    loadAdminData();
+    // Marca link ativo no sidebar
+    document.querySelectorAll('.sidebar-nav a, .mobile-dock a').forEach(link => {
+      link.classList.toggle('is-active', link.getAttribute('href') === '#adminPage');
+    });
+    return;
+  } else {
+    if (mainContent) mainContent.style.display = '';
+    if (adminPageEl) { adminPageEl.classList.add('hidden'); adminPageEl.setAttribute('inert', ''); }
+  }
+
+  content.classList.remove('page-mode-home','page-mode-library','page-mode-schedule','page-mode-setlists','page-mode-palettes','page-mode-history','page-mode-tutorial','page-mode-player-removed','page-mode-admin');
   content.classList.add(`page-mode-${page}`);
 
   const activeHashByPage = {
@@ -748,6 +776,7 @@ async function loadAppwriteServerConfig(){
     if (authUser) {
       renderSetlists();
       renderSchedule();
+      updateAdminNavVisibility();
     }
   } catch (error) {
     console.warn('Configuração do servidor não carregada:', error);
@@ -4028,4 +4057,122 @@ function applyTheme(theme){
   document.body.dataset.theme = theme;
   el.themeToggle.textContent = theme === 'light' ? '☾' : '☼';
   el.themeToggle.title = theme === 'light' ? 'Usar modo escuro' : 'Usar modo claro';
+}
+
+/* ============================================================
+   V120 — Painel Admin: membros cadastrados + log de acessos
+   Visível apenas para admins (isScheduleAdmin()).
+   ============================================================ */
+
+// Exibe/esconde o link Admin no menu conforme permissão
+function updateAdminNavVisibility(){
+  if (!el.adminNavLink) return;
+  el.adminNavLink.classList.toggle('hidden', !isScheduleAdmin());
+}
+
+// Inicializa o painel admin (binds de botões)
+function initAdminPage(){
+  if (el.adminRefreshBtn) {
+    el.adminRefreshBtn.addEventListener('click', loadAdminData);
+  }
+}
+
+// Carrega dados do servidor e renderiza
+async function loadAdminData(){
+  if (!isScheduleAdmin()) return;
+  if (el.adminLoadingMsg) el.adminLoadingMsg.style.display = '';
+  if (el.adminUsersWrap) el.adminUsersWrap.style.display = 'none';
+
+  try {
+    // Carrega usuários e log em paralelo
+    const [usersRes, logRes] = await Promise.all([
+      fetch('/api/admin/users?limit=200'),
+      fetch('/api/admin/access-log')
+    ]);
+
+    // Usuários
+    if (usersRes.ok) {
+      const data = await usersRes.json();
+      renderAdminUsers(data.users || [], data.total || 0);
+    } else {
+      renderAdminError('Não foi possível carregar os membros. Verifique a API Key no Render.');
+    }
+
+    // Log de acessos
+    if (logRes.ok) {
+      const logData = await logRes.json();
+      renderAdminLog(logData.entries || []);
+    }
+  } catch(e) {
+    renderAdminError('Erro de conexão: ' + e.message);
+  } finally {
+    if (el.adminLoadingMsg) el.adminLoadingMsg.style.display = 'none';
+  }
+}
+
+function renderAdminUsers(users, total){
+  if (!el.adminUsersBody) return;
+  if (el.adminUserCount) el.adminUserCount.textContent = `${total} membro${total !== 1 ? 's' : ''}`;
+
+  if (!users.length) {
+    el.adminUsersBody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">Nenhum membro cadastrado ainda.</td></tr>';
+    if (el.adminUsersWrap) el.adminUsersWrap.style.display = '';
+    return;
+  }
+
+  const rows = users.map(u => {
+    const createdAt = u.createdAt ? new Date(u.createdAt).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
+    const accessedAt = u.accessedAt ? new Date(u.accessedAt).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'Nunca';
+    const statusBadge = u.status
+      ? '<span class="admin-badge admin-badge-ok">Ativo</span>'
+      : '<span class="admin-badge admin-badge-off">Inativo</span>';
+    const isAdmin = isScheduleAdmin() && cloudAdminEmails.includes(String(u.email || '').toLowerCase());
+    const roleBadge = isAdmin ? ' <span class="admin-badge admin-badge-admin">Admin</span>' : '';
+    return `
+      <tr>
+        <td><strong>${esc(u.name || '—')}</strong>${roleBadge}</td>
+        <td class="admin-email">${esc(u.email || '—')}</td>
+        <td>${createdAt}</td>
+        <td>${accessedAt}</td>
+        <td>${statusBadge}</td>
+      </tr>
+    `;
+  }).join('');
+
+  el.adminUsersBody.innerHTML = rows;
+  if (el.adminUsersWrap) el.adminUsersWrap.style.display = '';
+}
+
+function renderAdminLog(entries){
+  if (!el.adminAccessLog) return;
+  if (!entries.length) {
+    el.adminAccessLog.innerHTML = '<p style="color:var(--muted);padding:8px 0">Nenhum acesso registrado nesta sessão do servidor.</p>';
+    return;
+  }
+  const rows = entries.slice(0, 50).map(e => {
+    const at = e.at ? new Date(e.at).toLocaleString('pt-BR') : '—';
+    const typeLabel = e.type === 'register' ? '📝 Cadastro' : '🔑 Login';
+    const typeCls = e.type === 'register' ? 'admin-badge-new' : 'admin-badge-ok';
+    return `
+      <div class="admin-log-row">
+        <span class="admin-badge ${typeCls}">${typeLabel}</span>
+        <strong>${esc(e.name || e.email || '—')}</strong>
+        <span class="admin-email">${esc(e.email || '')}</span>
+        <span class="admin-log-time">${at}</span>
+      </div>
+    `;
+  }).join('');
+  el.adminAccessLog.innerHTML = rows;
+}
+
+function renderAdminError(msg){
+  if (el.adminUsersBody) el.adminUsersBody.innerHTML = `<tr><td colspan="5" style="color:#ff8080;padding:20px">${esc(msg)}</td></tr>`;
+  if (el.adminUsersWrap) el.adminUsersWrap.style.display = '';
+}
+
+// Hook na navegação: carrega dados ao entrar na página admin
+function maybeLoadAdminOnNav(hash){
+  if (hash === '#adminPage' && isScheduleAdmin()) {
+    loadAdminData();
+  }
 }
