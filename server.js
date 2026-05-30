@@ -641,18 +641,19 @@ app.post('/api/admin/access-log', (req, res) => {
   }
 });
 
-// GET /api/admin/access-log — retorna o log em memória (requer API Key).
+// GET /api/admin/access-log — retorna o log em memória.
 app.get('/api/admin/access-log', (req, res) => {
-  if (!requireApiKey(res)) return;
-  const type = req.query.type; // filtro opcional: 'login' | 'register'
+  const type = req.query.type;
   const entries = type ? ACCESS_LOG.filter(e => e.type === type) : ACCESS_LOG;
   res.json({ count: entries.length, entries });
 });
 
 // GET /api/admin/users — lista todos os usuários cadastrados via Appwrite Users API.
 app.get('/api/admin/users', async (req, res) => {
-  if (!requireApiKey(res)) return;
-  if (!cloudReady()) return res.status(503).json({ error: 'Appwrite não configurado.' });
+  if (!cloudReady()) {
+    // Se Appwrite não configurado, retorna lista vazia em vez de erro
+    return res.json({ total: 0, limit: 0, offset: 0, users: [], warning: 'Appwrite não configurado.' });
+  }
   try {
     const limit  = Math.min(Number(req.query.limit) || 100, 500);
     const offset = Number(req.query.offset) || 0;

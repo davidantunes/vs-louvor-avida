@@ -4094,9 +4094,14 @@ async function loadAdminData(){
     // Usuários
     if (usersRes.ok) {
       const data = await usersRes.json();
-      renderAdminUsers(data.users || [], data.total || 0);
+      if (data.warning) {
+        renderAdminError('Appwrite não está configurado com API Key de servidor. Configure APPWRITE_API_KEY no Render para listar membros.');
+      } else {
+        renderAdminUsers(data.users || [], data.total || 0);
+      }
     } else {
-      renderAdminError('Não foi possível carregar os membros. Verifique a API Key no Render.');
+      const errText = await usersRes.text().catch(() => '');
+      renderAdminError(`Erro ${usersRes.status} ao carregar membros: ${errText || 'verifique os logs do Render.'}`);
     }
 
     // Log de acessos
