@@ -771,12 +771,11 @@ async function loadAppwriteServerConfig(){
     const data = await res.json();
     if (Array.isArray(data.adminEmails)) cloudAdminEmails = data.adminEmails.map(e => String(e).toLowerCase());
     cloudAdminConfigured = Boolean(data.adminConfigured);
-    // V116 — Re-renderiza após carregar os adminEmails para que os botões
-    // de admin (Excluir, Arquivar, Importar) apareçam corretamente.
+    // V116/V120 — Re-renderiza após carregar adminEmails
+    updateAdminNavVisibility(); // sempre — independe de authUser
     if (authUser) {
       renderSetlists();
       renderSchedule();
-      updateAdminNavVisibility();
     }
   } catch (error) {
     console.warn('Configuração do servidor não carregada:', error);
@@ -1017,6 +1016,8 @@ async function applyAuthUser(user){
   updateProfileModal();
   el.logoutBtn?.classList.remove('hidden');
   hideLogin();
+  // V120 — mostra link Membros no menu se for admin
+  updateAdminNavVisibility();
   // V110 — Registra acesso no histórico e no servidor
   recordUsageEvent({
     type: 'user_login',
