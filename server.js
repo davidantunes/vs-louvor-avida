@@ -648,35 +648,65 @@ app.get('/api/admin/access-log', (req, res) => {
   res.json({ count: entries.length, entries });
 });
 
-// GET /api/admin/users — lista todos os usuários cadastrados via Appwrite Users API.
+// GET /api/admin/users — lista usuários a partir do log de acessos
+// (não requer escopo users.read no Appwrite — usa dados já registrados no sistema)
 app.get('/api/admin/users', async (req, res) => {
-  if (!cloudReady()) {
-    // Se Appwrite não configurado, retorna lista vazia em vez de erro
-    return res.json({ total: 0, limit: 0, offset: 0, users: [], warning: 'Appwrite não configurado.' });
-  }
   try {
-    const limit  = Math.min(Number(req.query.limit) || 100, 500);
-    const offset = Number(req.query.offset) || 0;
-    const search = req.query.search || '';
-    const params = new URLSearchParams({ limit, offset });
-    if (search) params.set('search', search);
+    // Tenta via Appwrite Users API (requer escopo users.read na API Key)
+    if (appwriteReady()) {
+      const limit = Math.min(Number(req.query.limit) || 100, 500);
+      const offset = Number(req.query.offset) || 0;
+      const search = req.query.search || '';
+      const params = new URLSearchParams({ limit, offset });
+      if (search) params.set('search', search);
 
-    const r = await fetch(`${APPWRITE_ENDPOINT}/users?${params}`, { headers: appwriteHeaders() });
-    if (!r.ok) return res.status(r.status).json({ error: await r.text() });
+      const r = await fetch(`${APPWRITE_ENDPOINT}/users?${params}`, {
+        headers: appwriteHeaders()
+      }).catch(() => null);
 
-    const data = await r.json();
-    const users = (data.users || []).map(u => ({
-      id: u.$id,
-      name: u.name || '',
-      email: u.email || '',
-      status: u.status,
-      emailVerification: u.emailVerification,
-      createdAt: u.$createdAt,
-      updatedAt: u.$updatedAt,
-      accessedAt: u.accessedAt,
-      prefs: u.prefs || {}
-    }));
-    res.json({ total: data.total, limit, offset, users });
+      if (r && r.ok) {
+        const data = await r.json();
+        const users = (data.users || []).map(u => ({
+          id: u.$id,
+          name: u.name || '',
+          email: u.email || '',
+          status: u.status,
+          emailVerification: u.emailVerification,
+          createdAt: u.$createdAt,
+          updatedAt: u.$updatedAt,
+          accessedAt: u.accessedAt,
+          prefs: u.prefs || {}
+        }));
+        return res.json({ total: data.total, limit, offset, users, source: 'appwrite' });
+      }
+    }
+
+    // Fallback: monta lista a partir do log de acessos em memória
+    // (mostra quem já acessou o sistema nesta sessão do servidor)
+    const seen = new Map();
+    for (const entry of ACCESS_LOG) {
+      if (!entry.email) continue;
+      if (!seen.has(entry.email)) {
+        seen.set(entry.email, {
+          id: entry.userId || '',
+          name: entry.name || entry.email,
+          email: entry.email,
+          status: true,
+          createdAt: null,
+          accessedAt: entry.at,
+          source: 'log'
+        });
+      }
+    }
+    const users = [...seen.values()];
+    return res.json({
+      total: users.length,
+      limit: users.length,
+      offset: 0,
+      users,
+      source: 'log',
+      notice: 'Dados do log de acessos desta sessão. Para lista completa, configure users.read na API Key do Appwrite.'
+    });
   } catch (e) {
     console.error('[admin/users]', e);
     res.status(500).json({ error: e.message });
@@ -771,6 +801,17 @@ app.get('/api/transpose/:id', async (req, res) => {
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// V120 — Error handler global: captura erros do serve-static e outros
+// middleware sem deixar o processo travar.
+app.use((err, req, res, next) => {
+  // Arquivo estático não encontrado — retorna 404 silencioso
+  if (err.code === 'ENOENT' || err.status === 404) {
+    return res.status(404).send('Not found');
+  }
+  console.error(`[server error] ${req.method} ${req.url}:`, err.message || err);
+  res.status(err.status || 500).send(err.message || 'Internal server error');
 });
 
 app.listen(PORT, () => {

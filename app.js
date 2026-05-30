@@ -4094,14 +4094,10 @@ async function loadAdminData(){
     // Usuários
     if (usersRes.ok) {
       const data = await usersRes.json();
-      if (data.warning) {
-        renderAdminError('Appwrite não está configurado com API Key de servidor. Configure APPWRITE_API_KEY no Render para listar membros.');
-      } else {
-        renderAdminUsers(data.users || [], data.total || 0);
-      }
+      renderAdminUsers(data.users || [], data.total || 0, data.notice || '');
     } else {
       const errText = await usersRes.text().catch(() => '');
-      renderAdminError(`Erro ${usersRes.status} ao carregar membros: ${errText || 'verifique os logs do Render.'}`);
+      renderAdminError(`Não foi possível carregar os membros (${usersRes.status}). Verifique os logs do Render.`);
     }
 
     // Log de acessos
@@ -4116,13 +4112,18 @@ async function loadAdminData(){
   }
 }
 
-function renderAdminUsers(users, total){
+function renderAdminUsers(users, total, notice = ''){
   if (!el.adminUsersBody) return;
   if (el.adminUserCount) el.adminUserCount.textContent = `${total} membro${total !== 1 ? 's' : ''}`;
 
+  // Aviso quando dados vêm do log (não do Appwrite Users API)
+  const noticeHtml = notice
+    ? `<div style="margin-bottom:12px;padding:10px 14px;background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.2);border-radius:10px;font-size:12px;color:#ffb400">⚠️ ${esc(notice)}</div>`
+    : '';
+
   if (!users.length) {
-    el.adminUsersBody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">Nenhum membro cadastrado ainda.</td></tr>';
-    if (el.adminUsersWrap) el.adminUsersWrap.style.display = '';
+    el.adminUsersBody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted)">Nenhum acesso registrado nesta sessão.</td></tr>';
+    if (el.adminUsersWrap) { el.adminUsersWrap.querySelector('.admin-notice')?.remove(); el.adminUsersWrap.insertAdjacentHTML('beforebegin', noticeHtml); el.adminUsersWrap.style.display = ''; }
     return;
   }
 
