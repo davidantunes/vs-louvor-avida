@@ -7499,3 +7499,29 @@ details[open] .archived-setlists-toggle::before{
   .admin-table td, .admin-table th{ padding:8px 10px; font-size:12px; }
   .admin-log-time{ margin-left:0; width:100%; }
 }
+
+/* ============================================================
+   V121 — Card "Próximo culto" clicável na página inicial
+   ============================================================ */
+.next-culto-stat{
+  cursor:pointer !important;
+  transition:.15s ease;
+}
+.next-culto-stat:hover{
+  border-color:rgba(41,217,208,.35) !important;
+  background:rgba(41,217,208,.06) !important;
+}
+.next-culto-stat b{
+  font-size:16px !important;
+  line-height:1.2 !important;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+  display:block;
+}
+.next-culto-stat span{
+  font-size:11px !important;
+  color:var(--teal) !important;
+  font-weight:600;
+}

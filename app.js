@@ -252,7 +252,12 @@ const el = {
   songModalShare: document.getElementById('songModalShare'),
   tutorialStartBtn: document.getElementById('tutorialStartBtn'),
   tutorialPageStartBtn: document.getElementById('tutorialPageStartBtn'),
-  adminNavLink: document.getElementById('adminNavLink'),
+  heroSingers: document.getElementById('heroSingers'),
+  totalActiveSetlists: document.getElementById('totalActiveSetlists'),
+  totalActiveSetlists2: document.getElementById('totalActiveSetlists2'),
+  nextCultoName: document.getElementById('nextCultoName'),
+  nextCultoDate: document.getElementById('nextCultoDate'),
+  nextCultoStat: document.getElementById('nextCultoStat'),
   adminPage: document.getElementById('adminPage'),
   adminRefreshBtn: document.getElementById('adminRefreshBtn'),
   adminUsersBody: document.getElementById('adminUsersBody'),
@@ -3085,19 +3090,59 @@ function localeSort(a,b){ return String(a).localeCompare(String(b), 'pt-BR', { s
 
 function updateStats(){
   const folders = unique(allTracks.map(t => t.singer));
-  const keys = unique(allTracks.map(t => t.key));
-  const tags = unique(allTracks.flatMap(t => t.tags || []));
+
+  // V121 — Conta apenas repertórios NÃO arquivados (ativos/próximos)
+  const activeSetlists = setlists.filter(s => !isSetlistAutoArchived(s));
+
+  // Próximo culto: repertório ativo com eventDate mais próxima do futuro
+  const today = new Date(); today.setHours(0,0,0,0);
+  const withDate = activeSetlists
+    .filter(s => s.eventDate)
+    .sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate));
+  const nextCulto = withDate.length
+    ? withDate[0]
+    : (activeSetlists.length ? activeSetlists[activeSetlists.length - 1] : null);
+
+  // Stats da biblioteca
   el.totalTracks.textContent = allTracks.length;
   el.totalSingers.textContent = folders.length;
   el.totalSingersInline.textContent = folders.length;
-  el.totalKeys.textContent = keys.length;
-  el.totalFavorites.textContent = favorites.length;
+
+  // Stats do hero
   el.heroTotal.textContent = allTracks.length;
   el.heroTotalPanel.textContent = allTracks.length;
-  el.heroSetlists.textContent = setlists.length;
-  el.heroFavs.textContent = favorites.length;
-  el.heroKeys.textContent = keys.length;
-  el.heroCategories.textContent = tags.length;
+  if (el.heroSingers) el.heroSingers.textContent = folders.length;
+  if (el.heroSetlists) el.heroSetlists.textContent = activeSetlists.length;
+
+  // Painel lateral
+  if (el.totalActiveSetlists)  el.totalActiveSetlists.textContent = activeSetlists.length;
+  if (el.totalActiveSetlists2) el.totalActiveSetlists2.textContent = activeSetlists.length;
+
+  // Card "Próximo culto"
+  if (el.nextCultoName && el.nextCultoDate) {
+    if (nextCulto) {
+      // Nome curto: máx 14 chars para caber no card
+      const shortName = nextCulto.name.length > 14
+        ? nextCulto.name.slice(0, 13) + '…'
+        : nextCulto.name;
+      el.nextCultoName.textContent = shortName;
+      el.nextCultoDate.textContent = nextCulto.eventDate
+        ? new Date(nextCulto.eventDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit' })
+        : `${nextCulto.trackIds?.length || 0} músicas`;
+    } else {
+      el.nextCultoName.textContent = '—';
+      el.nextCultoDate.textContent = 'Nenhum ativo';
+    }
+  }
+
+  // Click no card leva para a guia de repertórios
+  if (el.nextCultoStat && !el.nextCultoStat.dataset.bound) {
+    el.nextCultoStat.dataset.bound = '1';
+    el.nextCultoStat.addEventListener('click', () => {
+      location.hash = '#repertorios';
+    });
+  }
+
   updateProfileModal();
   renderHistoryDashboard();
 }

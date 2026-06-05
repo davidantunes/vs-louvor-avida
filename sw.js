@@ -1,7 +1,7 @@
 /* Service Worker — Biblioteca de Louvor Igreja Amor e Vida
    v96 — performance pack (gzip, webp, preconnect, /api/library cache) */
 
-const SW_VERSION = 'v119.0.0';
+const SW_VERSION = 'v121.0.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
