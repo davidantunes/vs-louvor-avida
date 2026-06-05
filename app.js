@@ -194,6 +194,12 @@ const el = {
   setlistTrackName: document.getElementById('setlistTrackName'),
   newSetlistName: document.getElementById('newSetlistName'),
   newSetlistDate: document.getElementById('newSetlistDate'),
+  editSetlistDateModal: document.getElementById('editSetlistDateModal'),
+  editSetlistDateTitle: document.getElementById('editSetlistDateTitle'),
+  editSetlistDateInput: document.getElementById('editSetlistDateInput'),
+  saveSetlistDateBtn: document.getElementById('saveSetlistDateBtn'),
+  clearSetlistDateBtn: document.getElementById('clearSetlistDateBtn'),
+  closeEditSetlistDate: document.getElementById('closeEditSetlistDate'),
   createSetlistBtn: document.getElementById('createSetlistBtn'),
   setlistOptions: document.getElementById('setlistOptions'),
   activeSetlistBanner: document.getElementById('activeSetlistBanner'),
@@ -347,6 +353,7 @@ loadAppwriteServerConfig().finally(initSessionUI);
 bindEvents();
 initSchedule();
 initAdminPage();
+bindEditSetlistDateModal();
 applyTheme(loadJSON('vs_theme_v1', 'dark'));
 routeInternalPage();
 // V109 — loginScreen começa com .hidden → garante inert para não receber foco
@@ -3574,6 +3581,58 @@ function openSetlistModal(track, toneInfo = { semitones: 0, tone: '' }){
 function closeSetlistModal(){ el.setlistModal.classList.add('hidden'); }
 // V108 — Verifica se um repertório deve ser arquivado automaticamente.
 // Regras: tem eventDate E a data já passou (antes de hoje à meia-noite).
+// V122 — Modal de edição de data de repertório
+let editingSetlistId = null;
+
+function openEditSetlistDate(setlistId){
+  const s = setlists.find(x => x.id === setlistId);
+  if (!s) return;
+  editingSetlistId = setlistId;
+  if (el.editSetlistDateTitle) el.editSetlistDateTitle.textContent = s.name;
+  if (el.editSetlistDateInput) el.editSetlistDateInput.value = s.eventDate || '';
+  if (el.editSetlistDateModal) {
+    el.editSetlistDateModal.classList.remove('hidden');
+    el.editSetlistDateInput?.focus();
+  }
+}
+
+function closeEditSetlistDateModal(){
+  editingSetlistId = null;
+  if (el.editSetlistDateModal) el.editSetlistDateModal.classList.add('hidden');
+}
+
+function saveSetlistDate(clear = false){
+  const s = setlists.find(x => x.id === editingSetlistId);
+  if (!s) return;
+  if (!clear && !el.editSetlistDateInput?.value) {
+    toast('Informe uma data válida para continuar.');
+    el.editSetlistDateInput?.focus();
+    return;
+  }
+  s.eventDate = clear ? '' : (el.editSetlistDateInput?.value || '');
+  s.archived = false;
+  s.updatedAt = new Date().toISOString();
+  saveSetlistsState();
+  renderSetlists();
+  updateStats();
+  closeEditSetlistDateModal();
+  toast(clear ? 'Data removida do repertório.' : `Data definida: ${new Date(s.eventDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long' })}.`);
+}
+
+function bindEditSetlistDateModal(){
+  el.closeEditSetlistDate?.addEventListener('click', closeEditSetlistDateModal);
+  el.saveSetlistDateBtn?.addEventListener('click', () => saveSetlistDate(false));
+  el.clearSetlistDateBtn?.addEventListener('click', () => saveSetlistDate(true));
+  el.editSetlistDateModal?.addEventListener('click', e => {
+    if (e.target === el.editSetlistDateModal) closeEditSetlistDateModal();
+  });
+  // Enter salva
+  el.editSetlistDateInput?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveSetlistDate(false);
+    if (e.key === 'Escape') closeEditSetlistDateModal();
+  });
+}
+
 function isSetlistAutoArchived(setlist){
   if (setlist.archived) return true;  // arquivado manualmente
   if (!setlist.eventDate) return false;
@@ -3605,8 +3664,13 @@ function createSetlistFromInput(){
   }
   const name = el.newSetlistName.value.trim();
   if (!name) return toast('Informe o nome do repertório para continuar.');
+  const eventDate = el.newSetlistDate?.value || '';
+  if (!eventDate) {
+    toast('Informe a data do culto para continuar.');
+    el.newSetlistDate?.focus();
+    return;
+  }
   const creator = currentUserIdentity();
-  const eventDate = el.newSetlistDate?.value || '';  // V108 — data do culto
   const s = {
     id: String(Date.now()),
     name,
@@ -3664,13 +3728,13 @@ function renderSetlists(){
   const active   = setlists.filter(s => !isSetlistAutoArchived(s));
   const archived = setlists.filter(s =>  isSetlistAutoArchived(s));
 
-  // Ordena ativos: com data futura (mais próxima primeiro) → sem data (mais recente primeiro)
+  // V122 — Ordena ativos: com data (mais próxima primeiro) → sem data ao final (mais recente primeiro)
   active.sort((a, b) => {
     const aHas = !!a.eventDate, bHas = !!b.eventDate;
     if (aHas && bHas) return new Date(a.eventDate) - new Date(b.eventDate);
-    if (aHas) return -1;
-    if (bHas) return  1;
-    return new Date(b.createdAt) - new Date(a.createdAt);
+    if (aHas && !bHas) return -1;  // com data vem antes
+    if (!aHas && bHas) return 1;   // sem data vai ao final
+    return new Date(b.createdAt || 0) - new Date(a.createdAt || 0); // sem data: mais recente primeiro
   });
   // Ordena arquivados: mais recente primeiro
   archived.sort((a, b) => {
@@ -3716,6 +3780,7 @@ function renderSetlists(){
         </div>
         ${canEditSetlist(s) || canDeleteSetlist(s) ? `
         <div class="setlist-actions setlist-actions-row2">
+          ${canEditSetlist(s) ? `<button class="mini-btn edit-setlist-date" data-id="${esc(s.id)}">📅 ${s.eventDate ? 'Alterar data' : 'Definir data'}</button>` : ''}
           ${canEditSetlist(s) ? `<button class="mini-btn archive-setlist" data-id="${esc(s.id)}" title="${isArchived ? 'Restaurar' : 'Arquivar'}">${isArchived ? '↩ Restaurar' : '📦 Arquivar'}</button>` : ''}
           ${canDeleteSetlist(s) ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">🗑 Excluir</button>` : ''}
         </div>` : ''}
@@ -3734,6 +3799,7 @@ function renderSetlists(){
       notifySetlistDefined(setlists.find(s => s.id === btn.dataset.id));
     }));
     container.querySelectorAll('.archive-setlist').forEach(btn => btn.addEventListener('click', () => toggleSetlistArchive(btn.dataset.id)));
+    container.querySelectorAll('.edit-setlist-date').forEach(btn => btn.addEventListener('click', () => openEditSetlistDate(btn.dataset.id)));
     container.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
       const setlist = setlists.find(s => s.id === btn.dataset.id);
       if (!canDeleteSetlist(setlist)) { toast('Somente quem criou este repertório pode excluí-lo.'); return; }

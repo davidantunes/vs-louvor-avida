@@ -757,12 +757,35 @@
       <span class="kicker">Repertórios</span>
       <h3>Adicionar ao repertório</h3>
       <p id="setlistTrackName">Escolha um repertório abaixo.</p>
-      <div class="create-inline">
-        <input id="newSetlistName" type="text" placeholder="Ex.: Culto Domingo Noite">
-        <input id="newSetlistDate" type="date" title="Data do culto (opcional — para arquivamento automático)">
+      <div class="create-inline create-setlist-form">
+        <input id="newSetlistName" type="text" placeholder="Ex.: Culto Domingo Noite" style="flex:1">
+        <label class="setlist-date-label" title="Data do culto (obrigatório)">
+          <span>📅 Data do culto *</span>
+          <input id="newSetlistDate" type="date" required>
+        </label>
         <button id="createSetlistBtn" class="btn btn-primary">Criar</button>
       </div>
       <div id="setlistOptions" class="stack-list"></div>
+    </div>
+  </div>
+
+  <!-- V122 — Modal de edição de data do repertório -->
+  <div id="editSetlistDateModal" class="modal hidden">
+    <div class="modal-card glass" style="max-width:420px">
+      <button id="closeEditSetlistDate" class="modal-close">×</button>
+      <span class="kicker">Editar repertório</span>
+      <h3 id="editSetlistDateTitle">—</h3>
+      <div style="margin:18px 0 8px">
+        <label style="display:flex;flex-direction:column;gap:8px;font-size:14px">
+          <span style="color:var(--muted)">Data do culto</span>
+          <input id="editSetlistDateInput" type="date" style="height:44px;padding:0 14px;border-radius:14px;border:1px solid var(--line-soft);background:rgba(255,255,255,.04);color:var(--text);font-size:15px;width:100%">
+        </label>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">Defina a data para ordenar o repertório corretamente. Após a data, ele vai para a seção "Arquivados" automaticamente.</p>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button id="saveSetlistDateBtn" class="btn btn-primary" style="flex:1">Salvar data</button>
+        <button id="clearSetlistDateBtn" class="btn btn-secondary">Remover data</button>
+      </div>
     </div>
   </div>
 
