@@ -398,7 +398,7 @@ function bindEvents(){
   el.refresh.addEventListener('click', () => forceRefreshDriveLibrary());
   if (el.loadingSkipBtn) el.loadingSkipBtn.addEventListener('click', () => {
     hideLoading();
-    toast('Acesso liberado. As músicas continuam carregando em segundo plano.');
+    toast('Músicas aparecerão conforme carregam.');
   });
   el.themeToggle.addEventListener('click', toggleTheme);
   el.favoritesOnly.addEventListener('click', () => {
@@ -2332,9 +2332,9 @@ function getFilteredScheduleRows(){
 function updateScheduleEditUI(){
   const admin = isScheduleAdmin();
   el.scheduleSaveBtn?.classList.toggle('hidden', !admin);
-  if (!authUser) setScheduleEditStatus('Faça login para visualizar a escala. A edição é restrita aos administradores.', '');
-  else if (admin) setScheduleEditStatus(scheduleDirty ? 'Alteração pendente. Clique em “Salvar escala” para gravar no banco de dados.' : 'Modo edição liberado. Use as listas suspensas para alterar os escalados.', 'admin');
-  else if (!cloudAdminConfigured) setScheduleEditStatus('Escala em modo leitura. Configure APPWRITE_ADMIN_EMAILS no Render para liberar administradores.', '');
+  if (!authUser) setScheduleEditStatus('Faça login para ver a escala completa.', '');
+  else if (admin) setScheduleEditStatus(scheduleDirty ? 'Alteração pendente. Clique em “Salvar escala” para confirmar as alterações.' : 'Modo edição ativo. Clique nos nomes para alterar os escalados.', 'admin');
+  else if (!cloudAdminConfigured) setScheduleEditStatus('Escala em modo leitura. Somente administradores podem alterar os escalados.', '');
   else setScheduleEditStatus('Escala em modo leitura. Sua conta é de usuário comum e não pode alterar os escalados.', '');
 }
 function renderSchedule(){
@@ -2417,7 +2417,7 @@ function onScheduleSelectChange(event){
   scheduleDirty = true;
   saveJSON('vs_schedule_rows_v1', scheduleRows);
   renderScheduleSummary(getFilteredScheduleRows());
-  setScheduleEditStatus('Alteração pendente. Clique em “Salvar escala” para gravar no banco de dados.', 'admin');
+  setScheduleEditStatus('Alteração pendente. Clique em “Salvar escala” para confirmar as alterações.', 'admin');
 }
 function highlightScheduleMatch(value, q){
   const text = esc(value || '');
@@ -2491,7 +2491,7 @@ async function forceRefreshDriveLibrary(){
   discoveredFolderCount = 0;
   indexedFolderCount = 0;
   render();
-  toast('Atualizando biblioteca do Google Drive...');
+  toast('Atualizando biblioteca de músicas...');
   await loadLibrary(true);
 }
 function esc(str){ return String(str).replace(/[&<>'"]/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[ch])); }
@@ -3242,7 +3242,7 @@ function render(){
       ? 'A biblioteca ainda está sendo indexada. As músicas aparecerão automaticamente conforme forem encontradas.'
       : 'Nenhuma música encontrada com os filtros atuais.';
     el.trackList.innerHTML = `<div class="empty">${loadingMsg}</div>`;
-    el.loadStatus.textContent = indexedTrackCount === 0 ? 'Indexando músicas...' : 'Nenhuma música para carregar';
+    el.loadStatus.textContent = indexedTrackCount === 0 ? 'Carregando músicas...' : 'Nenhuma música para carregar';
     return;
   }
 
