@@ -3695,26 +3695,31 @@ function createSetlistFromInput(){
   toast('Repertório criado. Adicione músicas na biblioteca.');
 }
 function renderSetlistOptions(){
-  if (!setlists.length) {
-    el.setlistOptions.innerHTML = '<div class="empty">Nenhum repertório criado ainda.</div>';
+  // V122 — Mostra apenas repertórios que o usuário pode editar.
+  // Repertórios de outros usuários não aparecem mais neste modal.
+  const editableSetlists = setlists.filter(s => canEditSetlist(s) && !isSetlistAutoArchived(s));
+
+  if (!editableSetlists.length) {
+    el.setlistOptions.innerHTML = '<div class="empty">Nenhum repertório seu ativo. Crie um novo acima.</div>';
     return;
   }
-  el.setlistOptions.innerHTML = setlists.map(s => {
-    const owner = isSetlistOwner(s);
+  el.setlistOptions.innerHTML = editableSetlists.map(s => {
+    const dateLabel = s.eventDate
+      ? new Date(s.eventDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit' })
+      : '';
     return `
-      <div class="stack-item ${owner ? '' : 'is-readonly'}">
-        <div><strong>${esc(s.name)}</strong><span>${s.trackIds.length} música(s) • Criado por ${esc(getSetlistCreatorName(s))}</span></div>
-        ${owner ? `<button class="mini-btn add-to-setlist" data-id="${esc(s.id)}">Adicionar</button>` : `<span class="setlist-readonly-note">Somente o criador pode editar</span>`}
+      <div class="stack-item">
+        <div>
+          <strong>${esc(s.name)}</strong>
+          <span>${s.trackIds.length} música(s)${dateLabel ? ' • ' + dateLabel : ''}</span>
+        </div>
+        <button class="mini-btn add-to-setlist" data-id="${esc(s.id)}">Adicionar</button>
       </div>
     `;
   }).join('');
   el.setlistOptions.querySelectorAll('.add-to-setlist').forEach(btn => btn.addEventListener('click', () => {
     const setlist = setlists.find(s => s.id === btn.dataset.id);
     if (!setlist || !setlistTarget) return;
-    if (!canEditSetlist(setlist)) {
-      toast('Somente quem criou este repertório pode editá-lo.');
-      return;
-    }
     addTrackToSetlist(setlist, setlistTarget, setlistTargetTone, { closeModal: true });
   }));
 }
