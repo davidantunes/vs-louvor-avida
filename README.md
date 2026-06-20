@@ -1,4 +1,45 @@
-# VS Louvor — Igreja Amor e Vida — V101 Cards desktop sem cortes + Play centralizado de verdade
+# VS Louvor — Igreja Amor e Vida — V123 Fix barra de progresso travada (desktop/Android)
+
+## O que entra na V123
+
+### Bug — Barra de progresso (seekbar) não deixava arrastar no desktop e Android
+
+**Relato:** No iOS a barra de progresso da música funcionava normalmente (dava para
+arrastar e mudar a posição). No PC (desktop) e provavelmente no Android, a barra
+existia visualmente mas não era possível movê-la — parecia travada.
+
+**Causa raiz:** O `<audio>` dispara o evento `timeupdate` a cada ~250ms enquanto a
+música toca — inclusive durante o arrasto do usuário, já que o áudio não pausa
+durante o seek. A função `syncProgressUI()` escrevia `el.progressBar.value`
+diretamente a cada disparo desse evento, **sem checar se o usuário estava no meio
+de um arrasto**. Resultado: a escrita do JS "brigava" com o gesto do usuário — ele
+arrastava a barra, e ~250ms depois ela voltava para a posição real da música,
+dando a impressão de estar travada.
+
+No iOS, isso passava despercebido porque o WebKit dá prioridade ao toque nativo
+sobre escritas JS de `.value` durante um gesto ativo — um comportamento de
+plataforma, não uma correção real do bug. No desktop (mouse) e Android, não há
+essa proteção nativa, então o bug ficava visível.
+
+**Correção aplicada:**
+- Nova flag `isUserSeeking`, ativada em `mousedown` / `touchstart` / `pointerdown`
+  na barra, e desativada em `mouseup` / `touchend` / `pointerup` (com fallback
+  no `window` para o caso do usuário soltar o botão fora da barra).
+- `syncProgressUI()` agora **não sobrescreve** `el.progressBar.value` enquanto
+  `isUserSeeking` é `true` — elimina a disputa entre o JS e o gesto do usuário.
+- `onSeek()` atualiza o preenchimento visual (`progress-fill`) imediatamente a
+  cada movimento durante o arrasto, mantendo o feedback visual fluido.
+- Ao soltar o botão, a posição final do arrasto é aplicada ao áudio (`currentTime`).
+
+**Bônus — área de toque no mobile:** a barra tinha `height: 6px` aplicada
+diretamente no `<input>` (`#progressBar`) no CSS mobile, deixando a área de toque
+real abaixo do mínimo recomendado (44px). Corrigido para `height: 32px` no input,
+mantendo a aparência visual fina (6px) controlada separadamente pelo
+`.progress-track`.
+
+---
+
+# Versão anterior — V101 Cards desktop sem cortes + Play centralizado de verdade
 
 ## O que entra na V101
 

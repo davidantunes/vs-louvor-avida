@@ -10,6 +10,9 @@ let allTracks = [];
 let current = null;
 let currentQueue = [];
 let currentIndex = -1;
+// V123 — true enquanto o usuário está arrastando a barra de progresso.
+// Evita que o timeupdate do áudio sobrescreva o valor durante o arrasto.
+let isUserSeeking = false;
 let repeatMode = false;
 let shuffleMode = false;
 let randomContinuousMode = false;
@@ -440,6 +443,28 @@ function bindEvents(){
   el.playPauseBtn.addEventListener('click', togglePlayPause);
   el.closePlayerBtn?.addEventListener('click', closePlayer);
   el.progressBar.addEventListener('input', onSeek);
+  // V123 — Corrige bug onde a barra de progresso "trava" e não deixa arrastar.
+  // Causa: o evento 'timeupdate' do áudio dispara a cada ~250ms e sobrescreve
+  // o .value da barra continuamente, inclusive durante o arrasto do usuário —
+  // a escrita do JS "briga" com o gesto do usuário e o controle volta para a
+  // posição real da música quase instantaneamente. No desktop (mouse) e Android
+  // isso trava visivelmente; no iOS funciona por acaso porque o WebKit dá
+  // prioridade ao toque nativo sobre escritas JS durante o gesto.
+  // Solução: pausar a sincronização automática enquanto o usuário interage.
+  const startSeeking = () => { isUserSeeking = true; };
+  const endSeeking = () => {
+    isUserSeeking = false;
+    onSeek(); // garante que a posição final do arrasto seja aplicada
+  };
+  el.progressBar.addEventListener('mousedown', startSeeking);
+  el.progressBar.addEventListener('touchstart', startSeeking, { passive: true });
+  el.progressBar.addEventListener('pointerdown', startSeeking);
+  el.progressBar.addEventListener('mouseup', endSeeking);
+  el.progressBar.addEventListener('touchend', endSeeking);
+  el.progressBar.addEventListener('pointerup', endSeeking);
+  // Fallback: se o usuário soltar o botão fora da barra, ainda assim libera
+  window.addEventListener('mouseup', () => { if (isUserSeeking) endSeeking(); });
+  window.addEventListener('touchend', () => { if (isUserSeeking) endSeeking(); });
   el.volumeBar.addEventListener('input', () => el.audio.volume = Number(el.volumeBar.value) / 100);
   el.audio.volume = 1;
   el.audio.addEventListener('play', () => setPlayButtonState(true));
@@ -3458,15 +3483,23 @@ function syncProgressUI(){
   const duration = Number.isFinite(el.audio.duration) ? el.audio.duration : 0;
   const currentTime = Number.isFinite(el.audio.currentTime) ? el.audio.currentTime : 0;
   const pct = duration ? (currentTime / duration) * 100 : 0;
-  el.progressBar.value = pct;
-  el.progressFill.style.width = `${pct}%`;
+  // V123 — Não sobrescreve o valor da barra enquanto o usuário está arrastando,
+  // senão a posição visual "briga" com o gesto e trava o arrasto.
+  if (!isUserSeeking) {
+    el.progressBar.value = pct;
+    el.progressFill.style.width = `${pct}%`;
+  }
   el.currentTime.textContent = formatTime(currentTime);
   el.durationTime.textContent = formatTime(duration);
 }
 function onSeek(){
   const duration = Number.isFinite(el.audio.duration) ? el.audio.duration : 0;
+  // V123 — Atualiza o preenchimento visual imediatamente, mesmo sem duration ainda.
+  const pct = Number(el.progressBar.value) || 0;
+  el.progressFill.style.width = `${pct}%`;
   if (!duration) return;
-  el.audio.currentTime = (Number(el.progressBar.value) / 100) * duration;
+  el.audio.currentTime = (pct / 100) * duration;
+  el.currentTime.textContent = formatTime(el.audio.currentTime);
 }
 function formatTime(seconds){
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';

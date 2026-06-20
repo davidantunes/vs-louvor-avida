@@ -2406,16 +2406,15 @@ body[data-theme="light"] .schedule-toolbar select{
   }
 
   .progress-shell{
-    height:20px !important;
+    height:32px !important;
   }
 
   .progress-track{
     height:6px !important;
   }
 
-  #progressBar{
-    height:22px !important;
-  }
+  /* V123 — Mantido por compatibilidade; #progressBar real é definido
+     mais abaixo com altura de toque maior (32px) para uso confortável no mobile. */
 
   .player-side{
     display:grid !important;
@@ -3286,10 +3285,15 @@ body.player-visible .player{display:block !important;opacity:1;pointer-events:au
   }
 
   .progress-bar,
-  #progressBar,
   .timeline-bar,
   .player-progress input[type="range"]{
     height: 6px !important;
+  }
+  /* V123 — #progressBar é o <input> real: precisa de altura de toque
+     generosa (mín. 44px recomendado) mesmo que a barra visual seja fina.
+     A aparência fina já é controlada por .progress-track (6px) separadamente. */
+  #progressBar{
+    height: 32px !important;
   }
 
   .player-side{
