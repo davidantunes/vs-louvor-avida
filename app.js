@@ -3597,8 +3597,11 @@ function toggleFavorite(id){
   render();
 }
 function updateFavoriteCount(){
-  el.totalFavorites.textContent = favorites.length;
-  el.heroFavs.textContent = favorites.length;
+  // V123 — totalFavorites e heroFavs foram removidos da página inicial na V121
+  // (substituídos por "Próximos cultos"/"Próximo culto"). Checagem defensiva
+  // evita erro caso algum desses elementos não exista mais no HTML.
+  if (el.totalFavorites) el.totalFavorites.textContent = favorites.length;
+  if (el.heroFavs) el.heroFavs.textContent = favorites.length;
   updateProfileModal();
 }
 
