@@ -1292,12 +1292,15 @@ async function loadCloudState(){
     if (Array.isArray(shared)) {
       const localPendingFlag = loadJSON('vs_setlists_pending_v1', false);
       if (localPendingFlag) {
-        console.info('[setlists] Mudanças locais pendentes detectadas — preservando estado local e re-sincronizando.');
+        console.info('[setlists] Mudanças locais pendentes — preservando local e re-sincronizando.');
         setSharedState('setlists', setlists).catch(err => console.warn('Resync pendente falhou:', err));
       } else {
-        // V100 — Merge defensivo: preserva trackIds locais se servidor devolveu menos.
-        // Isso protege contra o cenário "PATCH atrasado sobrescreveu PATCH mais recente".
+        // V126.1 — Merge agora preserva eventDate/archived do remoto mesmo
+        // quando o local tem updatedAt igual ou posterior (corrige bug onde
+        // Chrome não mostrava repertório arquivado que iOS já mostrava).
         setlists = mergeSetlistsDefensive(setlists, shared);
+        // Persiste o resultado do merge para o próximo carregamento
+        saveJSON('vs_setlists_v1', setlists);
       }
     }
     if (Array.isArray(userState)) favorites = userState;
@@ -1345,11 +1348,9 @@ function mergeSetlistsDefensive(local, remote){
   if (!Array.isArray(local)) return remote;
   if (!Array.isArray(remote)) return local;
   const byId = new Map();
-  // Indexa remote
   for (const r of remote) {
     if (r && r.id) byId.set(r.id, { remote: r, local: null });
   }
-  // Indexa local — sobrepõe ou adiciona
   for (const l of local) {
     if (!l || !l.id) continue;
     const entry = byId.get(l.id) || { remote: null, local: null };
@@ -1359,15 +1360,39 @@ function mergeSetlistsDefensive(local, remote){
   const merged = [];
   for (const { local: l, remote: r } of byId.values()) {
     if (l && r) {
-      // Pega o que tem mais tracks; em empate, prefere o mais recente updatedAt
       const lCount = (l.trackIds || []).length;
       const rCount = (r.trackIds || []).length;
-      if (lCount > rCount) merged.push(l);
-      else if (rCount > lCount) merged.push(r);
-      else {
-        const lAt = Date.parse(l.updatedAt || '') || 0;
-        const rAt = Date.parse(r.updatedAt || '') || 0;
-        merged.push(lAt >= rAt ? l : r);
+      const lAt = Date.parse(l.updatedAt || '') || 0;
+      const rAt = Date.parse(r.updatedAt || '') || 0;
+
+      // V126.1 — Regra de merge revisada:
+      // 1) Mais músicas ganha (protege contra race condition de adição rápida).
+      if (lCount > rCount) {
+        // Local tem mais músicas mas preserva eventDate/archived do remoto se o
+        // local não tiver — evita perder dados de data adicionados em outro device.
+        const winner = { ...l };
+        if (!winner.eventDate && r.eventDate) winner.eventDate = r.eventDate;
+        if (!winner.archived && r.archived) winner.archived = r.archived;
+        merged.push(winner);
+      } else if (rCount > lCount) {
+        merged.push(r);
+      } else {
+        // 2) Empate de músicas: prefere o mais recente pelo updatedAt.
+        // MAS: se um tem eventDate e o outro não, prefere o que tem —
+        // independente do updatedAt (eventDate pode ter sido adicionado
+        // num device sem alterar tracks, mantendo updatedAt igual).
+        const lHasDate = !!l.eventDate;
+        const rHasDate = !!r.eventDate;
+        let winner;
+        if (rHasDate && !lHasDate) {
+          winner = { ...l, eventDate: r.eventDate, archived: r.archived || l.archived };
+        } else if (lHasDate && !rHasDate) {
+          winner = l;
+        } else {
+          // Ambos têm ou ambos não têm data: pega o mais recente
+          winner = lAt >= rAt ? l : r;
+        }
+        merged.push(winner);
       }
     } else {
       merged.push(l || r);
