@@ -7582,3 +7582,62 @@ details[open] .archived-setlists-toggle::before{
     min-width:0;
   }
 }
+
+/* ============================================================
+   V124 — Modal de repertório compartilhado sem corte.
+
+   Problema: quando o link compartilhado é aberto, o setlistSharedHero
+   (logo + nome + meta + botões) é injetado no topo do modal-card.
+   O modal-card tem max-height fixo e overflow:hidden — o hero
+   ultrapassava o limite antes da lista de músicas aparecer, causando
+   o corte visual.
+
+   Solução: criar uma zona scrollável que engloba tudo abaixo do
+   cabeçalho fixo (título + intro), incluindo o hero e as músicas.
+   O modal-card em si não muda de estrutura para os outros modais.
+   ============================================================ */
+
+/* No modo "view compartilhada", o conteúdo após o cabeçalho
+   (hero + ações + paleta + faixas) forma uma única zona com scroll */
+#setlistDetailModal .modal-card.is-shared-setlist-view{
+  /* Permite que o conteúdo interno role sem cortar o hero */
+  overflow:hidden !important;
+}
+
+/* Hero não deve ser comprimido pelo flexbox do modal */
+#setlistSharedHero{
+  flex-shrink:0 !important;
+  overflow:visible !important;
+}
+
+/* No modo compartilhado, a zona de scroll inclui o hero + faixas */
+.is-shared-setlist-view #setlistSharedHero,
+.is-shared-setlist-view .modal-actions-top,
+.is-shared-setlist-view #setlistDetailPalette{
+  flex-shrink:0 !important;
+}
+
+/* Zona scrollável ampliada no modo compartilhado para incluir
+   hero + ações + paleta + faixas em um único scroll contínuo */
+.is-shared-setlist-view #setlistDetailTracks{
+  /* Remove o scroll isolado da lista de faixas — o modal inteiro rola */
+  overflow:visible !important;
+  min-height:unset !important;
+}
+
+/* Wrapper scrollável criado via JS ao entrar em modo compartilhado */
+.setlist-shared-scroll-zone{
+  flex:1;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  min-height:0;
+  padding-right:4px;
+  padding-bottom:calc(var(--player-h, 0px) + 32px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width:760px){
+  .setlist-shared-scroll-zone{
+    padding-bottom:calc(var(--player-h, 0px) + 80px + env(safe-area-inset-bottom, 0px));
+  }
+}

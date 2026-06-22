@@ -3993,26 +3993,67 @@ function openSetlistDetail(id){
   const creatorName = getSetlistCreatorName(setlist);
   if (detailIntro) {
     if (isSharedView) {
-      detailIntro.textContent = `Repertório compartilhado com ${trackCount} música(s) • Criado por ${creatorName}. Confira também a paleta escolhida para este culto.`;
+      detailIntro.textContent = `Repertório compartilhado com ${trackCount} música(s) • Criado por ${creatorName}.`;
     } else {
       detailIntro.textContent = owner
         ? `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Você pode tocar, reordenar e editar este repertório.`
         : `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Repertório em modo leitura para você.`;
     }
   }
-  if (el.addMusicSetlistDetail) {
-    el.addMusicSetlistDetail.classList.toggle('hidden', !owner);
-  }
-  if (el.changeSetlistPaletteBtn) {
-    el.changeSetlistPaletteBtn.classList.toggle('hidden', !owner);
-  }
+  if (el.addMusicSetlistDetail) el.addMusicSetlistDetail.classList.toggle('hidden', !owner);
+  if (el.changeSetlistPaletteBtn) el.changeSetlistPaletteBtn.classList.toggle('hidden', !owner);
+
   renderSharedSetlistHero(setlist);
   renderSetlistDetailPalette(setlist, owner);
   renderSetlistDetailTracks();
   el.setlistDetailModal.classList.remove('hidden');
-  el.setlistDetailModal.querySelector('.modal-card')?.classList.toggle('is-shared-setlist-view', isSharedView);
+
+  const modalCard = el.setlistDetailModal.querySelector('.modal-card');
+  modalCard?.classList.toggle('is-shared-setlist-view', isSharedView);
+
+  // V124 — No modo compartilhado, embrulha hero + ações + paleta + faixas
+  // num único scroll-zone para evitar corte do hero pelo max-height do modal.
+  if (isSharedView && modalCard) {
+    // Remove scroll-zone anterior se existir
+    const existing = modalCard.querySelector('.setlist-shared-scroll-zone');
+    if (existing) {
+      while (existing.firstChild) existing.before(existing.firstChild);
+      existing.remove();
+    }
+    // Cria nova scroll-zone e move o conteúdo variável para dentro dela
+    const scrollZone = document.createElement('div');
+    scrollZone.className = 'setlist-shared-scroll-zone';
+    const hero = el.setlistSharedHero;
+    const actionsTop = modalCard.querySelector('.modal-actions-top');
+    const palette = document.getElementById('setlistDetailPalette');
+    const tracks = document.getElementById('setlistDetailTracks');
+    // Insere o scroll-zone antes do hero
+    if (hero && hero.parentNode === modalCard) {
+      modalCard.insertBefore(scrollZone, hero);
+      scrollZone.appendChild(hero);
+      if (actionsTop) scrollZone.appendChild(actionsTop);
+      if (palette) scrollZone.appendChild(palette);
+      if (tracks) scrollZone.appendChild(tracks);
+    }
+  }
 }
-function closeSetlistDetail(){ el.setlistDetailModal.classList.add('hidden'); el.setlistSharedHero?.classList.add('hidden'); if (el.setlistSharedHero) el.setlistSharedHero.innerHTML=''; el.setlistDetailModal.querySelector('.modal-card')?.classList.remove('is-shared-setlist-view'); sharedSetlistContextId = null; }
+function closeSetlistDetail(){
+  el.setlistDetailModal.classList.add('hidden');
+  el.setlistSharedHero?.classList.add('hidden');
+  if (el.setlistSharedHero) el.setlistSharedHero.innerHTML = '';
+  const modalCard = el.setlistDetailModal.querySelector('.modal-card');
+  modalCard?.classList.remove('is-shared-setlist-view');
+  sharedSetlistContextId = null;
+
+  // V124 — Restaura estrutura original (remove scroll-zone e move elementos de volta)
+  if (modalCard) {
+    const scrollZone = modalCard.querySelector('.setlist-shared-scroll-zone');
+    if (scrollZone) {
+      while (scrollZone.firstChild) scrollZone.before(scrollZone.firstChild);
+      scrollZone.remove();
+    }
+  }
+}
 function renderSetlistDetailPalette(setlist, owner=false){
   if (!el.setlistDetailPalette) return;
   const hasPalette = Boolean(setlist?.paletteTitle);
