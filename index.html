@@ -25,11 +25,26 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
+        // V126.1 — Detecta quando o SW foi atualizado e avisa o usuário
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data && event.data.type === 'SW_UPDATED') {
+            // Pequeno delay para o app carregar antes de mostrar o aviso
+            setTimeout(() => {
+              const banner = document.getElementById('swUpdateBanner');
+              if (banner) banner.classList.remove('hidden');
+            }, 1500);
+          }
+        });
       });
     }
   </script>
 </head>
 <body data-theme="dark">
+  <!-- V126.1 — Banner de atualização disponível (aparece quando SW atualiza) -->
+  <div id="swUpdateBanner" class="sw-update-banner hidden">
+    <span>Nova versão disponível.</span>
+    <button onclick="window.location.reload()">Atualizar agora</button>
+  </div>
   <div class="bg-blur bg-blur-a"></div>
   <div class="bg-blur bg-blur-b"></div>
   <div class="bg-blur bg-blur-c"></div>
@@ -785,29 +800,13 @@
             <small style="color:var(--muted)">Quem abrir o link vê o repertório completo</small>
           </div>
         </button>
-        <button id="shareSetlistDownloadArt" class="btn btn-secondary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto">
-          <span style="font-size:22px">🎨</span>
-          <div style="text-align:left">
-            <strong style="display:block">Baixar arte</strong>
-            <small style="color:var(--muted)">Imagem com músicas, tons e data do culto</small>
-          </div>
-        </button>
-        <button id="shareSetlistNativeShare" class="btn btn-primary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto;display:none">
+        <button id="shareSetlistNativeShare" class="btn btn-primary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto">
           <span style="font-size:22px">📤</span>
           <div style="text-align:left">
             <strong style="display:block">Compartilhar</strong>
             <small>Enviar pelo WhatsApp, Telegram e outros</small>
           </div>
         </button>
-      </div>
-
-      <!-- Preview da arte gerada -->
-      <div id="shareSetlistArtPreview" style="margin-top:16px;display:none">
-        <canvas id="shareSetlistCanvas" style="width:100%;border-radius:16px;border:1px solid var(--line-soft)"></canvas>
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <button id="shareSetlistSaveImg" class="btn btn-primary" style="flex:1">⬇ Salvar imagem</button>
-          <button id="shareSetlistShareImg" class="btn btn-secondary" style="flex:1;display:none">📤 Compartilhar imagem</button>
-        </div>
       </div>
     </div>
   </div>

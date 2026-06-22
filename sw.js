@@ -1,11 +1,22 @@
 /* Service Worker — Biblioteca de Louvor Igreja Amor e Vida
-   v96 — performance pack (gzip, webp, preconnect, /api/library cache) */
+   v126.1 — network-first para shell crítico (evita stale JS/CSS) */
 
-const SW_VERSION = 'v125.0.0';
+const SW_VERSION = 'v126.1.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
-const API_CACHE = `vsl-api-${SW_VERSION}`;
+const API_CACHE   = `vsl-api-${SW_VERSION}`;
+
+// Arquivos críticos: sempre busca da rede primeiro.
+// Evita o problema de stale-while-revalidate onde o browser roda
+// código antigo enquanto o cache atualiza em segundo plano.
+const CRITICAL_SHELL = new Set([
+  '/',
+  '/index.html',
+  '/app.js',
+  '/styles.css',
+  '/config.js',
+]);
 
 const SHELL_ASSETS = [
   '/',
@@ -17,7 +28,6 @@ const SHELL_ASSETS = [
   '/assets/logo-avida.jpg'
 ];
 
-// Limite do cache de áudios: ~300 músicas. LRU simples (ordem de inserção).
 const AUDIO_CACHE_MAX_ENTRIES = 300;
 
 self.addEventListener('install', (event) => {
@@ -32,12 +42,16 @@ self.addEventListener('activate', (event) => {
   const keep = new Set([SHELL_CACHE, ASSET_CACHE, AUDIO_CACHE, API_CACHE]);
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => !keep.has(k)).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(
+        keys.filter((k) => !keep.has(k)).map((k) => caches.delete(k))
+      ))
       .then(() => self.clients.claim())
+      // Notifica todas as abas que o SW foi atualizado
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((clients) => clients.forEach(c => c.postMessage({ type: 'SW_UPDATED', version: SW_VERSION })))
   );
 });
 
-// Permite que o app peça pré-cache de áudios em background
 self.addEventListener('message', (event) => {
   const data = event.data || {};
   if (data.type === 'PRECACHE_AUDIOS' && Array.isArray(data.urls)) {
@@ -58,42 +72,42 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // ÁUDIOS — cache first. Backend: /api/audio/:id  e direto do Drive (cross-origin).
+  // ÁUDIOS — cache first
   if (isAudioRequest(req, url)) {
     event.respondWith(audioCacheFirst(req));
     return;
   }
 
-  // API leve (Appwrite, config) — network first com fallback ao cache
+  // SHELL CRÍTICO (app.js, styles.css, index.html) — network first, sem stale
+  if (sameOrigin && CRITICAL_SHELL.has(url.pathname)) {
+    event.respondWith(networkFirst(req, SHELL_CACHE));
+    return;
+  }
+
+  // API — network first com fallback ao cache
   if (sameOrigin && url.pathname.startsWith('/api/')) {
-    // Evita cachear /api/transpose (pesado e variável)
     if (url.pathname.startsWith('/api/transpose/')) return;
     event.respondWith(networkFirst(req, API_CACHE));
     return;
   }
 
-  // Listagem Drive — network first com cache curto para indexação rápida no 2º acesso
   if (sameOrigin && url.pathname.startsWith('/api/drive')) {
     event.respondWith(networkFirst(req, API_CACHE));
     return;
   }
 
-  // Assets estáticos do mesmo domínio (CSS/JS/imagens) — stale-while-revalidate
+  // Demais assets (imagens, fontes) — stale-while-revalidate
   if (sameOrigin) {
     event.respondWith(staleWhileRevalidate(req, ASSET_CACHE));
     return;
   }
-
-  // Demais cross-origin: deixa o browser cuidar.
 });
 
 function isAudioRequest(req, url) {
-  // Range requests não devem ser cacheadas (servem fatias parciais)
   if (req.headers.has('range')) return false;
   if (req.destination === 'audio') return true;
   if (url.pathname.startsWith('/api/audio/')) return true;
   if (/\.(mp3|m4a|ogg|opus|wav|aac)(\?|$)/i.test(url.pathname)) return true;
-  // Cross-origin Drive (download direto): cobre googleusercontent / drive.google.com com mime de áudio
   return false;
 }
 
@@ -104,7 +118,9 @@ async function audioCacheFirst(req) {
     if (hit) return hit;
     const resp = await fetch(req);
     if (resp && resp.ok && resp.status === 200) {
-      cache.put(req, resp.clone()).then(() => trimCache(AUDIO_CACHE, AUDIO_CACHE_MAX_ENTRIES)).catch(() => {});
+      cache.put(req, resp.clone())
+        .then(() => trimCache(AUDIO_CACHE, AUDIO_CACHE_MAX_ENTRIES))
+        .catch(() => {});
     }
     return resp;
   } catch (err) {

@@ -231,12 +231,7 @@ const el = {
   shareSetlistModalTitle: document.getElementById('shareSetlistModalTitle'),
   shareSetlistModalMeta: document.getElementById('shareSetlistModalMeta'),
   shareSetlistCopyLink: document.getElementById('shareSetlistCopyLink'),
-  shareSetlistDownloadArt: document.getElementById('shareSetlistDownloadArt'),
   shareSetlistNativeShare: document.getElementById('shareSetlistNativeShare'),
-  shareSetlistArtPreview: document.getElementById('shareSetlistArtPreview'),
-  shareSetlistCanvas: document.getElementById('shareSetlistCanvas'),
-  shareSetlistSaveImg: document.getElementById('shareSetlistSaveImg'),
-  shareSetlistShareImg: document.getElementById('shareSetlistShareImg'),
   setlistReviewModal: document.getElementById('setlistReviewModal'),
   closeSetlistReview: document.getElementById('closeSetlistReview'),
   setlistReviewTitle: document.getElementById('setlistReviewTitle'),
@@ -1693,7 +1688,6 @@ function openShareSetlistModal(setlist){
   if (!setlist) return;
   shareSetlistTarget = setlist;
 
-  // Título e meta
   if (el.shareSetlistModalTitle) el.shareSetlistModalTitle.textContent = setlist.name;
   if (el.shareSetlistModalMeta) {
     const trackCount = (setlist.trackIds || []).length;
@@ -1703,13 +1697,8 @@ function openShareSetlistModal(setlist){
     el.shareSetlistModalMeta.textContent = `${trackCount} música(s) • ${dateLabel}`;
   }
 
-  // Esconde preview anterior
-  if (el.shareSetlistArtPreview) el.shareSetlistArtPreview.style.display = 'none';
-
-  // Botão compartilhar nativo (Web Share API) — disponível no mobile
-  if (el.shareSetlistNativeShare) {
-    el.shareSetlistNativeShare.style.display = navigator.share ? '' : 'none';
-  }
+  // Botão compartilhar nativo — visível sempre (fallback para copiar link se não disponível)
+  if (el.shareSetlistNativeShare) el.shareSetlistNativeShare.style.display = '';
 
   if (el.shareSetlistModal) el.shareSetlistModal.classList.remove('hidden');
 }
@@ -1719,299 +1708,35 @@ function closeShareSetlistModalFn(){
   shareSetlistTarget = null;
 }
 
-// Gera a arte do repertório no Canvas e retorna o canvas element
-async function generateSetlistArt(setlist){
-  const W = 1080, H_MIN = 1200;
-  const canvas = el.shareSetlistCanvas;
-  if (!canvas) return null;
-
-  // Monta lista de músicas com tons
-  const tracks = (setlist.trackIds || []).map(entry => {
-    const trackId = getSetlistEntryTrackId(entry);
-    const track = findTrack(trackId);
-    const semitones = getSetlistEntrySemitones(entry);
-    const toneEntry = getSetlistEntryTone(entry);
-    const tone = toneEntry || (track ? calculateToneLabel(track.key, semitones) : '—');
-    return { name: track?.name || 'Música', singer: track?.singer || '', tone };
-  });
-
-  const ROW_H = 72;
-  const HEADER_H = 280;
-  const FOOTER_H = 100;
-  const H = Math.max(H_MIN, HEADER_H + tracks.length * ROW_H + FOOTER_H + 60);
-
-  canvas.width = W;
-  canvas.height = H;
-  canvas.style.width = '100%';
-
-  const ctx = canvas.getContext('2d');
-
-  // === FUNDO ===
-  const bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, '#050e10');
-  bg.addColorStop(1, '#0a1f24');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  // Decoração radial no canto superior direito
-  const grd = ctx.createRadialGradient(W * 0.85, 60, 0, W * 0.85, 60, 400);
-  grd.addColorStop(0, 'rgba(41,217,208,0.18)');
-  grd.addColorStop(1, 'rgba(41,217,208,0)');
-  ctx.fillStyle = grd;
-  ctx.fillRect(0, 0, W, H);
-
-  // === HEADER ===
-  // Logo círculo
-  ctx.beginPath();
-  ctx.arc(80, 80, 44, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(41,217,208,0.15)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(41,217,208,0.5)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // Tenta carregar a logo da igreja
-  try {
-    await new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(80, 80, 40, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(img, 40, 40, 80, 80);
-        ctx.restore();
-        resolve();
-      };
-      img.onerror = resolve;
-      img.src = 'assets/logo-avida.jpg';
-    });
-  } catch(_) {}
-
-  // Nome da igreja
-  ctx.fillStyle = 'rgba(41,217,208,0.7)';
-  ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Igreja Amor e Vida', 140, 70);
-
-  // Subtítulo
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.font = '22px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Ministério de Louvor', 140, 100);
-
-  // Linha separadora
-  ctx.strokeStyle = 'rgba(41,217,208,0.2)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(40, 130);
-  ctx.lineTo(W - 40, 130);
-  ctx.stroke();
-
-  // Data do culto
-  if (setlist.eventDate) {
-    const dateLabel = new Date(setlist.eventDate + 'T00:00:00').toLocaleDateString('pt-BR', {
-      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
-    });
-    ctx.fillStyle = 'rgba(41,217,208,0.9)';
-    ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
-    ctx.fillText(dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1), 40, 175);
-  }
-
-  // Nome do repertório
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 52px system-ui, -apple-system, sans-serif';
-  // Trunca se muito longo
-  let nameText = setlist.name;
-  while (ctx.measureText(nameText).width > W - 80 && nameText.length > 10) {
-    nameText = nameText.slice(0, -1);
-  }
-  if (nameText !== setlist.name) nameText += '…';
-  ctx.fillText(nameText, 40, 240);
-
-  // Contagem
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.font = '24px system-ui, -apple-system, sans-serif';
-  ctx.fillText(`${tracks.length} música${tracks.length !== 1 ? 's' : ''}`, 40, 275);
-
-  // === LISTA DE MÚSICAS ===
-  let y = HEADER_H;
-
-  tracks.forEach((t, i) => {
-    const isEven = i % 2 === 0;
-
-    // Fundo alternado
-    if (isEven) {
-      ctx.fillStyle = 'rgba(255,255,255,0.03)';
-      ctx.beginPath();
-      roundRect(ctx, 20, y, W - 40, ROW_H - 4, 14);
-      ctx.fill();
-    }
-
-    // Número
-    ctx.fillStyle = 'rgba(41,217,208,0.5)';
-    ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
-    ctx.fillText(String(i + 1).padStart(2, '0'), 40, y + 28);
-
-    // Nome da música
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 26px system-ui, -apple-system, sans-serif';
-    let songName = t.name;
-    while (ctx.measureText(songName).width > W - 260 && songName.length > 10) {
-      songName = songName.slice(0, -1);
-    }
-    if (songName !== t.name) songName += '…';
-    ctx.fillText(songName, 100, y + 28);
-
-    // Cantor
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.font = '20px system-ui, -apple-system, sans-serif';
-    let singerText = t.singer;
-    while (ctx.measureText(singerText).width > W - 280 && singerText.length > 8) {
-      singerText = singerText.slice(0, -1);
-    }
-    if (singerText !== t.singer) singerText += '…';
-    ctx.fillText(singerText, 100, y + 54);
-
-    // Tom — badge à direita
-    if (t.tone && t.tone !== '—') {
-      const toneLabel = t.tone;
-      const toneW = ctx.measureText(toneLabel).width + 28;
-      const toneX = W - toneW - 40;
-      const toneY = y + 10;
-
-      ctx.fillStyle = 'rgba(41,217,208,0.15)';
-      ctx.strokeStyle = 'rgba(41,217,208,0.4)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      roundRect(ctx, toneX, toneY, toneW, 44, 10);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = 'rgba(41,217,208,0.95)';
-      ctx.font = 'bold 20px system-ui, -apple-system, sans-serif';
-      ctx.fillText(toneLabel, toneX + 14, toneY + 28);
-    }
-
-    y += ROW_H;
-  });
-
-  // === FOOTER ===
-  // Linha separadora
-  ctx.strokeStyle = 'rgba(41,217,208,0.15)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(40, H - FOOTER_H);
-  ctx.lineTo(W - 40, H - FOOTER_H);
-  ctx.stroke();
-
-  // URL do sistema
-  ctx.fillStyle = 'rgba(41,217,208,0.6)';
-  ctx.font = '22px system-ui, -apple-system, sans-serif';
-  ctx.fillText('vs-louvor-avida.onrender.com', 40, H - FOOTER_H + 40);
-
-  // Link do repertório
-  const shareUrl = buildSetlistShareUrl(setlist.id);
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.font = '18px system-ui, -apple-system, sans-serif';
-  // Trunca URL longa
-  let urlText = shareUrl;
-  if (ctx.measureText(urlText).width > W - 80) {
-    urlText = urlText.slice(0, 60) + '…';
-  }
-  ctx.fillText(urlText, 40, H - FOOTER_H + 68);
-
-  return canvas;
-}
-
-// Utilitário para desenhar retângulos com cantos arredondados no Canvas
-function roundRect(ctx, x, y, w, h, r){
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
 function bindShareSetlistModal(){
   el.closeShareSetlistModal?.addEventListener('click', closeShareSetlistModalFn);
   el.shareSetlistModal?.addEventListener('click', e => {
     if (e.target === el.shareSetlistModal) closeShareSetlistModalFn();
   });
-
-  // Copiar link
   el.shareSetlistCopyLink?.addEventListener('click', () => {
     if (!shareSetlistTarget) return;
     copyText(buildSetlistShareUrl(shareSetlistTarget.id), 'Link do repertório copiado!');
   });
-
-  // Gerar arte
-  el.shareSetlistDownloadArt?.addEventListener('click', async () => {
-    if (!shareSetlistTarget) return;
-    const btn = el.shareSetlistDownloadArt;
-    btn.disabled = true;
-    btn.textContent = '⏳ Gerando arte...';
-    try {
-      const canvas = await generateSetlistArt(shareSetlistTarget);
-      if (!canvas) return;
-      if (el.shareSetlistArtPreview) el.shareSetlistArtPreview.style.display = '';
-      // Botão compartilhar imagem (Web Share API com arquivo)
-      if (el.shareSetlistShareImg) {
-        el.shareSetlistShareImg.style.display = navigator.canShare ? '' : 'none';
-      }
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<span style="font-size:22px">🎨</span><div style="text-align:left"><strong style="display:block">Baixar arte</strong><small style="color:var(--muted)">Imagem com músicas, tons e data do culto</small></div>';
-    }
-  });
-
-  // Salvar imagem
-  el.shareSetlistSaveImg?.addEventListener('click', () => {
-    if (!shareSetlistTarget || !el.shareSetlistCanvas) return;
-    const a = document.createElement('a');
-    a.download = `repertorio-${(shareSetlistTarget.name || 'culto').replace(/\s+/g,'-').toLowerCase()}.png`;
-    a.href = el.shareSetlistCanvas.toDataURL('image/png');
-    a.click();
-    toast('Imagem salva!');
-  });
-
-  // Compartilhar imagem via Web Share API
-  el.shareSetlistShareImg?.addEventListener('click', async () => {
-    if (!shareSetlistTarget || !el.shareSetlistCanvas) return;
-    try {
-      const blob = await new Promise(res => el.shareSetlistCanvas.toBlob(res, 'image/png'));
-      const file = new File([blob], `repertorio-${shareSetlistTarget.name || 'culto'}.png`, { type: 'image/png' });
-      await navigator.share({
-        title: shareSetlistTarget.name,
-        text: `Repertório do culto — ${shareSetlistTarget.name}`,
-        files: [file],
-        url: buildSetlistShareUrl(shareSetlistTarget.id)
-      });
-    } catch(e) {
-      if (e.name !== 'AbortError') toast('Não foi possível compartilhar a imagem.');
-    }
-  });
-
-  // Compartilhar nativo (link + texto)
   el.shareSetlistNativeShare?.addEventListener('click', async () => {
     if (!shareSetlistTarget) return;
-    try {
-      await navigator.share({
-        title: shareSetlistTarget.name,
-        text: `Veja o repertório do culto: ${shareSetlistTarget.name}`,
-        url: buildSetlistShareUrl(shareSetlistTarget.id)
-      });
-    } catch(e) {
-      if (e.name !== 'AbortError') copyText(buildSetlistShareUrl(shareSetlistTarget.id), 'Link copiado!');
+    const url = buildSetlistShareUrl(shareSetlistTarget.id);
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareSetlistTarget.name,
+          text: `Repertório do culto: ${shareSetlistTarget.name}`,
+          url
+        });
+      } catch(e) {
+        if (e.name !== 'AbortError') copyText(url, 'Link copiado!');
+      }
+    } else {
+      copyText(url, 'Link do repertório copiado!');
     }
   });
 }
 
+// Gera a arte do repertório no Canvas e retorna o canvas element
 function shareSetlistWithPaletteCheck(setlist){
   if (!setlist) return;
   // V125 — Abre o modal de compartilhamento com opções de link + arte
