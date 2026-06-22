@@ -358,6 +358,11 @@ const el = {
 document.title = cfg.APP_TITLE;
 
 initAppwriteClient();
+// V127 — Pré-aquece o servidor Render imediatamente ao abrir o app,
+// antes mesmo do login. Isso reduz o cold start para o usuário:
+// enquanto ele digita login/senha, o servidor já está acordando.
+// Fire-and-forget — não bloqueia nada, falha silenciosamente.
+fetch('/ping').catch(() => {});
 loadAppwriteServerConfig().finally(initSessionUI);
 bindEvents();
 initSchedule();
@@ -2972,10 +2977,15 @@ async function refreshLibraryInBackground(){
     libraryLoadingInBackground = true;
     resetProgressCounters();
 
-    // V96 — Prefere /api/library (cache de servidor); fallback ao método antigo.
+    // V127 — background refresh com timeout de 30s (não trava a UI)
     if (useBackend()) {
       try {
-        const resp = await fetch(`/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}`, { credentials: 'omit' });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const resp = await fetch(`/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}`, {
+          credentials: 'omit', signal: controller.signal
+        });
+        clearTimeout(timeoutId);
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data.tracks) && data.tracks.length) {
@@ -2988,7 +2998,8 @@ async function refreshLibraryInBackground(){
           }
         }
       } catch (e) {
-        console.warn('Refresh via /api/library falhou, usando progressivo:', e);
+        if (e.name !== 'AbortError') console.warn('Refresh em background falhou:', e);
+        return; // Não tenta o fallback progressivo em background — muito pesado
       }
     }
 
@@ -3011,7 +3022,7 @@ async function refreshLibraryInBackground(){
 
 async function loadLibrary(force = false){
   try {
-    showLoading(force ? 'Atualizando biblioteca do Google Drive...' : 'Liberando acesso e preparando a biblioteca...');
+    showLoading(force ? 'Atualizando biblioteca de músicas...' : 'Preparando biblioteca...');
     resetProgressCounters();
     el.status.textContent = 'Preparando biblioteca...';
 
@@ -3038,12 +3049,29 @@ async function loadLibrary(force = false){
       }
     }
 
-    // V96 — Tenta primeiro o endpoint consolidado /api/library (mais rápido).
-    // Se falhar (servidor antigo / erro de rede), cai no método progressivo antigo.
+    // V127 — Tenta o endpoint consolidado /api/library com timeout.
+    // Se o Render está dormindo, o fetch trava por 60s+. Com timeout de 8s,
+    // mostramos uma mensagem amigável e continuamos tentando em background.
     if (useBackend()) {
       try {
         const url = `/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}${force ? '&force=1' : ''}`;
-        const resp = await fetch(url, { credentials: 'omit' });
+
+        // Timeout de 8s: se o servidor não responde, avisa o usuário
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+          // Mostra mensagem amigável em vez de loading genérico
+          if (el.loadingMessage) {
+            el.loadingMessage.innerHTML =
+              '⏳ O servidor está acordando...<br>' +
+              '<small style="opacity:.6">Isso pode levar até 1 minuto na primeira abertura do dia.<br>Você pode usar o app normalmente enquanto espera.</small>';
+          }
+          el.status.textContent = 'Aguardando servidor...';
+        }, 8000);
+
+        const resp = await fetch(url, { credentials: 'omit', signal: controller.signal });
+        clearTimeout(timeoutId);
+
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data.tracks) && data.tracks.length) {
@@ -3051,17 +3079,21 @@ async function loadLibrary(force = false){
             saveJSON(cacheKey, { updatedAt: Date.now(), tracks: allTracks });
             afterLibraryLoaded();
             completeLoadingProgress();
-            el.status.textContent = data.cached
-              ? `Biblioteca carregada (${data.count} músicas, do cache do servidor).`
-              : `Biblioteca carregada (${data.count} músicas).`;
+            el.status.textContent = `Biblioteca pronta — ${data.count} músicas.`;
             hideLoading();
             precacheSetlistAudios();
             return;
           }
         }
-        // Se chegou aqui, vai cair no fallback abaixo
         console.warn('/api/library indisponível ou vazio, usando indexação progressiva.');
       } catch (e) {
+        if (e.name === 'AbortError') {
+          // Timeout atingido — tenta novamente em background sem travar a UI
+          console.warn('Servidor demorou a responder, tentando em background...');
+          setTimeout(() => refreshLibraryInBackground(), 2000);
+          hideLoading();
+          return;
+        }
         console.warn('Falha ao usar /api/library, fallback para indexação progressiva:', e);
       }
     }

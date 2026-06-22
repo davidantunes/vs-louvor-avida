@@ -1,7 +1,7 @@
 /* Service Worker — Biblioteca de Louvor Igreja Amor e Vida
    v126.1 — network-first para shell crítico (evita stale JS/CSS) */
 
-const SW_VERSION = 'v126.2.0';
+const SW_VERSION = 'v127.0.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
