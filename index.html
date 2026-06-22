@@ -769,6 +769,49 @@
     </div>
   </div>
 
+  <!-- V125 — Modal de compartilhamento: link + arte -->
+  <div id="shareSetlistModal" class="modal hidden">
+    <div class="modal-card glass" style="max-width:480px">
+      <button id="closeShareSetlistModal" class="modal-close">×</button>
+      <span class="kicker">Compartilhar repertório</span>
+      <h3 id="shareSetlistModalTitle" style="font-size:22px;margin-bottom:6px">—</h3>
+      <p id="shareSetlistModalMeta" style="margin-bottom:20px;font-size:13px"></p>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button id="shareSetlistCopyLink" class="btn btn-secondary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto">
+          <span style="font-size:22px">🔗</span>
+          <div style="text-align:left">
+            <strong style="display:block">Copiar link</strong>
+            <small style="color:var(--muted)">Quem abrir o link vê o repertório completo</small>
+          </div>
+        </button>
+        <button id="shareSetlistDownloadArt" class="btn btn-secondary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto">
+          <span style="font-size:22px">🎨</span>
+          <div style="text-align:left">
+            <strong style="display:block">Baixar arte</strong>
+            <small style="color:var(--muted)">Imagem com músicas, tons e data do culto</small>
+          </div>
+        </button>
+        <button id="shareSetlistNativeShare" class="btn btn-primary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto;display:none">
+          <span style="font-size:22px">📤</span>
+          <div style="text-align:left">
+            <strong style="display:block">Compartilhar</strong>
+            <small>Enviar pelo WhatsApp, Telegram e outros</small>
+          </div>
+        </button>
+      </div>
+
+      <!-- Preview da arte gerada -->
+      <div id="shareSetlistArtPreview" style="margin-top:16px;display:none">
+        <canvas id="shareSetlistCanvas" style="width:100%;border-radius:16px;border:1px solid var(--line-soft)"></canvas>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="shareSetlistSaveImg" class="btn btn-primary" style="flex:1">⬇ Salvar imagem</button>
+          <button id="shareSetlistShareImg" class="btn btn-secondary" style="flex:1;display:none">📤 Compartilhar imagem</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- V122 — Modal de edição de data do repertório -->
   <div id="editSetlistDateModal" class="modal hidden">
     <div class="modal-card glass" style="max-width:420px">
