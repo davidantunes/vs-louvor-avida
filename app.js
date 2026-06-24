@@ -2308,6 +2308,22 @@ async function saveAllScheduleMonths(showToast = false){
 }
 
 // V112 — Importação de Excel via SheetJS
+// V127.3 — Carrega SheetJS sob demanda (lazy load).
+// Era carregado em todas as páginas para todos os usuários (~800 KB),
+// mas só é usado pelo admin ao importar escala.
+// Agora carrega apenas quando o botão "Importar Excel" é clicado.
+let xlsxLoaded = false;
+function loadXLSX(){
+  return new Promise((resolve, reject) => {
+    if (xlsxLoaded || window.XLSX) { xlsxLoaded = true; return resolve(); }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload = () => { xlsxLoaded = true; resolve(); };
+    s.onerror = () => reject(new Error('Falha ao carregar biblioteca de Excel.'));
+    document.head.appendChild(s);
+  });
+}
+
 async function handleScheduleExcelImport(event){
   const file = event.target.files?.[0];
   if (!file) return;
@@ -2315,8 +2331,12 @@ async function handleScheduleExcelImport(event){
     toast('Somente administradores podem importar escalas.');
     return;
   }
-  if (!window.XLSX) {
-    toast('Biblioteca de leitura de Excel ainda não carregou. Tente novamente em segundos.');
+  try {
+    // V127.3 — Carrega SheetJS sob demanda se ainda não carregou
+    toast('Preparando importação...');
+    await loadXLSX();
+  } catch(e) {
+    toast('Não foi possível carregar a biblioteca de Excel. Verifique sua conexão.');
     return;
   }
   try {
