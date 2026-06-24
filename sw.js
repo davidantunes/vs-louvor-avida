@@ -1,23 +1,16 @@
 /* Service Worker — Biblioteca de Louvor Igreja Amor e Vida
-   v126.1 — network-first para shell crítico (evita stale JS/CSS) */
+   v127.1 — Revertido para cache-first no shell (abre instantaneamente)
+   O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v127.0.0';
+const SW_VERSION = 'v127.2.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
 const API_CACHE   = `vsl-api-${SW_VERSION}`;
 
-// Arquivos críticos: sempre busca da rede primeiro.
-// Evita o problema de stale-while-revalidate onde o browser roda
-// código antigo enquanto o cache atualiza em segundo plano.
-const CRITICAL_SHELL = new Set([
-  '/',
-  '/index.html',
-  '/app.js',
-  '/styles.css',
-  '/config.js',
-]);
-
+// Shell: abre do cache imediatamente (instantâneo), atualiza em background.
+// Quando houver versão nova o SW envia mensagem SW_UPDATED para o app mostrar
+// o banner "Nova versão disponível — Atualizar agora".
 const SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -46,9 +39,10 @@ self.addEventListener('activate', (event) => {
         keys.filter((k) => !keep.has(k)).map((k) => caches.delete(k))
       ))
       .then(() => self.clients.claim())
-      // Notifica todas as abas que o SW foi atualizado
       .then(() => self.clients.matchAll({ type: 'window' }))
-      .then((clients) => clients.forEach(c => c.postMessage({ type: 'SW_UPDATED', version: SW_VERSION })))
+      .then((clients) => clients.forEach(c =>
+        c.postMessage({ type: 'SW_UPDATED', version: SW_VERSION })
+      ))
   );
 });
 
@@ -72,33 +66,25 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // ÁUDIOS — cache first
+  // ÁUDIOS — cache first (essencial para uso offline)
   if (isAudioRequest(req, url)) {
     event.respondWith(audioCacheFirst(req));
     return;
   }
 
-  // SHELL CRÍTICO (app.js, styles.css, index.html) — network first, sem stale
-  if (sameOrigin && CRITICAL_SHELL.has(url.pathname)) {
-    event.respondWith(networkFirst(req, SHELL_CACHE));
-    return;
-  }
-
-  // API — network first com fallback ao cache
+  // API — network first (dados sempre frescos), fallback ao cache
   if (sameOrigin && url.pathname.startsWith('/api/')) {
     if (url.pathname.startsWith('/api/transpose/')) return;
     event.respondWith(networkFirst(req, API_CACHE));
     return;
   }
 
-  if (sameOrigin && url.pathname.startsWith('/api/drive')) {
-    event.respondWith(networkFirst(req, API_CACHE));
-    return;
-  }
-
-  // Demais assets (imagens, fontes) — stale-while-revalidate
+  // SHELL e demais assets — stale-while-revalidate:
+  // serve do cache IMEDIATAMENTE (app abre instantâneo),
+  // e atualiza o cache em background para a próxima visita.
+  // O banner SW_UPDATED avisa quando a versão mudou.
   if (sameOrigin) {
-    event.respondWith(staleWhileRevalidate(req, ASSET_CACHE));
+    event.respondWith(staleWhileRevalidate(req, SHELL_CACHE));
     return;
   }
 });
