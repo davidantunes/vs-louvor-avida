@@ -755,25 +755,39 @@ app.get('/api/audio/:id', async (req, res) => {
   try {
     if (!requireApiKey(res)) return;
     const id = req.params.id;
-    const headers = {};
 
-    const response = await fetch(googleMediaUrl(id), { headers });
+    // V128 — Encaminha o header Range do browser para o Google Drive.
+    // iOS e Android EXIGEM suporte a Range requests para streaming de áudio:
+    // o browser envia Range: bytes=0- antes de começar, e se o servidor não
+    // responder com 206 + Accept-Ranges + Content-Range, o áudio não toca.
+    // Antes, o objeto headers estava vazio — o Range nunca chegava ao Drive.
+    const upstreamHeaders = {};
+    if (req.headers.range) {
+      upstreamHeaders['Range'] = req.headers.range;
+    }
+
+    const response = await fetch(googleMediaUrl(id), { headers: upstreamHeaders });
+
     if (!response.ok && response.status !== 206) {
       return res.status(response.status).send(await response.text());
     }
 
+    // Propaga status exato do Drive (200 ou 206)
     res.status(response.status);
+
     const contentType = response.headers.get('content-type') || 'audio/mpeg';
     res.setHeader('Content-Type', contentType);
-    const contentLength = response.headers.get('content-length');
-    const contentRange = response.headers.get('content-range');
-    const acceptRanges = response.headers.get('accept-ranges');
-    if (contentLength) res.setHeader('Content-Length', contentLength);
-    if (contentRange) res.setHeader('Content-Range', contentRange);
-    if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
 
-    // Cache longo no navegador/SW: áudios são imutáveis por id do Drive.
-    // Quando é range (206), evitamos cachear (resposta parcial).
+    const contentLength = response.headers.get('content-length');
+    const contentRange  = response.headers.get('content-range');
+    const acceptRanges  = response.headers.get('accept-ranges');
+
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    if (contentRange)  res.setHeader('Content-Range', contentRange);
+    // Garante Accept-Ranges mesmo que o Drive não devolva (mobile precisa desse header)
+    res.setHeader('Accept-Ranges', acceptRanges || 'bytes');
+
+    // Cache: resposta completa (200) pode ser cacheada; parcial (206) não
     if (response.status === 200 && !req.headers.range) {
       res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
     } else {
@@ -787,7 +801,7 @@ app.get('/api/audio/:id', async (req, res) => {
 
     response.body.pipe(res);
   } catch (error) {
-    console.error(error);
+    console.error('[audio]', error);
     res.status(500).send('Erro ao carregar áudio.');
   }
 });

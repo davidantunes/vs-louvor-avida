@@ -2,7 +2,7 @@
    v127.1 — Revertido para cache-first no shell (abre instantaneamente)
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v127.5.0';
+const SW_VERSION = 'v128.0.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
