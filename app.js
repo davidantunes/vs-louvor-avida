@@ -226,6 +226,12 @@ const el = {
   addMusicSetlistDetail: document.getElementById('addMusicSetlistDetail'),
   changeSetlistPaletteBtn: document.getElementById('changeSetlistPaletteBtn'),
   shareSetlistDetail: document.getElementById('shareSetlistDetail'),
+  shareSetlistModal: document.getElementById('shareSetlistModal'),
+  closeShareSetlistModal: document.getElementById('closeShareSetlistModal'),
+  shareSetlistModalTitle: document.getElementById('shareSetlistModalTitle'),
+  shareSetlistModalMeta: document.getElementById('shareSetlistModalMeta'),
+  shareSetlistCopyLink: document.getElementById('shareSetlistCopyLink'),
+  shareSetlistNativeShare: document.getElementById('shareSetlistNativeShare'),
   setlistReviewModal: document.getElementById('setlistReviewModal'),
   closeSetlistReview: document.getElementById('closeSetlistReview'),
   setlistReviewTitle: document.getElementById('setlistReviewTitle'),
@@ -352,11 +358,17 @@ const el = {
 document.title = cfg.APP_TITLE;
 
 initAppwriteClient();
+// V127 — Pré-aquece o servidor Render imediatamente ao abrir o app,
+// antes mesmo do login. Isso reduz o cold start para o usuário:
+// enquanto ele digita login/senha, o servidor já está acordando.
+// Fire-and-forget — não bloqueia nada, falha silenciosamente.
+fetch('/ping').catch(() => {});
 loadAppwriteServerConfig().finally(initSessionUI);
 bindEvents();
 initSchedule();
 initAdminPage();
 bindEditSetlistDateModal();
+bindShareSetlistModal();
 applyTheme(loadJSON('vs_theme_v1', 'dark'));
 routeInternalPage();
 // V109 — loginScreen começa com .hidden → garante inert para não receber foco
@@ -1285,12 +1297,15 @@ async function loadCloudState(){
     if (Array.isArray(shared)) {
       const localPendingFlag = loadJSON('vs_setlists_pending_v1', false);
       if (localPendingFlag) {
-        console.info('[setlists] Mudanças locais pendentes detectadas — preservando estado local e re-sincronizando.');
+        console.info('[setlists] Mudanças locais pendentes — preservando local e re-sincronizando.');
         setSharedState('setlists', setlists).catch(err => console.warn('Resync pendente falhou:', err));
       } else {
-        // V100 — Merge defensivo: preserva trackIds locais se servidor devolveu menos.
-        // Isso protege contra o cenário "PATCH atrasado sobrescreveu PATCH mais recente".
+        // V126.1 — Merge agora preserva eventDate/archived do remoto mesmo
+        // quando o local tem updatedAt igual ou posterior (corrige bug onde
+        // Chrome não mostrava repertório arquivado que iOS já mostrava).
         setlists = mergeSetlistsDefensive(setlists, shared);
+        // Persiste o resultado do merge para o próximo carregamento
+        saveJSON('vs_setlists_v1', setlists);
       }
     }
     if (Array.isArray(userState)) favorites = userState;
@@ -1338,11 +1353,9 @@ function mergeSetlistsDefensive(local, remote){
   if (!Array.isArray(local)) return remote;
   if (!Array.isArray(remote)) return local;
   const byId = new Map();
-  // Indexa remote
   for (const r of remote) {
     if (r && r.id) byId.set(r.id, { remote: r, local: null });
   }
-  // Indexa local — sobrepõe ou adiciona
   for (const l of local) {
     if (!l || !l.id) continue;
     const entry = byId.get(l.id) || { remote: null, local: null };
@@ -1352,15 +1365,39 @@ function mergeSetlistsDefensive(local, remote){
   const merged = [];
   for (const { local: l, remote: r } of byId.values()) {
     if (l && r) {
-      // Pega o que tem mais tracks; em empate, prefere o mais recente updatedAt
       const lCount = (l.trackIds || []).length;
       const rCount = (r.trackIds || []).length;
-      if (lCount > rCount) merged.push(l);
-      else if (rCount > lCount) merged.push(r);
-      else {
-        const lAt = Date.parse(l.updatedAt || '') || 0;
-        const rAt = Date.parse(r.updatedAt || '') || 0;
-        merged.push(lAt >= rAt ? l : r);
+      const lAt = Date.parse(l.updatedAt || '') || 0;
+      const rAt = Date.parse(r.updatedAt || '') || 0;
+
+      // V126.1 — Regra de merge revisada:
+      // 1) Mais músicas ganha (protege contra race condition de adição rápida).
+      if (lCount > rCount) {
+        // Local tem mais músicas mas preserva eventDate/archived do remoto se o
+        // local não tiver — evita perder dados de data adicionados em outro device.
+        const winner = { ...l };
+        if (!winner.eventDate && r.eventDate) winner.eventDate = r.eventDate;
+        if (!winner.archived && r.archived) winner.archived = r.archived;
+        merged.push(winner);
+      } else if (rCount > lCount) {
+        merged.push(r);
+      } else {
+        // 2) Empate de músicas: prefere o mais recente pelo updatedAt.
+        // MAS: se um tem eventDate e o outro não, prefere o que tem —
+        // independente do updatedAt (eventDate pode ter sido adicionado
+        // num device sem alterar tracks, mantendo updatedAt igual).
+        const lHasDate = !!l.eventDate;
+        const rHasDate = !!r.eventDate;
+        let winner;
+        if (rHasDate && !lHasDate) {
+          winner = { ...l, eventDate: r.eventDate, archived: r.archived || l.archived };
+        } else if (lHasDate && !rHasDate) {
+          winner = l;
+        } else {
+          // Ambos têm ou ambos não têm data: pega o mais recente
+          winner = lAt >= rAt ? l : r;
+        }
+        merged.push(winner);
       }
     } else {
       merged.push(l || r);
@@ -1671,22 +1708,69 @@ function applyPaletteToSetlist(setlist, palette){
   if (currentSetlistDetailId && String(currentSetlistDetailId) === String(setlist.id)) openSetlistDetail(setlist.id);
 }
 
+// ============================================================
+// V125 — Compartilhamento com arte gerada via Canvas
+// ============================================================
+
+let shareSetlistTarget = null; // setlist sendo compartilhado
+
+function openShareSetlistModal(setlist){
+  if (!setlist) return;
+  shareSetlistTarget = setlist;
+
+  if (el.shareSetlistModalTitle) el.shareSetlistModalTitle.textContent = setlist.name;
+  if (el.shareSetlistModalMeta) {
+    const trackCount = (setlist.trackIds || []).length;
+    const dateLabel = setlist.eventDate
+      ? new Date(setlist.eventDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })
+      : 'Sem data definida';
+    el.shareSetlistModalMeta.textContent = `${trackCount} música(s) • ${dateLabel}`;
+  }
+
+  // Botão compartilhar nativo — visível sempre (fallback para copiar link se não disponível)
+  if (el.shareSetlistNativeShare) el.shareSetlistNativeShare.style.display = '';
+
+  if (el.shareSetlistModal) el.shareSetlistModal.classList.remove('hidden');
+}
+
+function closeShareSetlistModalFn(){
+  if (el.shareSetlistModal) el.shareSetlistModal.classList.add('hidden');
+  shareSetlistTarget = null;
+}
+
+function bindShareSetlistModal(){
+  el.closeShareSetlistModal?.addEventListener('click', closeShareSetlistModalFn);
+  el.shareSetlistModal?.addEventListener('click', e => {
+    if (e.target === el.shareSetlistModal) closeShareSetlistModalFn();
+  });
+  el.shareSetlistCopyLink?.addEventListener('click', () => {
+    if (!shareSetlistTarget) return;
+    copyText(buildSetlistShareUrl(shareSetlistTarget.id), 'Link do repertório copiado!');
+  });
+  el.shareSetlistNativeShare?.addEventListener('click', async () => {
+    if (!shareSetlistTarget) return;
+    const url = buildSetlistShareUrl(shareSetlistTarget.id);
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareSetlistTarget.name,
+          text: `Repertório do culto: ${shareSetlistTarget.name}`,
+          url
+        });
+      } catch(e) {
+        if (e.name !== 'AbortError') copyText(url, 'Link copiado!');
+      }
+    } else {
+      copyText(url, 'Link do repertório copiado!');
+    }
+  });
+}
+
+// Gera a arte do repertório no Canvas e retorna o canvas element
 function shareSetlistWithPaletteCheck(setlist){
   if (!setlist) return;
-  if (!setlist.paletteTitle || !setlist.paletteImage) {
-    if (!canEditSetlist(setlist)) {
-      toast('Este repertório ainda não possui paleta. Peça ao criador para definir antes de compartilhar.');
-      return;
-    }
-    pendingPaletteShareSetlistId = setlist.id;
-    pendingPaletteReturnTarget = 'share';
-    closeSetlistDetail();
-    location.hash = '#paletas';
-    routeInternalPage();
-    toast('Escolha uma paleta antes de compartilhar o repertório.');
-    return;
-  }
-  copyText(buildSetlistShareUrl(setlist.id), 'Link do repertório copiado.');
+  // V125 — Abre o modal de compartilhamento com opções de link + arte
+  openShareSetlistModal(setlist);
 }
 
 function applyPaletteToPendingSetlist(palette){
@@ -2224,6 +2308,22 @@ async function saveAllScheduleMonths(showToast = false){
 }
 
 // V112 — Importação de Excel via SheetJS
+// V127.3 — Carrega SheetJS sob demanda (lazy load).
+// Era carregado em todas as páginas para todos os usuários (~800 KB),
+// mas só é usado pelo admin ao importar escala.
+// Agora carrega apenas quando o botão "Importar Excel" é clicado.
+let xlsxLoaded = false;
+function loadXLSX(){
+  return new Promise((resolve, reject) => {
+    if (xlsxLoaded || window.XLSX) { xlsxLoaded = true; return resolve(); }
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload = () => { xlsxLoaded = true; resolve(); };
+    s.onerror = () => reject(new Error('Falha ao carregar biblioteca de Excel.'));
+    document.head.appendChild(s);
+  });
+}
+
 async function handleScheduleExcelImport(event){
   const file = event.target.files?.[0];
   if (!file) return;
@@ -2231,8 +2331,12 @@ async function handleScheduleExcelImport(event){
     toast('Somente administradores podem importar escalas.');
     return;
   }
-  if (!window.XLSX) {
-    toast('Biblioteca de leitura de Excel ainda não carregou. Tente novamente em segundos.');
+  try {
+    // V127.3 — Carrega SheetJS sob demanda se ainda não carregou
+    toast('Preparando importação...');
+    await loadXLSX();
+  } catch(e) {
+    toast('Não foi possível carregar a biblioteca de Excel. Verifique sua conexão.');
     return;
   }
   try {
@@ -2893,10 +2997,15 @@ async function refreshLibraryInBackground(){
     libraryLoadingInBackground = true;
     resetProgressCounters();
 
-    // V96 — Prefere /api/library (cache de servidor); fallback ao método antigo.
+    // V127 — background refresh com timeout de 30s (não trava a UI)
     if (useBackend()) {
       try {
-        const resp = await fetch(`/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}`, { credentials: 'omit' });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const resp = await fetch(`/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}`, {
+          credentials: 'omit', signal: controller.signal
+        });
+        clearTimeout(timeoutId);
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data.tracks) && data.tracks.length) {
@@ -2909,7 +3018,8 @@ async function refreshLibraryInBackground(){
           }
         }
       } catch (e) {
-        console.warn('Refresh via /api/library falhou, usando progressivo:', e);
+        if (e.name !== 'AbortError') console.warn('Refresh em background falhou:', e);
+        return; // Não tenta o fallback progressivo em background — muito pesado
       }
     }
 
@@ -2932,7 +3042,7 @@ async function refreshLibraryInBackground(){
 
 async function loadLibrary(force = false){
   try {
-    showLoading(force ? 'Atualizando biblioteca do Google Drive...' : 'Liberando acesso e preparando a biblioteca...');
+    showLoading(force ? 'Atualizando biblioteca de músicas...' : 'Preparando biblioteca...');
     resetProgressCounters();
     el.status.textContent = 'Preparando biblioteca...';
 
@@ -2959,12 +3069,29 @@ async function loadLibrary(force = false){
       }
     }
 
-    // V96 — Tenta primeiro o endpoint consolidado /api/library (mais rápido).
-    // Se falhar (servidor antigo / erro de rede), cai no método progressivo antigo.
+    // V127 — Tenta o endpoint consolidado /api/library com timeout.
+    // Se o Render está dormindo, o fetch trava por 60s+. Com timeout de 8s,
+    // mostramos uma mensagem amigável e continuamos tentando em background.
     if (useBackend()) {
       try {
         const url = `/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}${force ? '&force=1' : ''}`;
-        const resp = await fetch(url, { credentials: 'omit' });
+
+        // Timeout de 8s: se o servidor não responde, avisa o usuário
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+          // Mostra mensagem amigável em vez de loading genérico
+          if (el.loadingMessage) {
+            el.loadingMessage.innerHTML =
+              '⏳ O servidor está acordando...<br>' +
+              '<small style="opacity:.6">Isso pode levar até 1 minuto na primeira abertura do dia.<br>Você pode usar o app normalmente enquanto espera.</small>';
+          }
+          el.status.textContent = 'Aguardando servidor...';
+        }, 8000);
+
+        const resp = await fetch(url, { credentials: 'omit', signal: controller.signal });
+        clearTimeout(timeoutId);
+
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data.tracks) && data.tracks.length) {
@@ -2972,17 +3099,21 @@ async function loadLibrary(force = false){
             saveJSON(cacheKey, { updatedAt: Date.now(), tracks: allTracks });
             afterLibraryLoaded();
             completeLoadingProgress();
-            el.status.textContent = data.cached
-              ? `Biblioteca carregada (${data.count} músicas, do cache do servidor).`
-              : `Biblioteca carregada (${data.count} músicas).`;
+            el.status.textContent = `Biblioteca pronta — ${data.count} músicas.`;
             hideLoading();
             precacheSetlistAudios();
             return;
           }
         }
-        // Se chegou aqui, vai cair no fallback abaixo
         console.warn('/api/library indisponível ou vazio, usando indexação progressiva.');
       } catch (e) {
+        if (e.name === 'AbortError') {
+          // Timeout atingido — tenta novamente em background sem travar a UI
+          console.warn('Servidor demorou a responder, tentando em background...');
+          setTimeout(() => refreshLibraryInBackground(), 2000);
+          hideLoading();
+          return;
+        }
         console.warn('Falha ao usar /api/library, fallback para indexação progressiva:', e);
       }
     }
@@ -3993,26 +4124,67 @@ function openSetlistDetail(id){
   const creatorName = getSetlistCreatorName(setlist);
   if (detailIntro) {
     if (isSharedView) {
-      detailIntro.textContent = `Repertório compartilhado com ${trackCount} música(s) • Criado por ${creatorName}. Confira também a paleta escolhida para este culto.`;
+      detailIntro.textContent = `Repertório compartilhado com ${trackCount} música(s) • Criado por ${creatorName}.`;
     } else {
       detailIntro.textContent = owner
         ? `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Você pode tocar, reordenar e editar este repertório.`
         : `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Repertório em modo leitura para você.`;
     }
   }
-  if (el.addMusicSetlistDetail) {
-    el.addMusicSetlistDetail.classList.toggle('hidden', !owner);
-  }
-  if (el.changeSetlistPaletteBtn) {
-    el.changeSetlistPaletteBtn.classList.toggle('hidden', !owner);
-  }
+  if (el.addMusicSetlistDetail) el.addMusicSetlistDetail.classList.toggle('hidden', !owner);
+  if (el.changeSetlistPaletteBtn) el.changeSetlistPaletteBtn.classList.toggle('hidden', !owner);
+
   renderSharedSetlistHero(setlist);
   renderSetlistDetailPalette(setlist, owner);
   renderSetlistDetailTracks();
   el.setlistDetailModal.classList.remove('hidden');
-  el.setlistDetailModal.querySelector('.modal-card')?.classList.toggle('is-shared-setlist-view', isSharedView);
+
+  const modalCard = el.setlistDetailModal.querySelector('.modal-card');
+  modalCard?.classList.toggle('is-shared-setlist-view', isSharedView);
+
+  // V124 — No modo compartilhado, embrulha hero + ações + paleta + faixas
+  // num único scroll-zone para evitar corte do hero pelo max-height do modal.
+  if (isSharedView && modalCard) {
+    // Remove scroll-zone anterior se existir
+    const existing = modalCard.querySelector('.setlist-shared-scroll-zone');
+    if (existing) {
+      while (existing.firstChild) existing.before(existing.firstChild);
+      existing.remove();
+    }
+    // Cria nova scroll-zone e move o conteúdo variável para dentro dela
+    const scrollZone = document.createElement('div');
+    scrollZone.className = 'setlist-shared-scroll-zone';
+    const hero = el.setlistSharedHero;
+    const actionsTop = modalCard.querySelector('.modal-actions-top');
+    const palette = document.getElementById('setlistDetailPalette');
+    const tracks = document.getElementById('setlistDetailTracks');
+    // Insere o scroll-zone antes do hero
+    if (hero && hero.parentNode === modalCard) {
+      modalCard.insertBefore(scrollZone, hero);
+      scrollZone.appendChild(hero);
+      if (actionsTop) scrollZone.appendChild(actionsTop);
+      if (palette) scrollZone.appendChild(palette);
+      if (tracks) scrollZone.appendChild(tracks);
+    }
+  }
 }
-function closeSetlistDetail(){ el.setlistDetailModal.classList.add('hidden'); el.setlistSharedHero?.classList.add('hidden'); if (el.setlistSharedHero) el.setlistSharedHero.innerHTML=''; el.setlistDetailModal.querySelector('.modal-card')?.classList.remove('is-shared-setlist-view'); sharedSetlistContextId = null; }
+function closeSetlistDetail(){
+  el.setlistDetailModal.classList.add('hidden');
+  el.setlistSharedHero?.classList.add('hidden');
+  if (el.setlistSharedHero) el.setlistSharedHero.innerHTML = '';
+  const modalCard = el.setlistDetailModal.querySelector('.modal-card');
+  modalCard?.classList.remove('is-shared-setlist-view');
+  sharedSetlistContextId = null;
+
+  // V124 — Restaura estrutura original (remove scroll-zone e move elementos de volta)
+  if (modalCard) {
+    const scrollZone = modalCard.querySelector('.setlist-shared-scroll-zone');
+    if (scrollZone) {
+      while (scrollZone.firstChild) scrollZone.before(scrollZone.firstChild);
+      scrollZone.remove();
+    }
+  }
+}
 function renderSetlistDetailPalette(setlist, owner=false){
   if (!el.setlistDetailPalette) return;
   const hasPalette = Boolean(setlist?.paletteTitle);

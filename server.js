@@ -42,12 +42,18 @@ app.get('/manifest.json', (req, res) => {
 });
 
 app.use(express.static(__dirname, {
+  etag: true,
+  lastModified: true,
   setHeaders: (res, filePath) => {
-    // Assets podem ser cacheados longamente (o navegador valida com ETag).
+    // Imagens/fontes: 7 dias (mudam raramente)
     if (/\.(png|jpg|jpeg|webp|svg|gif|woff2?|ttf|eot)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
+    // JS/CSS: 1h com stale-while-revalidate de 24h.
+    // O SW já controla o cache no cliente; esse header é para o CDN do Cloudflare.
+    // V127.2: aumentado de 5min para 1h — com Render Starter não há cold start,
+    // e o banner SW_UPDATED avisa o usuário quando há nova versão.
     } else if (/\.(css|js)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
+      res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     }
   }
 }));
@@ -192,11 +198,38 @@ app.put('/api/appwrite/admin/state/:key', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// V127.2 — Cache em memória para leituras do Appwrite state.
+// Evita múltiplas chamadas simultâneas para o mesmo dado (ex: quando 5 usuários
+// abrem o app ao mesmo tempo, todos pedindo setlists/members/schedule).
+// TTL de 30s: dados sempre frescos mas sem sobrecarregar o Appwrite.
+const stateReadCache = new Map(); // key → { value, ts }
+const STATE_READ_TTL_MS = 30 * 1000;
+
+function getStateFromCache(key) {
+  const entry = stateReadCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > STATE_READ_TTL_MS) { stateReadCache.delete(key); return null; }
+  return entry.value;
+}
+function setStateInCache(key, value) {
+  stateReadCache.set(key, { value, ts: Date.now() });
+}
+function invalidateStateCache(key) {
+  stateReadCache.delete(key);
+}
+
 app.get('/api/appwrite/state/:key', async (req, res) => {
   try {
+    const key = req.params.key;
+    const cached = getStateFromCache(key);
+    if (cached !== null) {
+      return res.json(cached);
+    }
     const docs = await listDocuments(APPWRITE_APP_STATE_COLLECTION_ID);
-    const doc = docs.find(d => d.key === req.params.key);
-    res.json({ value: doc?.value ? JSON.parse(doc.value) : null, updatedAt: doc?.updated_at || null });
+    const doc = docs.find(d => d.key === key);
+    const result = { value: doc?.value ? JSON.parse(doc.value) : null, updatedAt: doc?.updated_at || null };
+    setStateInCache(key, result);
+    res.json(result);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -205,6 +238,7 @@ app.get('/api/appwrite/state/:key', async (req, res) => {
 app.put('/api/appwrite/state/:key', async (req, res) => {
   try {
     const updatedAt = new Date().toISOString();
+    invalidateStateCache(req.params.key); // V127.2 — invalida cache de leitura
     const doc = await upsertState(APPWRITE_APP_STATE_COLLECTION_ID, d => d.key === req.params.key, {
       key: req.params.key,
       value: JSON.stringify(req.body.value ?? null),
@@ -297,7 +331,11 @@ app.get('/api/drive', async (req, res) => {
    e o cliente recebe TODO o catálogo em uma única chamada. Cliente que ainda
    usar /api/drive continua funcionando (compatibilidade). */
 
-const LIBRARY_TTL_MS = 30 * 60 * 1000;
+// V127.2 — Com Render Starter (sem cold start), podemos usar TTL maior.
+// A biblioteca muda raramente (quando você adiciona músicas no Drive).
+// 6h de cache no servidor significa que a primeira requisição do dia
+// é sempre rápida; só rebusca se você forçar com ?force=1.
+const LIBRARY_TTL_MS = 6 * 60 * 60 * 1000;
 let libraryCache = null;       // { tracks, builtAt, rootId }
 let libraryBuildPromise = null; // dedupe de chamadas concorrentes
 
@@ -516,7 +554,7 @@ app.get('/api/library', async (req, res) => {
                   (now - libraryCache.builtAt) < LIBRARY_TTL_MS;
 
     if (fresh && !req.query.force) {
-      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800');
+      res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=21600');
       res.setHeader('X-Library-Cache', 'hit');
       return res.json({
         tracks: libraryCache.tracks,
@@ -539,7 +577,7 @@ app.get('/api/library', async (req, res) => {
       })();
     }
     const tracks = await libraryBuildPromise;
-    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800');
+    res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=21600');
     res.setHeader('X-Library-Cache', 'miss');
     res.json({
       tracks,

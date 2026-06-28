@@ -4,9 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Biblioteca de Louvor — Igreja Amor e Vida</title>
+  <meta name="description" content="Biblioteca de músicas, escalas e repertórios do Ministério de Louvor da Igreja Amor e Vida." />
   <meta name="theme-color" content="#0a1014" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Louvor Ávida" />
+  <!-- Open Graph — preview no WhatsApp, Telegram, redes sociais -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Biblioteca de Louvor — Igreja Amor e Vida" />
+  <meta property="og:description" content="Biblioteca de músicas, escalas e repertórios do Ministério de Louvor da Igreja Amor e Vida." />
+  <meta property="og:image" content="/assets/logo-avida.jpg" />
+  <meta property="og:locale" content="pt_BR" />
+  <!-- Twitter/X card -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Biblioteca de Louvor — Igreja Amor e Vida" />
+  <meta name="twitter:description" content="Ministério de Louvor Ávida — músicas, escalas e repertórios." />
   <link rel="icon" href="assets/logo-avida.jpg" />
   <link rel="apple-touch-icon" href="assets/logo-avida.jpg" />
   <link rel="manifest" href="manifest.json" />
@@ -25,11 +36,26 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
+        // V126.1 — Detecta quando o SW foi atualizado e avisa o usuário
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (event.data && event.data.type === 'SW_UPDATED') {
+            // Pequeno delay para o app carregar antes de mostrar o aviso
+            setTimeout(() => {
+              const banner = document.getElementById('swUpdateBanner');
+              if (banner) banner.classList.remove('hidden');
+            }, 1500);
+          }
+        });
       });
     }
   </script>
 </head>
 <body data-theme="dark">
+  <!-- V126.1 — Banner de atualização disponível (aparece quando SW atualiza) -->
+  <div id="swUpdateBanner" class="sw-update-banner hidden">
+    <span>Nova versão disponível.</span>
+    <button onclick="window.location.reload()">Atualizar agora</button>
+  </div>
   <div class="bg-blur bg-blur-a"></div>
   <div class="bg-blur bg-blur-b"></div>
   <div class="bg-blur bg-blur-c"></div>
@@ -720,7 +746,7 @@
         
       </div>
     </div>
-    <audio id="audioPlayer" preload="none"></audio>
+    <audio id="audioPlayer" preload="none" playsinline></audio>
   </footer>
 
   <nav class="mobile-dock">
@@ -766,6 +792,33 @@
         <button id="createSetlistBtn" class="btn btn-primary">Criar</button>
       </div>
       <div id="setlistOptions" class="stack-list"></div>
+    </div>
+  </div>
+
+  <!-- V125 — Modal de compartilhamento: link + arte -->
+  <div id="shareSetlistModal" class="modal hidden">
+    <div class="modal-card glass" style="max-width:480px">
+      <button id="closeShareSetlistModal" class="modal-close">×</button>
+      <span class="kicker">Compartilhar repertório</span>
+      <h3 id="shareSetlistModalTitle" style="font-size:22px;margin-bottom:6px">—</h3>
+      <p id="shareSetlistModalMeta" style="margin-bottom:20px;font-size:13px"></p>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button id="shareSetlistCopyLink" class="btn btn-secondary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto">
+          <span style="font-size:22px">🔗</span>
+          <div style="text-align:left">
+            <strong style="display:block">Copiar link</strong>
+            <small style="color:var(--muted)">Quem abrir o link vê o repertório completo</small>
+          </div>
+        </button>
+        <button id="shareSetlistNativeShare" class="btn btn-primary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto">
+          <span style="font-size:22px">📤</span>
+          <div style="text-align:left">
+            <strong style="display:block">Compartilhar</strong>
+            <small>Enviar pelo WhatsApp, Telegram e outros</small>
+          </div>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -875,9 +928,8 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/appwrite@16.1.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/appwrite@16.1.0" defer></script>
+  <script src="config.js" defer></script>
 
   <div id="tourOverlay" class="tour-overlay hidden" aria-hidden="true">
     <div class="tour-backdrop"></div>
@@ -902,6 +954,6 @@
       </div>
     </div>
   </div>
-  <script src="app.js"></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
