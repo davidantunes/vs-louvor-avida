@@ -4,7 +4,6 @@
   "private": true,
   "description": "Biblioteca de Louvor Igreja Amor e Vida com Google Drive, player, escala, repertórios e paleta de cores do culto.",
   "scripts": {
-    "build": "node build.js",
     "start": "node server.js",
     "dev": "node server.js"
   },
@@ -14,9 +13,7 @@
     "ffmpeg-static": "^5.2.0",
     "node-fetch": "^2.7.0"
   },
-  "devDependencies": {
-    "esbuild": "^0.21.0"
-  },
+  "devDependencies": {},
   "main": "server.js",
   "engines": {
     "node": "20.x"

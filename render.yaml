@@ -3,7 +3,7 @@ services:
     name: vs-louvor-avida
     env: node
     plan: starter
-    buildCommand: npm install && npm run build
+    buildCommand: npm install
     startCommand: npm start
     autoDeploy: true
     envVars:
