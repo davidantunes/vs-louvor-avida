@@ -114,7 +114,7 @@ async function upsertState(collectionId, matcher, data) {
   return appwriteRequest('POST', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents`, { documentId: 'unique()', data });
 }
 app.get('/api/appwrite/config', (req, res) => {
-  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: true });
+  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: true, driveApiKey: API_KEY });
 });
 
 app.get('/api/appwrite/bootstrap/:userId', async (req, res) => {
@@ -755,40 +755,59 @@ app.get('/api/audio/:id', async (req, res) => {
   try {
     if (!requireApiKey(res)) return;
     const id = req.params.id;
-    const headers = {};
+    const driveMediaUrl = googleMediaUrl(id);
 
-    const response = await fetch(googleMediaUrl(id), { headers });
-    if (!response.ok && response.status !== 206) {
-      return res.status(response.status).send(await response.text());
+    // V131 — Obtém a URL real do arquivo via redirect manual.
+    // O Google Drive redireciona para um CDN (ex: lh3.googleusercontent.com).
+    // Em vez de fazer proxy (que pode falhar por restrições de rede do Render),
+    // repassamos o redirect ao browser — ele acessa o CDN diretamente.
+    const headResponse = await fetch(driveMediaUrl, {
+      method: 'GET',
+      redirect: 'manual',   // não segue o redirect automaticamente
+      headers: { 'User-Agent': 'VSLouvor/1.0' }
+    });
+
+    // Se houver redirect, passa para o browser seguir
+    if (headResponse.status >= 300 && headResponse.status < 400) {
+      const location = headResponse.headers.get('location');
+      if (location) {
+        console.log(`[audio] redirect ${headResponse.status} → ${location.slice(0, 80)}`);
+        return res.redirect(headResponse.status, location);
+      }
     }
 
-    res.status(response.status);
-    const contentType = response.headers.get('content-type') || 'audio/mpeg';
+    // Sem redirect: resposta direta (já tem o conteúdo)
+    if (!headResponse.ok && headResponse.status !== 206) {
+      const errBody = await headResponse.text().catch(() => '');
+      console.error(`[audio] erro ${headResponse.status}:`, errBody.slice(0, 200));
+      return res.status(headResponse.status).send(errBody || 'Erro ao carregar áudio.');
+    }
+
+    // Conteúdo direto (sem redirect): faz pipe normal
+    const contentType = headResponse.headers.get('content-type') || 'audio/mpeg';
+    res.status(headResponse.status);
     res.setHeader('Content-Type', contentType);
-    const contentLength = response.headers.get('content-length');
-    const contentRange = response.headers.get('content-range');
-    const acceptRanges = response.headers.get('accept-ranges');
-    if (contentLength) res.setHeader('Content-Length', contentLength);
-    if (contentRange) res.setHeader('Content-Range', contentRange);
-    if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
-
-    // Cache longo no navegador/SW: áudios são imutáveis por id do Drive.
-    // Quando é range (206), evitamos cachear (resposta parcial).
-    if (response.status === 200 && !req.headers.range) {
-      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
-    } else {
-      res.setHeader('Cache-Control', 'no-store');
-    }
+    res.setHeader('Accept-Ranges', headResponse.headers.get('accept-ranges') || 'bytes');
+    const cl = headResponse.headers.get('content-length');
+    const cr = headResponse.headers.get('content-range');
+    if (cl) res.setHeader('Content-Length', cl);
+    if (cr) res.setHeader('Content-Range', cr);
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
 
     if (req.query.download) {
-      const filename = req.query.filename || 'audio.mp3';
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${req.query.filename || 'audio.mp3'}"`);
     }
 
-    response.body.pipe(res);
+    headResponse.body.on('error', (err) => {
+      console.error('[audio] pipe error:', err.message);
+    });
+    headResponse.body.pipe(res);
+
   } catch (error) {
-    console.error(error);
-    res.status(500).send('Erro ao carregar áudio.');
+    console.error('[audio] catch:', error.name, error.message);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message, name: error.name });
+    }
   }
 });
 

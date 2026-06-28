@@ -358,6 +358,8 @@ const el = {
 document.title = cfg.APP_TITLE;
 
 initAppwriteClient();
+// V131 — Recupera chave do Drive salva para o fallback de áudio estar pronto imediatamente
+try { const k = localStorage.getItem('vs_drive_key'); if (k && cfg && !cfg.DRIVE_API_KEY) cfg.DRIVE_API_KEY = k; } catch(_){}
 // V127 — Pré-aquece o servidor Render imediatamente ao abrir o app,
 // antes mesmo do login. Isso reduz o cold start para o usuário:
 // enquanto ele digita login/senha, o servidor já está acordando.
@@ -484,6 +486,19 @@ function bindEvents(){
   el.audio.addEventListener('timeupdate', syncProgressUI);
   el.audio.addEventListener('loadedmetadata', syncProgressUI);
   el.audio.addEventListener('ended', handleAudioEnded);
+  // V131 — Quando a fonte de áudio falha em carregar (erro de rede/500 do proxy),
+  // tenta automaticamente a próxima fonte na lista de candidatas.
+  el.audio.addEventListener('error', () => {
+    const candidates = el.audio._candidates || [];
+    const nextIndex = (el.audio._candidateIndex || 0) + 1;
+    if (nextIndex < candidates.length) {
+      console.warn(`[audio] erro ao carregar fonte ${el.audio._candidateIndex}, tentando fonte ${nextIndex}`);
+      loadAudioCandidate(nextIndex);
+    } else {
+      console.error('[audio] todas as fontes falharam');
+      setPlayButtonState(false);
+    }
+  });
 
   el.closeTone.addEventListener('click', closeToneModal);
   el.toneModal.addEventListener('click', e => { if (e.target === el.toneModal) closeToneModal(); });
@@ -820,6 +835,11 @@ async function loadAppwriteServerConfig(){
     const data = await res.json();
     if (Array.isArray(data.adminEmails)) cloudAdminEmails = data.adminEmails.map(e => String(e).toLowerCase());
     cloudAdminConfigured = Boolean(data.adminConfigured);
+    // V131 — Salva chave do Drive para o fallback de áudio direto funcionar
+    if (data.driveApiKey) {
+      cfg.DRIVE_API_KEY = data.driveApiKey;
+      try { localStorage.setItem('vs_drive_key', data.driveApiKey); } catch(_) {}
+    }
     // V116/V120 — Re-renderiza após carregar adminEmails
     updateAdminNavVisibility(); // sempre — independe de authUser
     if (authUser) {
@@ -3548,29 +3568,65 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   currentIndex = currentQueue.findIndex(t => t.id === track.id);
   const alteredToneLabel = track.repertoireTone || (semitones ? calculateToneLabel(track.key, semitones) : '');
 
-  // Resposta visual imediata no smartphone: atualiza o player antes do áudio terminar de carregar.
   el.nowTitle.textContent = alteredToneLabel ? `${track.name} • Tom alterado ${formatKeyLabel(alteredToneLabel)}` : track.name;
   el.nowSinger.textContent = `${track.singer}${track.key && track.key !== '—' ? ' • Tom original ' + formatKeyLabel(track.key) : ''}${alteredToneLabel ? ' • Tom alterado ' + formatKeyLabel(alteredToneLabel) : ''}`;
   el.nowCover.src = track.coverUrl || 'assets/logo-avida.jpg';
   setPlayButtonState(true);
 
-  const src = semitones ? transposeUrl(track.id, semitones) : driveUrl(track.id);
-  if (el.audio.src !== src) {
-    el.audio.preload = 'auto';
-    el.audio.src = src;
-    try { el.audio.load(); } catch(_) {}
+  // V131 — Sistema de fallback em cascata para garantir reprodução sempre.
+  // Monta lista de URLs candidatas, da preferida para a alternativa:
+  // 1. Proxy do servidor (/api/audio) — funciona se o Render conecta ao Drive
+  // 2. URL direta da API do Drive — o browser acessa sem restrição de egress
+  // 3. URL de download do Drive — alternativa final
+  // Se uma falha (evento 'error'), tenta a próxima automaticamente.
+  const candidates = semitones
+    ? [transposeUrl(track.id, semitones), driveDirectApiUrl(track.id), driveDirectDownloadUrl(track.id)]
+    : [`/api/audio/${encodeURIComponent(track.id)}`, driveDirectApiUrl(track.id), driveDirectDownloadUrl(track.id)];
+
+  el.audio._candidates = candidates;
+  el.audio._candidateIndex = 0;
+  el.audio._trackId = track.id;
+
+  loadAudioCandidate(0);
+
+  recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: formatKeyLabel(track.key), changedKey: alteredToneLabel || '', semitones });
+  syncProgressUI();
+}
+
+// V131 — Carrega uma URL candidata; se falhar, o handler de erro tenta a próxima
+function loadAudioCandidate(index){
+  const candidates = el.audio._candidates || [];
+  if (index >= candidates.length) {
+    console.error('[audio] todas as fontes falharam para', el.audio._trackId);
+    setPlayButtonState(false);
+    toast('Não foi possível reproduzir esta música. Verifique sua conexão.');
+    return;
   }
+  el.audio._candidateIndex = index;
+  const src = candidates[index];
+  el.audio.preload = 'auto';
+  el.audio.src = src;
+  try { el.audio.load(); } catch(_) {}
 
   const p = el.audio.play();
   if (p && typeof p.catch === 'function') {
     p.catch(err => {
-      console.warn('Falha ao tocar automaticamente:', err);
-      setPlayButtonState(false);
+      if (err.name === 'AbortError') return; // troca de faixa, ignorar
+      console.warn(`[audio] fonte ${index} falhou (${err.name}), tentando próxima...`);
+      // Tenta a próxima fonte
+      loadAudioCandidate(index + 1);
     });
   }
+}
 
-  recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: formatKeyLabel(track.key), changedKey: alteredToneLabel || '', semitones });
-  syncProgressUI();
+// URLs diretas do Google Drive (browser acessa sem passar pelo servidor)
+function driveDirectApiUrl(id){
+  const key = (cfg && (cfg.DRIVE_API_KEY || cfg.API_KEY)) || '';
+  if (!key) { try { return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&key=${localStorage.getItem('vs_drive_key')||''}`; } catch(_){} }
+  return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&key=${encodeURIComponent(key)}`;
+}
+function driveDirectDownloadUrl(id){
+  return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`;
 }
 
 function closePlayer(){
