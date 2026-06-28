@@ -811,18 +811,23 @@ app.get('/api/audio/:id', async (req, res) => {
     const id = req.params.id;
     const driveMediaUrl = googleMediaUrl(id);
 
-    // V131 — Retry com até 3 tentativas. Conexões ao Google Drive podem
-    // falhar esporadicamente; tentar novamente resolve a intermitência.
-    let headResponse = null;
+    // V131.10 — O diagnóstico provou que esta abordagem funciona (status 206):
+    // encaminhar o header Range do browser, seguir redirects automaticamente
+    // (redirect:'follow', NÃO repassar ao browser que falha por CORS),
+    // e fazer pipe do conteúdo. Com retry para resiliência.
+    const upstreamHeaders = { 'User-Agent': 'VSLouvor/1.0' };
+    if (req.headers.range) upstreamHeaders['Range'] = req.headers.range;
+
+    let driveRes = null;
     let lastErr = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        headResponse = await fetch(driveMediaUrl, {
+        driveRes = await fetch(driveMediaUrl, {
           method: 'GET',
-          redirect: 'manual',
-          headers: { 'User-Agent': 'VSLouvor/1.0' }
+          redirect: 'follow',          // segue o redirect do Drive internamente
+          headers: upstreamHeaders
         });
-        break; // sucesso, sai do loop
+        break;
       } catch (e) {
         lastErr = e;
         console.warn(`[audio] tentativa ${attempt} falhou: ${e.message}`);
@@ -830,29 +835,23 @@ app.get('/api/audio/:id', async (req, res) => {
       }
     }
 
-    if (!headResponse) {
-      console.error('[audio] todas as tentativas falharam:', lastErr?.message);
+    if (!driveRes) {
+      console.error('[audio] conexão falhou:', lastErr?.message);
       return res.status(502).json({ error: 'Falha ao conectar ao Google Drive', detail: lastErr?.message });
     }
 
-    // Redirect → repassa ao browser (acessa o CDN diretamente)
-    if (headResponse.status >= 300 && headResponse.status < 400) {
-      const location = headResponse.headers.get('location');
-      if (location) return res.redirect(302, location);
+    if (!driveRes.ok && driveRes.status !== 206) {
+      const errBody = await driveRes.text().catch(() => '');
+      console.error(`[audio] Drive ${driveRes.status}:`, errBody.slice(0, 150));
+      return res.status(driveRes.status).send(errBody || 'Erro ao carregar áudio.');
     }
 
-    if (!headResponse.ok && headResponse.status !== 206) {
-      const errBody = await headResponse.text().catch(() => '');
-      console.error(`[audio] Drive ${headResponse.status}:`, errBody.slice(0, 150));
-      return res.status(headResponse.status).send(errBody || 'Erro ao carregar áudio.');
-    }
-
-    const contentType = headResponse.headers.get('content-type') || 'audio/mpeg';
-    res.status(headResponse.status);
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Accept-Ranges', headResponse.headers.get('accept-ranges') || 'bytes');
-    const cl = headResponse.headers.get('content-length');
-    const cr = headResponse.headers.get('content-range');
+    // Propaga status (200 ou 206) e headers de streaming
+    res.status(driveRes.status);
+    res.setHeader('Content-Type', driveRes.headers.get('content-type') || 'audio/mpeg');
+    res.setHeader('Accept-Ranges', driveRes.headers.get('accept-ranges') || 'bytes');
+    const cl = driveRes.headers.get('content-length');
+    const cr = driveRes.headers.get('content-range');
     if (cl) res.setHeader('Content-Length', cl);
     if (cr) res.setHeader('Content-Range', cr);
     res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
@@ -861,11 +860,12 @@ app.get('/api/audio/:id', async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename="${req.query.filename || 'audio.mp3'}"`);
     }
 
-    headResponse.body.on('error', (err) => {
+    driveRes.body.on('error', (err) => {
       console.error('[audio] pipe error:', err.message);
       if (!res.headersSent) res.status(500).end();
+      else res.end();
     });
-    headResponse.body.pipe(res);
+    driveRes.body.pipe(res);
 
   } catch (error) {
     console.error('[audio] catch:', error.name, error.message);

@@ -3632,12 +3632,16 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   // enquanto o proxy do servidor (/api/audio) falha intermitentemente.
   // Ordem: 1) API direta do Drive  2) download direto  3) proxy do servidor
   // Para tom alterado (transpose), só o servidor faz — então usa só ele.
+  // V131.10 — O diagnóstico confirmou que o proxy do servidor (/api/audio)
+  // baixa o áudio corretamente (status 206). As URLs diretas do Google Drive
+  // falham no navegador por CORS. Então usamos o proxy do servidor PRIMEIRO,
+  // e as URLs diretas apenas como reserva caso o servidor fique indisponível.
   const candidates = semitones
     ? [transposeUrl(track.id, semitones)]
     : [
+        `/api/audio/${encodeURIComponent(track.id)}`,
         driveDirectApiUrl(track.id),
-        driveDirectDownloadUrl(track.id),
-        `/api/audio/${encodeURIComponent(track.id)}`
+        driveDirectDownloadUrl(track.id)
       ];
 
   el.audio._candidates = candidates;
