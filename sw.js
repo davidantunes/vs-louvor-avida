@@ -2,7 +2,7 @@
    v127.1 — Revertido para cache-first no shell (abre instantaneamente)
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v128.5.0';
+const SW_VERSION = 'v128.6.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -66,23 +66,27 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // ÁUDIOS — cache first (essencial para uso offline)
-  if (isAudioRequest(req, url)) {
-    event.respondWith(audioCacheFirst(req));
-    return;
+  // V128.6 — Áudio: NÃO interceptar. Deixar o browser lidar diretamente.
+  // O servidor redireciona /api/audio/:id para Google Drive (302).
+  // Se o SW intercepta, range requests falham porque o redirect não
+  // preserva o header Range, causando falha no streaming no mobile.
+  // Sem interceptação, o browser faz range requests nativamente ao Drive.
+  if (
+    url.pathname.startsWith('/api/audio/') ||
+    url.pathname.startsWith('/api/transpose/') ||
+    req.destination === 'audio' ||
+    /\.(mp3|m4a|ogg|opus|wav|aac)(\?|$)/i.test(url.pathname)
+  ) {
+    return; // não chama event.respondWith() — browser lida sozinho
   }
 
-  // API — network first (dados sempre frescos), fallback ao cache
+  // API — network first
   if (sameOrigin && url.pathname.startsWith('/api/')) {
-    if (url.pathname.startsWith('/api/transpose/')) return;
     event.respondWith(networkFirst(req, API_CACHE));
     return;
   }
 
-  // SHELL e demais assets — stale-while-revalidate:
-  // serve do cache IMEDIATAMENTE (app abre instantâneo),
-  // e atualiza o cache em background para a próxima visita.
-  // O banner SW_UPDATED avisa quando a versão mudou.
+  // Shell e demais assets — stale-while-revalidate
   if (sameOrigin) {
     event.respondWith(staleWhileRevalidate(req, SHELL_CACHE));
     return;
