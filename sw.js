@@ -2,7 +2,7 @@
    v127.1 — Revertido para cache-first no shell (abre instantaneamente)
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v131.13.0';
+const SW_VERSION = 'v131.14.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -31,7 +31,10 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  const keep = new Set([SHELL_CACHE, ASSET_CACHE, AUDIO_CACHE, API_CACHE]);
+  const keep = new Set([SHELL_CACHE, ASSET_CACHE, API_CACHE]);
+  // V131.14 — NÃO mantém AUDIO_CACHE: força limpeza do cache de áudio antigo,
+  // que pode conter respostas de erro gravadas quando a chave do Drive estava
+  // incorreta. O áudio será rebaixado do servidor (agora funcionando).
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
@@ -110,11 +113,13 @@ function isAudioRequest(req, url) {
 }
 
 async function audioCacheFirst(req) {
+  // V131.14 — Mudado para NETWORK-FIRST. Antes era cache-first, o que servia
+  // respostas de erro antigas (gravadas quando a chave do Drive estava errada).
+  // Agora busca sempre do servidor; usa cache só se a rede falhar (offline).
+  const cache = await caches.open(AUDIO_CACHE);
   try {
-    const cache = await caches.open(AUDIO_CACHE);
-    const hit = await cache.match(req, { ignoreVary: true });
-    if (hit) return hit;
     const resp = await fetch(req);
+    // Só cacheia respostas completas e boas (200). Nunca cacheia erro/parcial.
     if (resp && resp.ok && resp.status === 200) {
       cache.put(req, resp.clone())
         .then(() => trimCache(AUDIO_CACHE, AUDIO_CACHE_MAX_ENTRIES))
@@ -122,7 +127,7 @@ async function audioCacheFirst(req) {
     }
     return resp;
   } catch (err) {
-    const cache = await caches.open(AUDIO_CACHE);
+    // Rede falhou — tenta o cache (modo offline)
     const hit = await cache.match(req, { ignoreVary: true });
     if (hit) return hit;
     throw err;
