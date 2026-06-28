@@ -3573,15 +3573,18 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   el.nowCover.src = track.coverUrl || 'assets/logo-avida.jpg';
   setPlayButtonState(true);
 
-  // V131 — Sistema de fallback em cascata para garantir reprodução sempre.
-  // Monta lista de URLs candidatas, da preferida para a alternativa:
-  // 1. Proxy do servidor (/api/audio) — funciona se o Render conecta ao Drive
-  // 2. URL direta da API do Drive — o browser acessa sem restrição de egress
-  // 3. URL de download do Drive — alternativa final
-  // Se uma falha (evento 'error'), tenta a próxima automaticamente.
+  // V131.3 — Fallback em cascata. A URL direta do Google Drive é tentada
+  // PRIMEIRO porque o browser do usuário acessa o Drive de forma confiável,
+  // enquanto o proxy do servidor (/api/audio) falha intermitentemente.
+  // Ordem: 1) API direta do Drive  2) download direto  3) proxy do servidor
+  // Para tom alterado (transpose), só o servidor faz — então usa só ele.
   const candidates = semitones
-    ? [transposeUrl(track.id, semitones), driveDirectApiUrl(track.id), driveDirectDownloadUrl(track.id)]
-    : [`/api/audio/${encodeURIComponent(track.id)}`, driveDirectApiUrl(track.id), driveDirectDownloadUrl(track.id)];
+    ? [transposeUrl(track.id, semitones)]
+    : [
+        driveDirectApiUrl(track.id),
+        driveDirectDownloadUrl(track.id),
+        `/api/audio/${encodeURIComponent(track.id)}`
+      ];
 
   el.audio._candidates = candidates;
   el.audio._candidateIndex = 0;

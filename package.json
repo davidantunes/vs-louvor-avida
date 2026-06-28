@@ -1,6 +1,6 @@
 {
   "name": "vs-louvor-avida",
-  "version": "2.131.2",
+  "version": "2.131.3",
   "private": true,
   "description": "Biblioteca de Louvor Igreja Amor e Vida com Google Drive, player, escala, repert\u00f3rios e paleta de cores do culto.",
   "scripts": {
