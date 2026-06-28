@@ -1,7 +1,7 @@
 const express = require('express');
 const compression = require('compression');
-// Node 20 tem fetch nativo — sem necessidade de node-fetch.
 const { spawn } = require('child_process');
+const { Readable } = require('stream');
 const ffmpeg = require('ffmpeg-static');
 const path = require('path');
 
@@ -799,7 +799,9 @@ app.get('/api/audio/:id', async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     }
 
-    response.body.pipe(res);
+    // fetch nativo Node 20: response.body é Web ReadableStream, não Node stream.
+    // Readable.fromWeb() converte para Node stream que suporta .pipe()
+    Readable.fromWeb(response.body).pipe(res);
   } catch (error) {
     console.error('[audio]', error);
     res.status(500).send('Erro ao carregar áudio.');
@@ -838,7 +840,8 @@ app.get('/api/transpose/:id', async (req, res) => {
     ];
 
     const proc = spawn(ffmpeg, args);
-    response.body.pipe(proc.stdin);
+    // fetch nativo Node 20: converter Web ReadableStream → Node stream
+    Readable.fromWeb(response.body).pipe(proc.stdin);
     proc.stdout.pipe(res);
 
     proc.stderr.on('data', data => console.error(String(data)));

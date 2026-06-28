@@ -3538,7 +3538,7 @@ function prewarmTrackAudio(track, semitones = null){
 }
 
 function playTrack(track, semitones = null, queue = currentQueue, options = {}){
-  if (!track) return;
+  if (!track || track._notFound) return;
   randomContinuousMode = Boolean(options.randomContinuous);
   document.body.classList.add('player-visible');
   document.getElementById('playerArea')?.classList.remove('player-hidden');
@@ -3556,14 +3556,11 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
 
   const src = semitones ? transposeUrl(track.id, semitones) : driveUrl(track.id);
   if (el.audio.src !== src) {
-    el.audio.preload = 'metadata';
+    el.audio.preload = 'auto';
     el.audio.src = src;
     try { el.audio.load(); } catch(_) {}
   }
 
-  // V128.2 — play() deve ser chamado sincronamente dentro do click handler.
-  // Deferir para canplay quebra a cadeia de gesto do usuário no iOS/Android
-  // e o browser recusa tocar ("not allowed by the user agent").
   const p = el.audio.play();
   if (p && typeof p.catch === 'function') {
     p.catch(err => {
@@ -4020,30 +4017,40 @@ function playSetlistById(id){
   const setlist = setlists.find(s => s.id === id);
   if (!setlist) return;
   const tracks = mapSetlistTracks(setlist);
-  if (!tracks.length) {
-    // Biblioteca pode ainda não ter carregado
-    if (!allTracks.length) {
-      toast('A biblioteca ainda está carregando. Aguarde um momento e tente novamente.');
-    } else {
-      toast('Nenhuma música deste repertório foi encontrada na biblioteca.');
-    }
+  // Pula placeholders de músicas não encontradas
+  const playable = tracks.filter(t => !t._notFound);
+  if (!playable.length) {
+    toast(!allTracks.length
+      ? 'A biblioteca ainda está carregando. Aguarde e tente novamente.'
+      : 'Nenhuma música deste repertório foi encontrada na biblioteca.');
     return;
   }
-  playTrack(tracks[0], null, tracks);
+  if (playable.length < tracks.length) {
+    toast(`${tracks.length - playable.length} música(s) não encontrada(s) na biblioteca — tocando as demais.`);
+  }
+  playTrack(playable[0], null, playable);
 }
 function mapSetlistTracks(setlist){
   return (setlist.trackIds || []).map(entry => {
     const id = getSetlistEntryTrackId(entry);
     const base = findTrack(id);
-    if (!base) return null;
+    // V128.3 — Se a música não está na biblioteca, retorna um placeholder
+    // em vez de null (que era filtrado silenciosamente, causando discrepância
+    // entre a contagem no card e as músicas exibidas na playlist).
+    if (!base) return {
+      id,
+      name: '(música não encontrada na biblioteca)',
+      singer: '—',
+      key: '',
+      fileName: '',
+      _notFound: true,
+      repertoireSemitones: getSetlistEntrySemitones(entry),
+      repertoireTone: getSetlistEntryTone(entry)
+    };
     const semitones = getSetlistEntrySemitones(entry);
     const tone = getSetlistEntryTone(entry) || calculateToneLabel(base.key, semitones);
-    return {
-      ...base,
-      repertoireSemitones: semitones,
-      repertoireTone: tone
-    };
-  }).filter(Boolean);
+    return { ...base, repertoireSemitones: semitones, repertoireTone: tone };
+  });
 }
 
 function makeSetlistEntry(track, toneInfo = { semitones: 0, tone: '' }){
@@ -4261,13 +4268,18 @@ function renderSetlistDetailTracks(){
     btn.addEventListener('mouseenter', () => prewarmTrackAudio(getTrack()));
     btn.addEventListener('click', () => {
       const track = getTrack();
-      if (track) {
-        btn.classList.add('is-loading');
-        playTrack(track, null, tracks);
-        setTimeout(() => { btn.classList.remove('is-loading'); }, 900);
-      } else {
-        toast('Música não encontrada na biblioteca. Tente atualizar a página.');
+      if (!track) {
+        toast('Música não encontrada. Tente atualizar a página.');
+        return;
       }
+      if (track._notFound) {
+        toast('Esta música não está disponível na biblioteca atual.');
+        return;
+      }
+      btn.classList.add('is-loading');
+      const playable = tracks.filter(t => !t._notFound);
+      playTrack(track, null, playable);
+      setTimeout(() => { btn.classList.remove('is-loading'); }, 900);
     });
   });
   el.setlistDetailTracks.querySelectorAll('.remove-one').forEach(btn => btn.addEventListener('click', () => {
