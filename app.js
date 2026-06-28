@@ -3556,17 +3556,49 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
 
   const src = semitones ? transposeUrl(track.id, semitones) : driveUrl(track.id);
   if (el.audio.src !== src) {
-    el.audio.preload = 'auto';
+    el.audio.preload = 'metadata';
     el.audio.src = src;
-    try { el.audio.load(); } catch(_) {}
-  }
 
-  const p = el.audio.play();
-  if (p && typeof p.catch === 'function') {
-    p.catch(err => {
-      console.warn('Falha ao tocar automaticamente:', err);
-      setPlayButtonState(false);
-    });
+    // V128 — iOS Safari exige aguardar canplay antes de chamar play().
+    // Chamar play() imediatamente após setar src causa AbortError no iOS.
+    const tryPlay = () => {
+      const p = el.audio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(err => {
+          if (err.name !== 'AbortError') {
+            console.warn('Falha ao tocar:', err);
+            setPlayButtonState(false);
+          }
+        });
+      }
+    };
+
+    // Aguarda canplay uma única vez, com fallback de timeout
+    const onCanPlay = () => {
+      el.audio.removeEventListener('canplay', onCanPlay);
+      tryPlay();
+    };
+    el.audio.addEventListener('canplay', onCanPlay, { once: true });
+
+    // Fallback: se canplay não disparar em 3s, tenta mesmo assim
+    const fallbackTimer = setTimeout(() => {
+      el.audio.removeEventListener('canplay', onCanPlay);
+      tryPlay();
+    }, 3000);
+    el.audio.addEventListener('canplay', () => clearTimeout(fallbackTimer), { once: true });
+
+    try { el.audio.load(); } catch(_) {}
+  } else {
+    // Mesma src — só dá play direto
+    const p = el.audio.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(err => {
+        if (err.name !== 'AbortError') {
+          console.warn('Falha ao tocar:', err);
+          setPlayButtonState(false);
+        }
+      });
+    }
   }
 
   recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: formatKeyLabel(track.key), changedKey: alteredToneLabel || '', semitones });
@@ -4015,7 +4047,16 @@ function playSetlistById(id){
   const setlist = setlists.find(s => s.id === id);
   if (!setlist) return;
   const tracks = mapSetlistTracks(setlist);
-  if (tracks.length) playTrack(tracks[0], null, tracks);
+  if (!tracks.length) {
+    // Biblioteca pode ainda não ter carregado
+    if (!allTracks.length) {
+      toast('A biblioteca ainda está carregando. Aguarde um momento e tente novamente.');
+    } else {
+      toast('Nenhuma música deste repertório foi encontrada na biblioteca.');
+    }
+    return;
+  }
+  playTrack(tracks[0], null, tracks);
 }
 function mapSetlistTracks(setlist){
   return (setlist.trackIds || []).map(entry => {
@@ -4251,6 +4292,8 @@ function renderSetlistDetailTracks(){
         btn.classList.add('is-loading');
         playTrack(track, null, tracks);
         setTimeout(() => { btn.classList.remove('is-loading'); }, 900);
+      } else {
+        toast('Música não encontrada na biblioteca. Tente atualizar a página.');
       }
     });
   });
