@@ -358,9 +358,10 @@ const el = {
 document.title = cfg.APP_TITLE;
 
 initAppwriteClient();
-// V130 — Lê DRIVE_API_KEY do localStorage para disponibilidade imediata,
-// antes do fetch assíncrono de /api/appwrite/config completar.
-try { const k=localStorage.getItem('vs_drive_key'); if(k&&!cfg.DRIVE_API_KEY) cfg.DRIVE_API_KEY=k; } catch(_){}
+// V127 — Pré-aquece o servidor Render imediatamente ao abrir o app,
+// antes mesmo do login. Isso reduz o cold start para o usuário:
+// enquanto ele digita login/senha, o servidor já está acordando.
+// Fire-and-forget — não bloqueia nada, falha silenciosamente.
 fetch('/ping').catch(() => {});
 loadAppwriteServerConfig().finally(initSessionUI);
 bindEvents();
@@ -819,11 +820,6 @@ async function loadAppwriteServerConfig(){
     const data = await res.json();
     if (Array.isArray(data.adminEmails)) cloudAdminEmails = data.adminEmails.map(e => String(e).toLowerCase());
     cloudAdminConfigured = Boolean(data.adminConfigured);
-    // V130 — Salva e aplica DRIVE_API_KEY imediatamente
-    if (data.driveApiKey) {
-      cfg.DRIVE_API_KEY = data.driveApiKey;
-      try { localStorage.setItem('vs_drive_key', data.driveApiKey); } catch(_) {}
-    }
     // V116/V120 — Re-renderiza após carregar adminEmails
     updateAdminNavVisibility(); // sempre — independe de authUser
     if (authUser) {
@@ -2602,18 +2598,7 @@ function isNextSchedule(row){
 function useBackend(){ return cfg.USE_BACKEND && location.protocol !== 'file:'; }
 function directDriveMedia(id){ return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`; }
 function thumbnailUrl(id){ return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800`; }
-function driveUrl(id){
-  // V130 — URL direta ao Google Drive (sem servidor).
-  // Tenta a chave em 3 lugares, da mais rápida para a mais lenta:
-  // 1. cfg.DRIVE_API_KEY (do config.js dinâmico, disponível imediatamente)
-  // 2. cfg.API_KEY (backup — mesma chave)
-  // 3. localStorage (persiste entre sessões, disponível offline)
-  let key = (cfg && cfg.DRIVE_API_KEY) || (cfg && cfg.API_KEY) || '';
-  if (!key) { try { key = localStorage.getItem('vs_drive_key') || ''; } catch(_){} }
-  if (key) return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&key=${encodeURIComponent(key)}`;
-  // Fallback ao servidor só se não houver chave nenhuma
-  return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id);
-}
+function driveUrl(id){ return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id); }
 function transposeUrl(id, semitones){ return !semitones ? driveUrl(id) : `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}`; }
 function downloadUrl(id, name, semitones = 0){
   const filename = encodeURIComponent(`${safeFileName(name)}${semitones ? `_tom_${semitones > 0 ? '+' : ''}${semitones}` : ''}.mp3`);

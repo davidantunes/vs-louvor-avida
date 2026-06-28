@@ -1,6 +1,6 @@
 const express = require('express');
 const compression = require('compression');
-// Node 20 tem fetch nativo — sem necessidade de node-fetch.
+const fetch = require('node-fetch');
 const { spawn } = require('child_process');
 const ffmpeg = require('ffmpeg-static');
 const path = require('path');
@@ -39,24 +39,6 @@ app.get('/manifest.json', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
   res.sendFile(path.join(__dirname, 'manifest.json'));
-});
-
-// V130 — config.js dinâmico: injeta DRIVE_API_KEY no cliente.
-// O cliente usa a chave para acessar o Google Drive DIRETAMENTE,
-// sem passar pelo servidor — elimina o 500 do /api/audio/.
-app.get('/config.js', (req, res) => {
-  const ROOT = process.env.ROOT_FOLDER_ID || '1Tcua5y0O9Bv5LRNmtIYnDCderiaN8xB8';
-  res.type('application/javascript').setHeader('Cache-Control','no-store');
-  res.send(`window.VS_LOUVOR_CONFIG = {
-  APP_TITLE: "Biblioteca de Louvor — Igreja Amor e Vida",
-  ROOT_FOLDER_ID: ${JSON.stringify(ROOT)},
-  API_KEY: ${JSON.stringify(API_KEY)},
-  DRIVE_API_KEY: ${JSON.stringify(API_KEY)},
-  USE_BACKEND: true,
-  APPWRITE_ENDPOINT: ${JSON.stringify(APPWRITE_ENDPOINT)},
-  APPWRITE_PROJECT_ID: ${JSON.stringify(APPWRITE_PROJECT_ID)},
-  APPWRITE_DATABASE_ID: ${JSON.stringify(APPWRITE_DATABASE_ID || 'louvor_avida')}
-};`);
 });
 
 app.use(express.static(__dirname, {
