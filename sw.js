@@ -2,7 +2,7 @@
    v127.1 — Revertido para cache-first no shell (abre instantaneamente)
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v128.4.0';
+const SW_VERSION = 'v128.5.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -90,7 +90,9 @@ self.addEventListener('fetch', (event) => {
 });
 
 function isAudioRequest(req, url) {
-  if (req.headers.has('range')) return false;
+  // V128.4 — Range requests de áudio TAMBÉM devem ir para audioCacheFirst.
+  // Antes, Range requests eram excluídos do cache de áudio e iam para
+  // staleWhileRevalidate do shell — causando cache incorreto.
   if (req.destination === 'audio') return true;
   if (url.pathname.startsWith('/api/audio/')) return true;
   if (/\.(mp3|m4a|ogg|opus|wav|aac)(\?|$)/i.test(url.pathname)) return true;
@@ -102,8 +104,11 @@ async function audioCacheFirst(req) {
     const cache = await caches.open(AUDIO_CACHE);
     const hit = await cache.match(req, { ignoreVary: true });
     if (hit) return hit;
+    // V128.4 — O servidor redireciona para Google Drive (302).
+    // Não armazenar respostas de redirect ou opacas no cache de áudio —
+    // elas não funcionam para reprodução subsequente.
     const resp = await fetch(req);
-    if (resp && resp.ok && resp.status === 200) {
+    if (resp && resp.ok && resp.status === 200 && resp.type !== 'opaque') {
       cache.put(req, resp.clone())
         .then(() => trimCache(AUDIO_CACHE, AUDIO_CACHE_MAX_ENTRIES))
         .catch(() => {});

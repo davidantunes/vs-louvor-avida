@@ -3196,32 +3196,12 @@ function getSetlistTrackIdSet(){
 // que estão em repertórios. Roda em segundo plano, em pequenas levas, sem travar o app.
 let precachingInFlight = false;
 async function precacheSetlistAudios(){
-  if (precachingInFlight) return;
-  if (!('serviceWorker' in navigator)) return;
-  const reg = await navigator.serviceWorker.getRegistration().catch(() => null);
-  const sw = reg && (reg.active || reg.waiting);
-  if (!sw) return;
-
-  const ids = getSetlistTrackIdSet();
-  if (!ids.size) return;
-
-  // Só pré-baixa se estiver em wifi/rede boa. Em conexão lenta, deixa sob demanda.
-  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-  if (conn && (conn.saveData || /2g/i.test(conn.effectiveType || ''))) return;
-
-  precachingInFlight = true;
-  try {
-    const urls = [];
-    for (const t of allTracks) {
-      if (ids.has(t.id)) urls.push(driveUrl(t.id));
-      if (urls.length >= 60) break; // segurança: no máx 60 por sessão
-    }
-    if (urls.length) sw.postMessage({ type: 'PRECACHE_AUDIOS', urls });
-  } catch (_) {
-    // silencioso
-  } finally {
-    setTimeout(() => { precachingInFlight = false; }, 30000);
-  }
+  // V128.4 — Desabilitado enquanto /api/audio usa redirect para Google Drive.
+  // O precache com mode:'cors' não funciona com redirects cross-origin —
+  // o SW recebe uma opaque response que não pode ser usada para reprodução.
+  // O cache de áudio volta a funcionar automaticamente quando as músicas
+  // forem tocadas diretamente (audioCacheFirst armazena na segunda escuta).
+  return;
 }
 
 function afterLibraryLoaded(){
