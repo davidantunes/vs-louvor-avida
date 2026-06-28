@@ -820,8 +820,6 @@ async function loadAppwriteServerConfig(){
     const data = await res.json();
     if (Array.isArray(data.adminEmails)) cloudAdminEmails = data.adminEmails.map(e => String(e).toLowerCase());
     cloudAdminConfigured = Boolean(data.adminConfigured);
-    // V128.6 — Salva API Key do Drive para URLs diretas (sem proxy do servidor)
-    if (data.driveApiKey) cfg.DRIVE_API_KEY = data.driveApiKey;
     // V116/V120 — Re-renderiza após carregar adminEmails
     updateAdminNavVisibility(); // sempre — independe de authUser
     if (authUser) {
@@ -2310,22 +2308,6 @@ async function saveAllScheduleMonths(showToast = false){
 }
 
 // V112 — Importação de Excel via SheetJS
-// V127.3 — Carrega SheetJS sob demanda (lazy load).
-// Era carregado em todas as páginas para todos os usuários (~800 KB),
-// mas só é usado pelo admin ao importar escala.
-// Agora carrega apenas quando o botão "Importar Excel" é clicado.
-let xlsxLoaded = false;
-function loadXLSX(){
-  return new Promise((resolve, reject) => {
-    if (xlsxLoaded || window.XLSX) { xlsxLoaded = true; return resolve(); }
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-    s.onload = () => { xlsxLoaded = true; resolve(); };
-    s.onerror = () => reject(new Error('Falha ao carregar biblioteca de Excel.'));
-    document.head.appendChild(s);
-  });
-}
-
 async function handleScheduleExcelImport(event){
   const file = event.target.files?.[0];
   if (!file) return;
@@ -2333,12 +2315,8 @@ async function handleScheduleExcelImport(event){
     toast('Somente administradores podem importar escalas.');
     return;
   }
-  try {
-    // V127.3 — Carrega SheetJS sob demanda se ainda não carregou
-    toast('Preparando importação...');
-    await loadXLSX();
-  } catch(e) {
-    toast('Não foi possível carregar a biblioteca de Excel. Verifique sua conexão.');
+  if (!window.XLSX) {
+    toast('Biblioteca de leitura de Excel ainda não carregou. Tente novamente em segundos.');
     return;
   }
   try {
@@ -2600,16 +2578,7 @@ function isNextSchedule(row){
 function useBackend(){ return cfg.USE_BACKEND && location.protocol !== 'file:'; }
 function directDriveMedia(id){ return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`; }
 function thumbnailUrl(id){ return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800`; }
-function directGoogleDriveUrl(id){
-  const key = cfg.DRIVE_API_KEY || '';
-  return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&key=${encodeURIComponent(key)}`;
-}
-function driveUrl(id){
-  // V128.6 — URL direta ao Google Drive quando temos a API Key (sem servidor).
-  // Elimina proxy, streaming e redirect — o browser lida nativamente com Range requests.
-  if (cfg.DRIVE_API_KEY) return directGoogleDriveUrl(id);
-  return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id);
-}
+function driveUrl(id){ return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id); }
 function transposeUrl(id, semitones){ return !semitones ? driveUrl(id) : `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}`; }
 function downloadUrl(id, name, semitones = 0){
   const filename = encodeURIComponent(`${safeFileName(name)}${semitones ? `_tom_${semitones > 0 ? '+' : ''}${semitones}` : ''}.mp3`);
@@ -3207,12 +3176,32 @@ function getSetlistTrackIdSet(){
 // que estão em repertórios. Roda em segundo plano, em pequenas levas, sem travar o app.
 let precachingInFlight = false;
 async function precacheSetlistAudios(){
-  // V128.4 — Desabilitado enquanto /api/audio usa redirect para Google Drive.
-  // O precache com mode:'cors' não funciona com redirects cross-origin —
-  // o SW recebe uma opaque response que não pode ser usada para reprodução.
-  // O cache de áudio volta a funcionar automaticamente quando as músicas
-  // forem tocadas diretamente (audioCacheFirst armazena na segunda escuta).
-  return;
+  if (precachingInFlight) return;
+  if (!('serviceWorker' in navigator)) return;
+  const reg = await navigator.serviceWorker.getRegistration().catch(() => null);
+  const sw = reg && (reg.active || reg.waiting);
+  if (!sw) return;
+
+  const ids = getSetlistTrackIdSet();
+  if (!ids.size) return;
+
+  // Só pré-baixa se estiver em wifi/rede boa. Em conexão lenta, deixa sob demanda.
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (conn && (conn.saveData || /2g/i.test(conn.effectiveType || ''))) return;
+
+  precachingInFlight = true;
+  try {
+    const urls = [];
+    for (const t of allTracks) {
+      if (ids.has(t.id)) urls.push(driveUrl(t.id));
+      if (urls.length >= 60) break; // segurança: no máx 60 por sessão
+    }
+    if (urls.length) sw.postMessage({ type: 'PRECACHE_AUDIOS', urls });
+  } catch (_) {
+    // silencioso
+  } finally {
+    setTimeout(() => { precachingInFlight = false; }, 30000);
+  }
 }
 
 function afterLibraryLoaded(){
@@ -3529,7 +3518,7 @@ function prewarmTrackAudio(track, semitones = null){
 }
 
 function playTrack(track, semitones = null, queue = currentQueue, options = {}){
-  if (!track || track._notFound) return;
+  if (!track) return;
   randomContinuousMode = Boolean(options.randomContinuous);
   document.body.classList.add('player-visible');
   document.getElementById('playerArea')?.classList.remove('player-hidden');
@@ -3555,10 +3544,8 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   const p = el.audio.play();
   if (p && typeof p.catch === 'function') {
     p.catch(err => {
-      if (err.name !== 'AbortError') {
-        console.warn('Falha ao tocar:', err);
-        setPlayButtonState(false);
-      }
+      console.warn('Falha ao tocar automaticamente:', err);
+      setPlayButtonState(false);
     });
   }
 
@@ -4008,40 +3995,21 @@ function playSetlistById(id){
   const setlist = setlists.find(s => s.id === id);
   if (!setlist) return;
   const tracks = mapSetlistTracks(setlist);
-  // Pula placeholders de músicas não encontradas
-  const playable = tracks.filter(t => !t._notFound);
-  if (!playable.length) {
-    toast(!allTracks.length
-      ? 'A biblioteca ainda está carregando. Aguarde e tente novamente.'
-      : 'Nenhuma música deste repertório foi encontrada na biblioteca.');
-    return;
-  }
-  if (playable.length < tracks.length) {
-    toast(`${tracks.length - playable.length} música(s) não encontrada(s) na biblioteca — tocando as demais.`);
-  }
-  playTrack(playable[0], null, playable);
+  if (tracks.length) playTrack(tracks[0], null, tracks);
 }
 function mapSetlistTracks(setlist){
   return (setlist.trackIds || []).map(entry => {
     const id = getSetlistEntryTrackId(entry);
     const base = findTrack(id);
-    // V128.3 — Se a música não está na biblioteca, retorna um placeholder
-    // em vez de null (que era filtrado silenciosamente, causando discrepância
-    // entre a contagem no card e as músicas exibidas na playlist).
-    if (!base) return {
-      id,
-      name: '(música não encontrada na biblioteca)',
-      singer: '—',
-      key: '',
-      fileName: '',
-      _notFound: true,
-      repertoireSemitones: getSetlistEntrySemitones(entry),
-      repertoireTone: getSetlistEntryTone(entry)
-    };
+    if (!base) return null;
     const semitones = getSetlistEntrySemitones(entry);
     const tone = getSetlistEntryTone(entry) || calculateToneLabel(base.key, semitones);
-    return { ...base, repertoireSemitones: semitones, repertoireTone: tone };
-  });
+    return {
+      ...base,
+      repertoireSemitones: semitones,
+      repertoireTone: tone
+    };
+  }).filter(Boolean);
 }
 
 function makeSetlistEntry(track, toneInfo = { semitones: 0, tone: '' }){
@@ -4259,18 +4227,11 @@ function renderSetlistDetailTracks(){
     btn.addEventListener('mouseenter', () => prewarmTrackAudio(getTrack()));
     btn.addEventListener('click', () => {
       const track = getTrack();
-      if (!track) {
-        toast('Música não encontrada. Tente atualizar a página.');
-        return;
+      if (track) {
+        btn.classList.add('is-loading');
+        playTrack(track, null, tracks);
+        setTimeout(() => { btn.classList.remove('is-loading'); }, 900);
       }
-      if (track._notFound) {
-        toast('Esta música não está disponível na biblioteca atual.');
-        return;
-      }
-      btn.classList.add('is-loading');
-      const playable = tracks.filter(t => !t._notFound);
-      playTrack(track, null, playable);
-      setTimeout(() => { btn.classList.remove('is-loading'); }, 900);
     });
   });
   el.setlistDetailTracks.querySelectorAll('.remove-one').forEach(btn => btn.addEventListener('click', () => {

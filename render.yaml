@@ -2,20 +2,10 @@ services:
   - type: web
     name: vs-louvor-avida
     env: node
-    plan: starter
-    buildCommand: npm install && npm run build
+    plan: free
+    buildCommand: npm install
     startCommand: npm start
     autoDeploy: true
     envVars:
       - key: GOOGLE_DRIVE_API_KEY
-        sync: false
-      - key: APPWRITE_API_KEY
-        sync: false
-      - key: APPWRITE_ENDPOINT
-        sync: false
-      - key: APPWRITE_PROJECT_ID
-        sync: false
-      - key: APPWRITE_DATABASE_ID
-        sync: false
-      - key: APPWRITE_ADMIN_EMAILS
         sync: false

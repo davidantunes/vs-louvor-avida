@@ -1,7 +1,7 @@
 const express = require('express');
 const compression = require('compression');
+const fetch = require('node-fetch');
 const { spawn } = require('child_process');
-const { Readable } = require('stream');
 const ffmpeg = require('ffmpeg-static');
 const path = require('path');
 
@@ -41,39 +41,13 @@ app.get('/manifest.json', (req, res) => {
   res.sendFile(path.join(__dirname, 'manifest.json'));
 });
 
-// V128.7 — config.js dinâmico: injeta a API Key do Drive no cliente.
-// Isso garante que cfg.DRIVE_API_KEY esteja disponível IMEDIATAMENTE
-// ao carregar o app, sem depender de fetch assíncrono.
-// O browser vai diretamente ao Google Drive para áudio — sem servidor no meio.
-app.get('/config.js', (req, res) => {
-  res.type('application/javascript');
-  res.setHeader('Cache-Control', 'no-store'); // sempre fresh para pegar key atualizada
-  const ROOT_FOLDER_ID_CFG = process.env.ROOT_FOLDER_ID || '1Tcua5y0O9Bv5LRNmtIYnDCderiaN8xB8';
-  res.send(`window.VS_LOUVOR_CONFIG = {
-  APP_TITLE: "Biblioteca de Louvor — Igreja Amor e Vida",
-  ROOT_FOLDER_ID: ${JSON.stringify(ROOT_FOLDER_ID_CFG)},
-  API_KEY: ${JSON.stringify(API_KEY)},
-  DRIVE_API_KEY: ${JSON.stringify(API_KEY)},
-  USE_BACKEND: true,
-  APPWRITE_ENDPOINT: ${JSON.stringify(APPWRITE_ENDPOINT)},
-  APPWRITE_PROJECT_ID: ${JSON.stringify(APPWRITE_PROJECT_ID)},
-  APPWRITE_DATABASE_ID: ${JSON.stringify(APPWRITE_DATABASE_ID || 'louvor_avida')}
-};`);
-});
-
 app.use(express.static(__dirname, {
-  etag: true,
-  lastModified: true,
   setHeaders: (res, filePath) => {
-    // Imagens/fontes: 7 dias (mudam raramente)
+    // Assets podem ser cacheados longamente (o navegador valida com ETag).
     if (/\.(png|jpg|jpeg|webp|svg|gif|woff2?|ttf|eot)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
-    // JS/CSS: 1h com stale-while-revalidate de 24h.
-    // O SW já controla o cache no cliente; esse header é para o CDN do Cloudflare.
-    // V127.2: aumentado de 5min para 1h — com Render Starter não há cold start,
-    // e o banner SW_UPDATED avisa o usuário quando há nova versão.
     } else if (/\.(css|js)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
     }
   }
 }));
@@ -134,9 +108,7 @@ async function upsertState(collectionId, matcher, data) {
   return appwriteRequest('POST', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents`, { documentId: 'unique()', data });
 }
 app.get('/api/appwrite/config', (req, res) => {
-  // V128.6 — Inclui driveApiKey para o cliente construir URLs de áudio diretamente,
-  // eliminando o servidor do caminho do áudio e todos os problemas de proxy/streaming.
-  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: true, driveApiKey: API_KEY });
+  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: true });
 });
 
 app.get('/api/appwrite/bootstrap/:userId', async (req, res) => {
@@ -220,38 +192,11 @@ app.put('/api/appwrite/admin/state/:key', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-// V127.2 — Cache em memória para leituras do Appwrite state.
-// Evita múltiplas chamadas simultâneas para o mesmo dado (ex: quando 5 usuários
-// abrem o app ao mesmo tempo, todos pedindo setlists/members/schedule).
-// TTL de 30s: dados sempre frescos mas sem sobrecarregar o Appwrite.
-const stateReadCache = new Map(); // key → { value, ts }
-const STATE_READ_TTL_MS = 30 * 1000;
-
-function getStateFromCache(key) {
-  const entry = stateReadCache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.ts > STATE_READ_TTL_MS) { stateReadCache.delete(key); return null; }
-  return entry.value;
-}
-function setStateInCache(key, value) {
-  stateReadCache.set(key, { value, ts: Date.now() });
-}
-function invalidateStateCache(key) {
-  stateReadCache.delete(key);
-}
-
 app.get('/api/appwrite/state/:key', async (req, res) => {
   try {
-    const key = req.params.key;
-    const cached = getStateFromCache(key);
-    if (cached !== null) {
-      return res.json(cached);
-    }
     const docs = await listDocuments(APPWRITE_APP_STATE_COLLECTION_ID);
-    const doc = docs.find(d => d.key === key);
-    const result = { value: doc?.value ? JSON.parse(doc.value) : null, updatedAt: doc?.updated_at || null };
-    setStateInCache(key, result);
-    res.json(result);
+    const doc = docs.find(d => d.key === req.params.key);
+    res.json({ value: doc?.value ? JSON.parse(doc.value) : null, updatedAt: doc?.updated_at || null });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
@@ -260,7 +205,6 @@ app.get('/api/appwrite/state/:key', async (req, res) => {
 app.put('/api/appwrite/state/:key', async (req, res) => {
   try {
     const updatedAt = new Date().toISOString();
-    invalidateStateCache(req.params.key); // V127.2 — invalida cache de leitura
     const doc = await upsertState(APPWRITE_APP_STATE_COLLECTION_ID, d => d.key === req.params.key, {
       key: req.params.key,
       value: JSON.stringify(req.body.value ?? null),
@@ -353,11 +297,7 @@ app.get('/api/drive', async (req, res) => {
    e o cliente recebe TODO o catálogo em uma única chamada. Cliente que ainda
    usar /api/drive continua funcionando (compatibilidade). */
 
-// V127.2 — Com Render Starter (sem cold start), podemos usar TTL maior.
-// A biblioteca muda raramente (quando você adiciona músicas no Drive).
-// 6h de cache no servidor significa que a primeira requisição do dia
-// é sempre rápida; só rebusca se você forçar com ?force=1.
-const LIBRARY_TTL_MS = 6 * 60 * 60 * 1000;
+const LIBRARY_TTL_MS = 30 * 60 * 1000;
 let libraryCache = null;       // { tracks, builtAt, rootId }
 let libraryBuildPromise = null; // dedupe de chamadas concorrentes
 
@@ -576,7 +516,7 @@ app.get('/api/library', async (req, res) => {
                   (now - libraryCache.builtAt) < LIBRARY_TTL_MS;
 
     if (fresh && !req.query.force) {
-      res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=21600');
+      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800');
       res.setHeader('X-Library-Cache', 'hit');
       return res.json({
         tracks: libraryCache.tracks,
@@ -599,7 +539,7 @@ app.get('/api/library', async (req, res) => {
       })();
     }
     const tracks = await libraryBuildPromise;
-    res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=21600');
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=1800');
     res.setHeader('X-Library-Cache', 'miss');
     res.json({
       tracks,
@@ -777,15 +717,39 @@ app.get('/api/audio/:id', async (req, res) => {
   try {
     if (!requireApiKey(res)) return;
     const id = req.params.id;
+    const headers = {};
 
-    // V128.4 — Redireciona para o Google Drive diretamente.
-    // O proxy via pipe estava causando 500 em mobile por erros de streaming.
-    // O redirect faz o browser fazer o download/streaming nativo, com suporte
-    // perfeito a Range requests sem precisar de código extra no servidor.
-    const url = googleMediaUrl(id);
-    return res.redirect(302, url);
+    const response = await fetch(googleMediaUrl(id), { headers });
+    if (!response.ok && response.status !== 206) {
+      return res.status(response.status).send(await response.text());
+    }
+
+    res.status(response.status);
+    const contentType = response.headers.get('content-type') || 'audio/mpeg';
+    res.setHeader('Content-Type', contentType);
+    const contentLength = response.headers.get('content-length');
+    const contentRange = response.headers.get('content-range');
+    const acceptRanges = response.headers.get('accept-ranges');
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    if (contentRange) res.setHeader('Content-Range', contentRange);
+    if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
+
+    // Cache longo no navegador/SW: áudios são imutáveis por id do Drive.
+    // Quando é range (206), evitamos cachear (resposta parcial).
+    if (response.status === 200 && !req.headers.range) {
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    } else {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+
+    if (req.query.download) {
+      const filename = req.query.filename || 'audio.mp3';
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    }
+
+    response.body.pipe(res);
   } catch (error) {
-    console.error('[audio]', error);
+    console.error(error);
     res.status(500).send('Erro ao carregar áudio.');
   }
 });
@@ -822,8 +786,7 @@ app.get('/api/transpose/:id', async (req, res) => {
     ];
 
     const proc = spawn(ffmpeg, args);
-    // fetch nativo Node 20: converter Web ReadableStream → Node stream
-    Readable.fromWeb(response.body).pipe(proc.stdin);
+    response.body.pipe(proc.stdin);
     proc.stdout.pipe(res);
 
     proc.stderr.on('data', data => console.error(String(data)));

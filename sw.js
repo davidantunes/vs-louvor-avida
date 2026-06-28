@@ -1,16 +1,23 @@
 /* Service Worker — Biblioteca de Louvor Igreja Amor e Vida
-   v127.1 — Revertido para cache-first no shell (abre instantaneamente)
-   O banner de atualização avisa quando há nova versão disponível. */
+   v126.1 — network-first para shell crítico (evita stale JS/CSS) */
 
-const SW_VERSION = 'v128.8.0';
+const SW_VERSION = 'v127.0.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
 const API_CACHE   = `vsl-api-${SW_VERSION}`;
 
-// Shell: abre do cache imediatamente (instantâneo), atualiza em background.
-// Quando houver versão nova o SW envia mensagem SW_UPDATED para o app mostrar
-// o banner "Nova versão disponível — Atualizar agora".
+// Arquivos críticos: sempre busca da rede primeiro.
+// Evita o problema de stale-while-revalidate onde o browser roda
+// código antigo enquanto o cache atualiza em segundo plano.
+const CRITICAL_SHELL = new Set([
+  '/',
+  '/index.html',
+  '/app.js',
+  '/styles.css',
+  '/config.js',
+]);
+
 const SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -39,10 +46,9 @@ self.addEventListener('activate', (event) => {
         keys.filter((k) => !keep.has(k)).map((k) => caches.delete(k))
       ))
       .then(() => self.clients.claim())
+      // Notifica todas as abas que o SW foi atualizado
       .then(() => self.clients.matchAll({ type: 'window' }))
-      .then((clients) => clients.forEach(c =>
-        c.postMessage({ type: 'SW_UPDATED', version: SW_VERSION })
-      ))
+      .then((clients) => clients.forEach(c => c.postMessage({ type: 'SW_UPDATED', version: SW_VERSION })))
   );
 });
 
@@ -66,37 +72,39 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // V128.6 — Áudio: NÃO interceptar. Deixar o browser lidar diretamente.
-  // O servidor redireciona /api/audio/:id para Google Drive (302).
-  // Se o SW intercepta, range requests falham porque o redirect não
-  // preserva o header Range, causando falha no streaming no mobile.
-  // Sem interceptação, o browser faz range requests nativamente ao Drive.
-  if (
-    url.pathname.startsWith('/api/audio/') ||
-    url.pathname.startsWith('/api/transpose/') ||
-    req.destination === 'audio' ||
-    /\.(mp3|m4a|ogg|opus|wav|aac)(\?|$)/i.test(url.pathname)
-  ) {
-    return; // não chama event.respondWith() — browser lida sozinho
+  // ÁUDIOS — cache first
+  if (isAudioRequest(req, url)) {
+    event.respondWith(audioCacheFirst(req));
+    return;
   }
 
-  // API — network first
+  // SHELL CRÍTICO (app.js, styles.css, index.html) — network first, sem stale
+  if (sameOrigin && CRITICAL_SHELL.has(url.pathname)) {
+    event.respondWith(networkFirst(req, SHELL_CACHE));
+    return;
+  }
+
+  // API — network first com fallback ao cache
   if (sameOrigin && url.pathname.startsWith('/api/')) {
+    if (url.pathname.startsWith('/api/transpose/')) return;
     event.respondWith(networkFirst(req, API_CACHE));
     return;
   }
 
-  // Shell e demais assets — stale-while-revalidate
+  if (sameOrigin && url.pathname.startsWith('/api/drive')) {
+    event.respondWith(networkFirst(req, API_CACHE));
+    return;
+  }
+
+  // Demais assets (imagens, fontes) — stale-while-revalidate
   if (sameOrigin) {
-    event.respondWith(staleWhileRevalidate(req, SHELL_CACHE));
+    event.respondWith(staleWhileRevalidate(req, ASSET_CACHE));
     return;
   }
 });
 
 function isAudioRequest(req, url) {
-  // V128.4 — Range requests de áudio TAMBÉM devem ir para audioCacheFirst.
-  // Antes, Range requests eram excluídos do cache de áudio e iam para
-  // staleWhileRevalidate do shell — causando cache incorreto.
+  if (req.headers.has('range')) return false;
   if (req.destination === 'audio') return true;
   if (url.pathname.startsWith('/api/audio/')) return true;
   if (/\.(mp3|m4a|ogg|opus|wav|aac)(\?|$)/i.test(url.pathname)) return true;
@@ -108,11 +116,8 @@ async function audioCacheFirst(req) {
     const cache = await caches.open(AUDIO_CACHE);
     const hit = await cache.match(req, { ignoreVary: true });
     if (hit) return hit;
-    // V128.4 — O servidor redireciona para Google Drive (302).
-    // Não armazenar respostas de redirect ou opacas no cache de áudio —
-    // elas não funcionam para reprodução subsequente.
     const resp = await fetch(req);
-    if (resp && resp.ok && resp.status === 200 && resp.type !== 'opaque') {
+    if (resp && resp.ok && resp.status === 200) {
       cache.put(req, resp.clone())
         .then(() => trimCache(AUDIO_CACHE, AUDIO_CACHE_MAX_ENTRIES))
         .catch(() => {});
