@@ -25,26 +25,11 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
-        // V126.1 — Detecta quando o SW foi atualizado e avisa o usuário
-        navigator.serviceWorker.addEventListener('message', (event) => {
-          if (event.data && event.data.type === 'SW_UPDATED') {
-            // Pequeno delay para o app carregar antes de mostrar o aviso
-            setTimeout(() => {
-              const banner = document.getElementById('swUpdateBanner');
-              if (banner) banner.classList.remove('hidden');
-            }, 1500);
-          }
-        });
       });
     }
   </script>
 </head>
 <body data-theme="dark">
-  <!-- V126.1 — Banner de atualização disponível (aparece quando SW atualiza) -->
-  <div id="swUpdateBanner" class="sw-update-banner hidden">
-    <span>Nova versão disponível.</span>
-    <button onclick="window.location.reload()">Atualizar agora</button>
-  </div>
   <div class="bg-blur bg-blur-a"></div>
   <div class="bg-blur bg-blur-b"></div>
   <div class="bg-blur bg-blur-c"></div>
@@ -781,33 +766,6 @@
         <button id="createSetlistBtn" class="btn btn-primary">Criar</button>
       </div>
       <div id="setlistOptions" class="stack-list"></div>
-    </div>
-  </div>
-
-  <!-- V125 — Modal de compartilhamento: link + arte -->
-  <div id="shareSetlistModal" class="modal hidden">
-    <div class="modal-card glass" style="max-width:480px">
-      <button id="closeShareSetlistModal" class="modal-close">×</button>
-      <span class="kicker">Compartilhar repertório</span>
-      <h3 id="shareSetlistModalTitle" style="font-size:22px;margin-bottom:6px">—</h3>
-      <p id="shareSetlistModalMeta" style="margin-bottom:20px;font-size:13px"></p>
-
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <button id="shareSetlistCopyLink" class="btn btn-secondary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto">
-          <span style="font-size:22px">🔗</span>
-          <div style="text-align:left">
-            <strong style="display:block">Copiar link</strong>
-            <small style="color:var(--muted)">Quem abrir o link vê o repertório completo</small>
-          </div>
-        </button>
-        <button id="shareSetlistNativeShare" class="btn btn-primary" style="justify-content:flex-start;gap:12px;padding:14px 18px;height:auto">
-          <span style="font-size:22px">📤</span>
-          <div style="text-align:left">
-            <strong style="display:block">Compartilhar</strong>
-            <small>Enviar pelo WhatsApp, Telegram e outros</small>
-          </div>
-        </button>
-      </div>
     </div>
   </div>
 
