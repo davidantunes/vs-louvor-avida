@@ -2,7 +2,7 @@
    v127.1 — Revertido para cache-first no shell (abre instantaneamente)
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v131.3.0';
+const SW_VERSION = 'v131.5.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -79,10 +79,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // SHELL e demais assets — stale-while-revalidate:
-  // serve do cache IMEDIATAMENTE (app abre instantâneo),
-  // e atualiza o cache em background para a próxima visita.
-  // O banner SW_UPDATED avisa quando a versão mudou.
+  // V131.4 — Código-fonte (app.js, styles.css, index.html, config.js):
+  // NETWORK-FIRST. Garante que correções cheguem imediatamente ao usuário,
+  // sem precisar abrir o app duas vezes. Cai no cache só se a rede falhar
+  // (mantém funcionamento offline). Isso resolve o problema de o app rodar
+  // uma versão antiga do código após um deploy.
+  if (sameOrigin && (
+      url.pathname === '/' ||
+      url.pathname === '/index.html' ||
+      url.pathname === '/app.js' ||
+      url.pathname === '/styles.css' ||
+      url.pathname === '/config.js'
+  )) {
+    event.respondWith(networkFirst(req, SHELL_CACHE));
+    return;
+  }
+
+  // Demais assets (imagens, fontes, manifest) — stale-while-revalidate
   if (sameOrigin) {
     event.respondWith(staleWhileRevalidate(req, SHELL_CACHE));
     return;

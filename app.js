@@ -1578,7 +1578,7 @@ function renderActiveSetlistBanner(){
   el.activeSetlistMiniBar?.classList.remove('hidden');
   el.activeSetlistName.textContent = active.name;
   if (el.activeSetlistMiniName) el.activeSetlistMiniName.textContent = active.name;
-  const count = (active.trackIds || []).length;
+  const count = countValidSetlistTracks(active);
   el.activeSetlistMeta.textContent = `${count} música(s) no repertório.`;
 }
 
@@ -1615,7 +1615,7 @@ function renderSetlistReviewTracks(setlist){
 function openSetlistReviewModal(setlist){
   if (!setlist || !el.setlistReviewModal) return;
   el.setlistReviewTitle.textContent = setlist.name;
-  const count = (setlist.trackIds || []).length;
+  const count = countValidSetlistTracks(setlist);
   el.setlistReviewMeta.textContent = `${count} música(s) • Confira a ordem e clique em OK para concluir.`;
   renderSetlistReviewTracks(setlist);
   el.setlistReviewModal.classList.remove('hidden');
@@ -1740,7 +1740,7 @@ function openShareSetlistModal(setlist){
 
   if (el.shareSetlistModalTitle) el.shareSetlistModalTitle.textContent = setlist.name;
   if (el.shareSetlistModalMeta) {
-    const trackCount = (setlist.trackIds || []).length;
+    const trackCount = countValidSetlistTracks(setlist);
     const dateLabel = setlist.eventDate
       ? new Date(setlist.eventDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long', year:'numeric' })
       : 'Sem data definida';
@@ -3247,6 +3247,9 @@ async function precacheSetlistAudios(){
 function afterLibraryLoaded(){
   libraryLoaded = true;
   populateFilters();
+  // V131.5 — Remove IDs órfãos dos repertórios agora que a biblioteca
+  // está carregada e sabemos quais músicas realmente existem.
+  cleanOrphanSetlistTracks();
   updateStats();
   renderSetlists();
   render();
@@ -3311,7 +3314,7 @@ function updateStats(){
       el.nextCultoName.textContent = shortName;
       el.nextCultoDate.textContent = nextCulto.eventDate
         ? new Date(nextCulto.eventDate + 'T00:00:00').toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit' })
-        : `${nextCulto.trackIds?.length || 0} músicas`;
+        : `${countValidSetlistTracks(nextCulto)} músicas`;
     } else {
       el.nextCultoName.textContent = '—';
       el.nextCultoDate.textContent = 'Nenhum ativo';
@@ -3937,7 +3940,7 @@ function renderSetlistOptions(){
       <div class="stack-item">
         <div>
           <strong>${esc(s.name)}</strong>
-          <span>${s.trackIds.length} música(s)${dateLabel ? ' • ' + dateLabel : ''}</span>
+          <span>${countValidSetlistTracks(s)} música(s)${dateLabel ? ' • ' + dateLabel : ''}</span>
         </div>
         <button class="mini-btn add-to-setlist" data-id="${esc(s.id)}">Adicionar</button>
       </div>
@@ -3998,7 +4001,7 @@ function renderSetlists(){
       <article class="setlist-card ${owner ? 'is-owner' : 'is-readonly'} ${isArchived ? 'is-archived' : ''}">
         <strong>${esc(s.name)}</strong>
         ${dateLabel ? `<div class="setlist-event-date"><span class="setlist-date-chip">📅 ${esc(dateLabel)}</span></div>` : ''}
-        <div class="muted">${s.trackIds.length} música(s) • ${esc(getSetlistCreatorName(s))}</div>
+        <div class="muted">${countValidSetlistTracks(s)} música(s) • ${esc(getSetlistCreatorName(s))}</div>
         <div class="setlist-inline-meta">
           <span class="setlist-chip ${s.paletteTitle ? '' : 'is-empty'}">${s.paletteTitle ? `Paleta: ${esc(s.paletteTitle)}` : 'Paleta pendente'}</span>
         </div>
@@ -4091,6 +4094,44 @@ function mapSetlistTracks(setlist){
   }).filter(Boolean);
 }
 
+// V131.5 — Conta apenas músicas que existem na biblioteca.
+// Evita a discrepância "card mostra 5, playlist mostra 4" quando um trackId
+// salvo no repertório não existe mais na biblioteca (ex: ID mudou no Drive).
+// Se a biblioteca ainda não carregou, retorna o total bruto (não temos como saber).
+function countValidSetlistTracks(setlist){
+  if (!allTracks.length) return (setlist.trackIds || []).length;
+  return (setlist.trackIds || []).filter(entry => {
+    const id = getSetlistEntryTrackId(entry);
+    return !!findTrack(id);
+  }).length;
+}
+
+// V131.5 — Remove IDs órfãos (músicas que não existem mais na biblioteca)
+// de todos os repertórios. Roda após a biblioteca carregar. Corrige o caso
+// onde uma música foi re-adicionada e a antiga ficou duplicada na contagem.
+function cleanOrphanSetlistTracks(){
+  if (!allTracks.length) return; // só limpa com biblioteca carregada
+  let changed = false;
+  for (const setlist of setlists) {
+    const original = setlist.trackIds || [];
+    const cleaned = original.filter(entry => {
+      const id = getSetlistEntryTrackId(entry);
+      return !!findTrack(id);
+    });
+    if (cleaned.length !== original.length) {
+      setlist.trackIds = cleaned;
+      setlist.updatedAt = new Date().toISOString();
+      changed = true;
+      console.info(`[setlist] ${original.length - cleaned.length} música(s) órfã(s) removida(s) de "${setlist.name}"`);
+    }
+  }
+  if (changed) {
+    saveSetlistsState();
+    renderSetlists();
+    updateStats();
+  }
+}
+
 function makeSetlistEntry(track, toneInfo = { semitones: 0, tone: '' }){
   const semitones = Number(toneInfo?.semitones || 0);
   const tone = toneInfo?.tone || '';
@@ -4128,7 +4169,7 @@ function renderSharedSetlistHero(setlist){
     el.setlistSharedHero.innerHTML = '';
     return;
   }
-  const trackCount = (setlist.trackIds || []).length;
+  const trackCount = countValidSetlistTracks(setlist);
   const creatorName = getSetlistCreatorName(setlist);
   const paletteTitle = setlist.paletteTitle || 'Paleta ainda não definida';
   const createdAt = formatSetlistDate(setlist.createdAt);
@@ -4179,7 +4220,7 @@ function openSetlistDetail(id){
   const isSharedView = String(sharedSetlistContextId || '') === String(id);
   el.setlistDetailTitle.textContent = setlist.name;
   const detailIntro = el.setlistDetailIntro;
-  const trackCount = (setlist.trackIds || []).length;
+  const trackCount = countValidSetlistTracks(setlist);
   const creatorName = getSetlistCreatorName(setlist);
   if (detailIntro) {
     if (isSharedView) {
