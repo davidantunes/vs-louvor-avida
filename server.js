@@ -757,33 +757,42 @@ app.get('/api/audio/:id', async (req, res) => {
     const id = req.params.id;
     const driveMediaUrl = googleMediaUrl(id);
 
-    // V131 — Obtém a URL real do arquivo via redirect manual.
-    // O Google Drive redireciona para um CDN (ex: lh3.googleusercontent.com).
-    // Em vez de fazer proxy (que pode falhar por restrições de rede do Render),
-    // repassamos o redirect ao browser — ele acessa o CDN diretamente.
-    const headResponse = await fetch(driveMediaUrl, {
-      method: 'GET',
-      redirect: 'manual',   // não segue o redirect automaticamente
-      headers: { 'User-Agent': 'VSLouvor/1.0' }
-    });
-
-    // Se houver redirect, passa para o browser seguir
-    if (headResponse.status >= 300 && headResponse.status < 400) {
-      const location = headResponse.headers.get('location');
-      if (location) {
-        console.log(`[audio] redirect ${headResponse.status} → ${location.slice(0, 80)}`);
-        return res.redirect(headResponse.status, location);
+    // V131 — Retry com até 3 tentativas. Conexões ao Google Drive podem
+    // falhar esporadicamente; tentar novamente resolve a intermitência.
+    let headResponse = null;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        headResponse = await fetch(driveMediaUrl, {
+          method: 'GET',
+          redirect: 'manual',
+          headers: { 'User-Agent': 'VSLouvor/1.0' }
+        });
+        break; // sucesso, sai do loop
+      } catch (e) {
+        lastErr = e;
+        console.warn(`[audio] tentativa ${attempt} falhou: ${e.message}`);
+        if (attempt < 3) await new Promise(r => setTimeout(r, 300 * attempt));
       }
     }
 
-    // Sem redirect: resposta direta (já tem o conteúdo)
+    if (!headResponse) {
+      console.error('[audio] todas as tentativas falharam:', lastErr?.message);
+      return res.status(502).json({ error: 'Falha ao conectar ao Google Drive', detail: lastErr?.message });
+    }
+
+    // Redirect → repassa ao browser (acessa o CDN diretamente)
+    if (headResponse.status >= 300 && headResponse.status < 400) {
+      const location = headResponse.headers.get('location');
+      if (location) return res.redirect(302, location);
+    }
+
     if (!headResponse.ok && headResponse.status !== 206) {
       const errBody = await headResponse.text().catch(() => '');
-      console.error(`[audio] erro ${headResponse.status}:`, errBody.slice(0, 200));
+      console.error(`[audio] Drive ${headResponse.status}:`, errBody.slice(0, 150));
       return res.status(headResponse.status).send(errBody || 'Erro ao carregar áudio.');
     }
 
-    // Conteúdo direto (sem redirect): faz pipe normal
     const contentType = headResponse.headers.get('content-type') || 'audio/mpeg';
     res.status(headResponse.status);
     res.setHeader('Content-Type', contentType);
@@ -800,14 +809,13 @@ app.get('/api/audio/:id', async (req, res) => {
 
     headResponse.body.on('error', (err) => {
       console.error('[audio] pipe error:', err.message);
+      if (!res.headersSent) res.status(500).end();
     });
     headResponse.body.pipe(res);
 
   } catch (error) {
     console.error('[audio] catch:', error.name, error.message);
-    if (!res.headersSent) {
-      res.status(500).json({ error: error.message, name: error.name });
-    }
+    if (!res.headersSent) res.status(500).json({ error: error.message });
   }
 });
 
@@ -871,6 +879,12 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).send(err.message || 'Internal server error');
 });
 
-app.listen(PORT, () => {
+// V131 — Timeouts maiores conforme recomendação oficial do Render para
+// serviços Node.js com streaming. Evita "Connection reset by peer" e 500
+// intermitentes durante o streaming de áudios grandes do Google Drive.
+const server = app.listen(PORT, () => {
   console.log(`VS Louvor rodando em http://localhost:${PORT}`);
 });
+server.keepAliveTimeout = 120000;  // 120s (padrão é 5s)
+server.headersTimeout = 120000;    // 120s
+server.requestTimeout = 0;         // sem limite para streams longos
