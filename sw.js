@@ -2,7 +2,7 @@
    v127.1 — Revertido para cache-first no shell (abre instantaneamente)
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v130.0.0';
+const SW_VERSION = 'v130.1.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -69,6 +69,13 @@ self.addEventListener('fetch', (event) => {
   // ÁUDIOS — cache first (essencial para uso offline)
   if (isAudioRequest(req, url)) {
     event.respondWith(audioCacheFirst(req));
+    return;
+  }
+
+  // config.js é dinâmico (gerado pelo servidor com DRIVE_API_KEY).
+  // Deve ser sempre network-first para que a chave esteja disponível imediatamente.
+  if (sameOrigin && url.pathname === '/config.js') {
+    event.respondWith(networkFirst(req, SHELL_CACHE));
     return;
   }
 

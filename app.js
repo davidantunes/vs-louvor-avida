@@ -358,10 +358,9 @@ const el = {
 document.title = cfg.APP_TITLE;
 
 initAppwriteClient();
-// V127 — Pré-aquece o servidor Render imediatamente ao abrir o app,
-// antes mesmo do login. Isso reduz o cold start para o usuário:
-// enquanto ele digita login/senha, o servidor já está acordando.
-// Fire-and-forget — não bloqueia nada, falha silenciosamente.
+// V130 — Lê DRIVE_API_KEY do localStorage para disponibilidade imediata,
+// antes do fetch assíncrono de /api/appwrite/config completar.
+try { const k=localStorage.getItem('vs_drive_key'); if(k&&!cfg.DRIVE_API_KEY) cfg.DRIVE_API_KEY=k; } catch(_){}
 fetch('/ping').catch(() => {});
 loadAppwriteServerConfig().finally(initSessionUI);
 bindEvents();
@@ -820,6 +819,11 @@ async function loadAppwriteServerConfig(){
     const data = await res.json();
     if (Array.isArray(data.adminEmails)) cloudAdminEmails = data.adminEmails.map(e => String(e).toLowerCase());
     cloudAdminConfigured = Boolean(data.adminConfigured);
+    // V130 — Salva e aplica DRIVE_API_KEY imediatamente
+    if (data.driveApiKey) {
+      cfg.DRIVE_API_KEY = data.driveApiKey;
+      try { localStorage.setItem('vs_drive_key', data.driveApiKey); } catch(_) {}
+    }
     // V116/V120 — Re-renderiza após carregar adminEmails
     updateAdminNavVisibility(); // sempre — independe de authUser
     if (authUser) {
