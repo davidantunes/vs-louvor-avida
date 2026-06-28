@@ -657,6 +657,35 @@ app.get('/healthz', (req, res) => {
 
 // V99 — Endpoint diagnóstico: lista as músicas SEM tom detectado.
 // Útil para o David ver quais nomes precisam ser ajustados no Drive.
+// V131.9 — Diagnóstico de áudio: testa o download real de um arquivo
+// e retorna o erro EXATO do Google Drive. Use /api/diagnostics/audio/:id
+app.get('/api/diagnostics/audio/:id', async (req, res) => {
+  const id = req.params.id;
+  const result = { id, apiKeyPresent: !!API_KEY, tests: {} };
+  try {
+    // Teste 1: metadata (Drive API)
+    const metaUrl = `${GOOGLE_API}/${encodeURIComponent(id)}?fields=id,name,mimeType,size&key=${encodeURIComponent(API_KEY)}`;
+    const metaRes = await fetch(metaUrl, { headers: { 'User-Agent': 'VSLouvor/1.0' } });
+    result.tests.metadata = { status: metaRes.status, ok: metaRes.ok };
+    if (!metaRes.ok) {
+      result.tests.metadata.body = (await metaRes.text()).slice(0, 300);
+    } else {
+      result.tests.metadata.data = await metaRes.json();
+    }
+
+    // Teste 2: download de mídia (alt=media)
+    const mediaUrl = `${GOOGLE_API}/${encodeURIComponent(id)}?alt=media&key=${encodeURIComponent(API_KEY)}`;
+    const mediaRes = await fetch(mediaUrl, { method: 'GET', redirect: 'manual', headers: { 'User-Agent': 'VSLouvor/1.0', 'Range': 'bytes=0-1023' } });
+    result.tests.media = { status: mediaRes.status, ok: mediaRes.ok, contentType: mediaRes.headers.get('content-type'), location: mediaRes.headers.get('location') };
+    if (!mediaRes.ok && mediaRes.status < 300) {
+      result.tests.media.body = (await mediaRes.text()).slice(0, 300);
+    }
+  } catch (e) {
+    result.error = e.message;
+  }
+  res.json(result);
+});
+
 app.get('/api/diagnostics/missing-keys', (req, res) => {
   if (!libraryCache) {
     return res.json({ ready: false, message: 'Biblioteca ainda não foi indexada. Acesse /api/library?rootId=...' });
