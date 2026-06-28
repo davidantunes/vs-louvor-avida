@@ -1556,6 +1556,24 @@ function setActiveSetlist(id){
   persistActiveSetlist();
   renderActiveSetlistBanner();
 }
+
+// V131.11 — Inicia o fluxo de adicionar músicas a um repertório existente.
+// Torna o repertório ativo e leva o usuário à biblioteca, onde cada música
+// tem o botão de adicionar ao repertório ativo.
+function startAddSongsToSetlist(id){
+  const setlist = setlists.find(s => s.id === id);
+  if (!setlist) return;
+  if (!canEditSetlist(setlist)) {
+    toast('Somente quem criou este repertório (ou um administrador) pode adicionar músicas.');
+    return;
+  }
+  setActiveSetlist(id);
+  closeSetlistDetail();
+  location.hash = '#biblioteca';
+  routeInternalPage();
+  render();
+  toast(`Repertório ativo: "${setlist.name}". Toque ➕ nas músicas para adicioná-las.`);
+}
 function clearActiveSetlist(){
   activeSetlistId = '';
   persistActiveSetlist();
@@ -4069,6 +4087,7 @@ function renderSetlists(){
         </div>
         ${canEditSetlist(s) || canDeleteSetlist(s) ? `
         <div class="setlist-actions setlist-actions-row2">
+          ${canEditSetlist(s) ? `<button class="mini-btn add-songs-setlist" data-id="${esc(s.id)}">➕ Adicionar músicas</button>` : ''}
           ${canEditSetlist(s) ? `<button class="mini-btn edit-setlist-date" data-id="${esc(s.id)}">📅 ${s.eventDate ? 'Alterar data' : 'Definir data'}</button>` : ''}
           ${canEditSetlist(s) ? `<button class="mini-btn archive-setlist" data-id="${esc(s.id)}" title="${isArchived ? 'Restaurar' : 'Arquivar'}">${isArchived ? '↩ Restaurar' : '📦 Arquivar'}</button>` : ''}
           ${canDeleteSetlist(s) ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">🗑 Excluir</button>` : ''}
@@ -4089,6 +4108,7 @@ function renderSetlists(){
     }));
     container.querySelectorAll('.archive-setlist').forEach(btn => btn.addEventListener('click', () => toggleSetlistArchive(btn.dataset.id)));
     container.querySelectorAll('.edit-setlist-date').forEach(btn => btn.addEventListener('click', () => openEditSetlistDate(btn.dataset.id)));
+    container.querySelectorAll('.add-songs-setlist').forEach(btn => btn.addEventListener('click', () => startAddSongsToSetlist(btn.dataset.id)));
     container.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
       const setlist = setlists.find(s => s.id === btn.dataset.id);
       if (!canDeleteSetlist(setlist)) { toast('Somente quem criou este repertório pode excluí-lo.'); return; }
@@ -4271,7 +4291,7 @@ function openSetlistDetail(id){
   currentSetlistDetailId = id;
   const setlist = setlists.find(s => s.id === id);
   if (!setlist) return;
-  const owner = isSetlistOwner(setlist);
+  const owner = canEditSetlist(setlist);
   const isSharedView = String(sharedSetlistContextId || '') === String(id);
   el.setlistDetailTitle.textContent = setlist.name;
   const detailIntro = el.setlistDetailIntro;
@@ -4286,8 +4306,9 @@ function openSetlistDetail(id){
         : `Playlist com ${trackCount} música(s) • Criado por ${creatorName}. Repertório em modo leitura para você.`;
     }
   }
-  if (el.addMusicSetlistDetail) el.addMusicSetlistDetail.classList.toggle('hidden', !owner);
-  if (el.changeSetlistPaletteBtn) el.changeSetlistPaletteBtn.classList.toggle('hidden', !owner);
+  const canEdit = canEditSetlist(setlist);
+  if (el.addMusicSetlistDetail) el.addMusicSetlistDetail.classList.toggle('hidden', !canEdit);
+  if (el.changeSetlistPaletteBtn) el.changeSetlistPaletteBtn.classList.toggle('hidden', !canEdit);
 
   renderSharedSetlistHero(setlist);
   renderSetlistDetailPalette(setlist, owner);
@@ -4370,7 +4391,7 @@ function renderSetlistDetailTracks(){
     el.setlistDetailTracks.innerHTML = '<div class="empty">Este repertório ainda não possui músicas.</div>';
     return;
   }
-  const owner = isSetlistOwner(setlist);
+  const owner = canEditSetlist(setlist);
   el.setlistDetailTracks.innerHTML = tracks.map((track, index) => {
     const chosenTone = formatKeyLabel(track.repertoireTone || track.key || '—');
     const toneLabel = track.repertoireTone ? 'Tom escolhido' : 'Tom';
@@ -4410,8 +4431,8 @@ function renderSetlistDetailTracks(){
     });
   });
   el.setlistDetailTracks.querySelectorAll('.remove-one').forEach(btn => btn.addEventListener('click', () => {
-    if (!isSetlistOwner(setlist)) {
-      toast('Somente quem criou este repertório pode editá-lo.');
+    if (!canEditSetlist(setlist)) {
+      toast('Somente quem criou este repertório (ou um administrador) pode editá-lo.');
       return;
     }
     const idx = Number(btn.closest('.reorder-item')?.dataset.index);
@@ -4424,7 +4445,7 @@ function renderSetlistDetailTracks(){
 }
 function bindReorderEvents(){
   const setlist = setlists.find(s => s.id === currentSetlistDetailId);
-  if (!isSetlistOwner(setlist)) return;
+  if (!canEditSetlist(setlist)) return;
   const items = [...el.setlistDetailTracks.querySelectorAll('.reorder-item')];
   let draggedIndex = null;
   items.forEach(item => {
