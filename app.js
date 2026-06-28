@@ -3558,47 +3558,20 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   if (el.audio.src !== src) {
     el.audio.preload = 'metadata';
     el.audio.src = src;
-
-    // V128 — iOS Safari exige aguardar canplay antes de chamar play().
-    // Chamar play() imediatamente após setar src causa AbortError no iOS.
-    const tryPlay = () => {
-      const p = el.audio.play();
-      if (p && typeof p.catch === 'function') {
-        p.catch(err => {
-          if (err.name !== 'AbortError') {
-            console.warn('Falha ao tocar:', err);
-            setPlayButtonState(false);
-          }
-        });
-      }
-    };
-
-    // Aguarda canplay uma única vez, com fallback de timeout
-    const onCanPlay = () => {
-      el.audio.removeEventListener('canplay', onCanPlay);
-      tryPlay();
-    };
-    el.audio.addEventListener('canplay', onCanPlay, { once: true });
-
-    // Fallback: se canplay não disparar em 3s, tenta mesmo assim
-    const fallbackTimer = setTimeout(() => {
-      el.audio.removeEventListener('canplay', onCanPlay);
-      tryPlay();
-    }, 3000);
-    el.audio.addEventListener('canplay', () => clearTimeout(fallbackTimer), { once: true });
-
     try { el.audio.load(); } catch(_) {}
-  } else {
-    // Mesma src — só dá play direto
-    const p = el.audio.play();
-    if (p && typeof p.catch === 'function') {
-      p.catch(err => {
-        if (err.name !== 'AbortError') {
-          console.warn('Falha ao tocar:', err);
-          setPlayButtonState(false);
-        }
-      });
-    }
+  }
+
+  // V128.2 — play() deve ser chamado sincronamente dentro do click handler.
+  // Deferir para canplay quebra a cadeia de gesto do usuário no iOS/Android
+  // e o browser recusa tocar ("not allowed by the user agent").
+  const p = el.audio.play();
+  if (p && typeof p.catch === 'function') {
+    p.catch(err => {
+      if (err.name !== 'AbortError') {
+        console.warn('Falha ao tocar:', err);
+        setPlayButtonState(false);
+      }
+    });
   }
 
   recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: formatKeyLabel(track.key), changedKey: alteredToneLabel || '', semitones });
