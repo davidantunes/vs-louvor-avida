@@ -258,16 +258,21 @@ app.get('/api/appwrite/state/:key', async (req, res) => {
 app.put('/api/appwrite/state/:key', async (req, res) => {
   try {
     const updatedAt = new Date().toISOString();
-    invalidateStateCache(req.params.key); // V127.2 — invalida cache de leitura
+    const serialized = JSON.stringify(req.body.value ?? null);
+    // V131.8 — Log de tamanho para diagnóstico. Appwrite rejeita > 50.000 chars.
+    if (serialized.length > 49000) {
+      console.warn(`[state] "${req.params.key}" = ${serialized.length} chars (próximo/acima do limite Appwrite 50000)`);
+    }
+    invalidateStateCache(req.params.key);
     const doc = await upsertState(APPWRITE_APP_STATE_COLLECTION_ID, d => d.key === req.params.key, {
       key: req.params.key,
-      value: JSON.stringify(req.body.value ?? null),
+      value: serialized,
       updated_at: updatedAt
     });
     res.json({ ok: true, id: doc.$id, updatedAt });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+    console.error(`[state] erro ao salvar "${req.params.key}":`, error.message);
+    res.status(500).json({ error: error.message, key: req.params.key });
   }
 });
 app.get('/api/appwrite/user-state/:userId/:key', async (req, res) => {

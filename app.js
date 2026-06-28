@@ -1442,8 +1442,26 @@ function mergeSetlistsDefensive(local, remote){
   return merged;
 }
 
+// V131.8 — Limite do Appwrite: o atributo "value" aceita no máx 50.000 chars
+// após JSON.stringify. Verificamos ANTES de enviar para dar erro claro e
+// evitar o 400 genérico. Margem de segurança de 49.000.
+const APPWRITE_VALUE_MAX = 49000;
+
+function checkStateSize(key, value){
+  const size = JSON.stringify(value ?? null).length;
+  if (size > APPWRITE_VALUE_MAX) {
+    console.warn(`[sync] "${key}" tem ${size} chars (limite ${APPWRITE_VALUE_MAX}). Não sincronizado para evitar erro.`);
+    return false;
+  }
+  return true;
+}
+
 async function setSharedState(key, value){
   if (!authUser) return;
+  // Bloqueia envio se exceder o limite — evita erro 400 que travava o app
+  if (!checkStateSize(key, value)) {
+    throw new Error(`Estado "${key}" excede o limite de tamanho e não foi sincronizado.`);
+  }
   const res = await fetch(`/api/appwrite/state/${encodeURIComponent(key)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1857,6 +1875,9 @@ function addTrackToSetlist(setlist, track, toneInfo = { semitones: 0, tone: '' }
 }
 async function setAdminSharedState(key, value){
   if (!authUser) throw new Error('Faça login para salvar.');
+  if (!checkStateSize(key, value)) {
+    throw new Error(`A escala "${key}" ficou muito grande para sincronizar. Considere remover meses antigos.`);
+  }
   const jwt = await getAuthJwt();
   const res = await fetch(`/api/appwrite/admin/state/${encodeURIComponent(key)}`, {
     method: 'PUT',
@@ -1943,6 +1964,9 @@ async function getUserState(key){
 }
 async function setUserState(key, value){
   if (!authUser) return;
+  if (!checkStateSize(key, value)) {
+    throw new Error(`Estado "${key}" excede o limite de tamanho e não foi sincronizado.`);
+  }
   const res = await fetch(`/api/appwrite/user-state/${encodeURIComponent(authUser.$id)}/${encodeURIComponent(key)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1997,22 +2021,20 @@ function saveSetlistsState(){
 }
 
 function saveUsageHistoryState(){
-  // V131.7 — O Appwrite rejeita valores acima de 50.000 caracteres.
-  // O histórico crescia indefinidamente e estourava esse limite, fazendo
-  // o salvamento falhar com erro 400. Agora limitamos a 200 eventos E
-  // verificamos o tamanho real do JSON, removendo os mais antigos até caber.
-  let limited = usageHistory.slice(-200);
+  // V131.8 — Appwrite rejeita valores acima de 50.000 chars. Usamos margem
+  // agressiva: 100 eventos base, e poda por tamanho real até ficar abaixo
+  // de 40.000 chars (margem ampla de segurança).
+  let limited = usageHistory.slice(-100);
 
-  // Garantia extra: se ainda passar de 45.000 chars (margem de segurança),
-  // remove os eventos mais antigos até caber.
-  const MAX_CHARS = 45000;
-  while (limited.length > 20 && JSON.stringify(limited).length > MAX_CHARS) {
-    limited = limited.slice(Math.ceil(limited.length * 0.2)); // remove 20% mais antigos
+  const MAX_CHARS = 40000;
+  while (limited.length > 10 && JSON.stringify(limited).length > MAX_CHARS) {
+    limited = limited.slice(Math.ceil(limited.length * 0.25)); // remove 25% mais antigos
   }
 
   usageHistory = limited;
   saveJSON('vs_usage_history_v51', usageHistory);
-  setSharedState('usageHistory', usageHistory).catch(err => console.warn('Histórico não sincronizado:', err));
+  // Só sincroniza se couber (checkStateSize evita o erro 400)
+  setSharedState('usageHistory', usageHistory).catch(err => console.warn('Histórico não sincronizado:', err.message));
 }
 
 function recordUsageEvent(event){
