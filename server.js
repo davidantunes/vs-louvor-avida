@@ -756,52 +756,12 @@ app.get('/api/audio/:id', async (req, res) => {
     if (!requireApiKey(res)) return;
     const id = req.params.id;
 
-    // V128 — Encaminha o header Range do browser para o Google Drive.
-    // iOS e Android EXIGEM suporte a Range requests para streaming de áudio:
-    // o browser envia Range: bytes=0- antes de começar, e se o servidor não
-    // responder com 206 + Accept-Ranges + Content-Range, o áudio não toca.
-    // Antes, o objeto headers estava vazio — o Range nunca chegava ao Drive.
-    const upstreamHeaders = {};
-    if (req.headers.range) {
-      upstreamHeaders['Range'] = req.headers.range;
-    }
-
-    const response = await fetch(googleMediaUrl(id), { headers: upstreamHeaders });
-
-    if (!response.ok && response.status !== 206) {
-      return res.status(response.status).send(await response.text());
-    }
-
-    // Propaga status exato do Drive (200 ou 206)
-    res.status(response.status);
-
-    const contentType = response.headers.get('content-type') || 'audio/mpeg';
-    res.setHeader('Content-Type', contentType);
-
-    const contentLength = response.headers.get('content-length');
-    const contentRange  = response.headers.get('content-range');
-    const acceptRanges  = response.headers.get('accept-ranges');
-
-    if (contentLength) res.setHeader('Content-Length', contentLength);
-    if (contentRange)  res.setHeader('Content-Range', contentRange);
-    // Garante Accept-Ranges mesmo que o Drive não devolva (mobile precisa desse header)
-    res.setHeader('Accept-Ranges', acceptRanges || 'bytes');
-
-    // Cache: resposta completa (200) pode ser cacheada; parcial (206) não
-    if (response.status === 200 && !req.headers.range) {
-      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
-    } else {
-      res.setHeader('Cache-Control', 'no-store');
-    }
-
-    if (req.query.download) {
-      const filename = req.query.filename || 'audio.mp3';
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    }
-
-    // fetch nativo Node 20: response.body é Web ReadableStream, não Node stream.
-    // Readable.fromWeb() converte para Node stream que suporta .pipe()
-    Readable.fromWeb(response.body).pipe(res);
+    // V128.4 — Redireciona para o Google Drive diretamente.
+    // O proxy via pipe estava causando 500 em mobile por erros de streaming.
+    // O redirect faz o browser fazer o download/streaming nativo, com suporte
+    // perfeito a Range requests sem precisar de código extra no servidor.
+    const url = googleMediaUrl(id);
+    return res.redirect(302, url);
   } catch (error) {
     console.error('[audio]', error);
     res.status(500).send('Erro ao carregar áudio.');
