@@ -2603,10 +2603,15 @@ function useBackend(){ return cfg.USE_BACKEND && location.protocol !== 'file:'; 
 function directDriveMedia(id){ return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`; }
 function thumbnailUrl(id){ return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800`; }
 function driveUrl(id){
-  // V130 — usa URL direta do Google Drive com a chave injetada pelo servidor.
-  // Elimina o proxy /api/audio/ que causava 500 por restrição de IP/domínio na chave.
-  const key = (cfg && cfg.DRIVE_API_KEY) || (cfg && cfg.API_KEY) || '';
+  // V130 — URL direta ao Google Drive (sem servidor).
+  // Tenta a chave em 3 lugares, da mais rápida para a mais lenta:
+  // 1. cfg.DRIVE_API_KEY (do config.js dinâmico, disponível imediatamente)
+  // 2. cfg.API_KEY (backup — mesma chave)
+  // 3. localStorage (persiste entre sessões, disponível offline)
+  let key = (cfg && cfg.DRIVE_API_KEY) || (cfg && cfg.API_KEY) || '';
+  if (!key) { try { key = localStorage.getItem('vs_drive_key') || ''; } catch(_){} }
   if (key) return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&key=${encodeURIComponent(key)}`;
+  // Fallback ao servidor só se não houver chave nenhuma
   return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id);
 }
 function transposeUrl(id, semitones){ return !semitones ? driveUrl(id) : `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}`; }
