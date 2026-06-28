@@ -4436,11 +4436,16 @@ function renderSetlistDetailTracks(){
       return;
     }
     const idx = Number(btn.closest('.reorder-item')?.dataset.index);
-    if (Number.isInteger(idx) && idx >= 0) setlist.trackIds.splice(idx, 1);
+    if (!Number.isInteger(idx) || idx < 0) return;
+    // V131.12 — Confirmação antes de remover a música do repertório
+    const trackName = tracks[idx]?.name || 'esta música';
+    if (!confirm(`Remover "${trackName}" deste repertório?`)) return;
+    setlist.trackIds.splice(idx, 1);
     saveSetlistsState();
     renderSetlists();
     renderSetlistDetailTracks();
     updateStats();
+    toast('Música removida do repertório.');
   }));
 }
 function bindReorderEvents(){

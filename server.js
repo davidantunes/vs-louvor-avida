@@ -811,42 +811,32 @@ app.get('/api/audio/:id', async (req, res) => {
     const id = req.params.id;
     const driveMediaUrl = googleMediaUrl(id);
 
-    // V131.10 — O diagnóstico provou que esta abordagem funciona (status 206):
-    // encaminhar o header Range do browser, seguir redirects automaticamente
-    // (redirect:'follow', NÃO repassar ao browser que falha por CORS),
-    // e fazer pipe do conteúdo. Com retry para resiliência.
+    // V131.13 — Réplica EXATA do diagnóstico que retornou 206 com sucesso.
+    // Encaminha Range, redirect:follow, e faz pipe. Logs detalhados em cada
+    // etapa para identificar exatamente onde falha se der erro.
     const upstreamHeaders = { 'User-Agent': 'VSLouvor/1.0' };
     if (req.headers.range) upstreamHeaders['Range'] = req.headers.range;
 
-    let driveRes = null;
-    let lastErr = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        driveRes = await fetch(driveMediaUrl, {
-          method: 'GET',
-          redirect: 'follow',          // segue o redirect do Drive internamente
-          headers: upstreamHeaders
-        });
-        break;
-      } catch (e) {
-        lastErr = e;
-        console.warn(`[audio] tentativa ${attempt} falhou: ${e.message}`);
-        if (attempt < 3) await new Promise(r => setTimeout(r, 300 * attempt));
-      }
+    let driveRes;
+    try {
+      driveRes = await fetch(driveMediaUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        headers: upstreamHeaders
+      });
+    } catch (fetchErr) {
+      console.error('[audio] fetch falhou:', fetchErr.name, fetchErr.message);
+      return res.status(502).json({ stage: 'fetch', error: fetchErr.message, name: fetchErr.name });
     }
 
-    if (!driveRes) {
-      console.error('[audio] conexão falhou:', lastErr?.message);
-      return res.status(502).json({ error: 'Falha ao conectar ao Google Drive', detail: lastErr?.message });
-    }
+    console.log(`[audio] ${id}: status ${driveRes.status}, type ${driveRes.headers.get('content-type')}`);
 
     if (!driveRes.ok && driveRes.status !== 206) {
       const errBody = await driveRes.text().catch(() => '');
-      console.error(`[audio] Drive ${driveRes.status}:`, errBody.slice(0, 150));
-      return res.status(driveRes.status).send(errBody || 'Erro ao carregar áudio.');
+      console.error(`[audio] Drive ${driveRes.status}:`, errBody.slice(0, 200));
+      return res.status(driveRes.status).json({ stage: 'drive-response', status: driveRes.status, body: errBody.slice(0, 200) });
     }
 
-    // Propaga status (200 ou 206) e headers de streaming
     res.status(driveRes.status);
     res.setHeader('Content-Type', driveRes.headers.get('content-type') || 'audio/mpeg');
     res.setHeader('Accept-Ranges', driveRes.headers.get('accept-ranges') || 'bytes');
@@ -860,16 +850,17 @@ app.get('/api/audio/:id', async (req, res) => {
       res.setHeader('Content-Disposition', `attachment; filename="${req.query.filename || 'audio.mp3'}"`);
     }
 
+    // node-fetch v2: body é stream Node. Trata erro de pipe sem derrubar.
     driveRes.body.on('error', (err) => {
-      console.error('[audio] pipe error:', err.message);
+      console.error('[audio] stream error:', err.message);
       if (!res.headersSent) res.status(500).end();
-      else res.end();
+      else try { res.end(); } catch(_) {}
     });
     driveRes.body.pipe(res);
 
   } catch (error) {
-    console.error('[audio] catch:', error.name, error.message);
-    if (!res.headersSent) res.status(500).json({ error: error.message });
+    console.error('[audio] catch geral:', error.name, error.message, error.stack?.split('\n')[1]);
+    if (!res.headersSent) res.status(500).json({ stage: 'catch', error: error.message, name: error.name });
   }
 });
 
