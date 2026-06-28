@@ -41,6 +41,26 @@ app.get('/manifest.json', (req, res) => {
   res.sendFile(path.join(__dirname, 'manifest.json'));
 });
 
+// V128.7 — config.js dinâmico: injeta a API Key do Drive no cliente.
+// Isso garante que cfg.DRIVE_API_KEY esteja disponível IMEDIATAMENTE
+// ao carregar o app, sem depender de fetch assíncrono.
+// O browser vai diretamente ao Google Drive para áudio — sem servidor no meio.
+app.get('/config.js', (req, res) => {
+  res.type('application/javascript');
+  res.setHeader('Cache-Control', 'no-store'); // sempre fresh para pegar key atualizada
+  const ROOT_FOLDER_ID_CFG = process.env.ROOT_FOLDER_ID || '1Tcua5y0O9Bv5LRNmtIYnDCderiaN8xB8';
+  res.send(`window.VS_LOUVOR_CONFIG = {
+  APP_TITLE: "Biblioteca de Louvor — Igreja Amor e Vida",
+  ROOT_FOLDER_ID: ${JSON.stringify(ROOT_FOLDER_ID_CFG)},
+  API_KEY: ${JSON.stringify(API_KEY)},
+  DRIVE_API_KEY: ${JSON.stringify(API_KEY)},
+  USE_BACKEND: true,
+  APPWRITE_ENDPOINT: ${JSON.stringify(APPWRITE_ENDPOINT)},
+  APPWRITE_PROJECT_ID: ${JSON.stringify(APPWRITE_PROJECT_ID)},
+  APPWRITE_DATABASE_ID: ${JSON.stringify(APPWRITE_DATABASE_ID || 'louvor_avida')}
+};`);
+});
+
 app.use(express.static(__dirname, {
   etag: true,
   lastModified: true,
@@ -114,7 +134,9 @@ async function upsertState(collectionId, matcher, data) {
   return appwriteRequest('POST', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents`, { documentId: 'unique()', data });
 }
 app.get('/api/appwrite/config', (req, res) => {
-  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: true });
+  // V128.6 — Inclui driveApiKey para o cliente construir URLs de áudio diretamente,
+  // eliminando o servidor do caminho do áudio e todos os problemas de proxy/streaming.
+  res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: true, driveApiKey: API_KEY });
 });
 
 app.get('/api/appwrite/bootstrap/:userId', async (req, res) => {

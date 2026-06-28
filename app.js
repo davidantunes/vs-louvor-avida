@@ -820,6 +820,8 @@ async function loadAppwriteServerConfig(){
     const data = await res.json();
     if (Array.isArray(data.adminEmails)) cloudAdminEmails = data.adminEmails.map(e => String(e).toLowerCase());
     cloudAdminConfigured = Boolean(data.adminConfigured);
+    // V128.6 — Salva API Key do Drive para URLs diretas (sem proxy do servidor)
+    if (data.driveApiKey) cfg.DRIVE_API_KEY = data.driveApiKey;
     // V116/V120 — Re-renderiza após carregar adminEmails
     updateAdminNavVisibility(); // sempre — independe de authUser
     if (authUser) {
@@ -2598,7 +2600,16 @@ function isNextSchedule(row){
 function useBackend(){ return cfg.USE_BACKEND && location.protocol !== 'file:'; }
 function directDriveMedia(id){ return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`; }
 function thumbnailUrl(id){ return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800`; }
-function driveUrl(id){ return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id); }
+function directGoogleDriveUrl(id){
+  const key = cfg.DRIVE_API_KEY || '';
+  return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&key=${encodeURIComponent(key)}`;
+}
+function driveUrl(id){
+  // V128.6 — URL direta ao Google Drive quando temos a API Key (sem servidor).
+  // Elimina proxy, streaming e redirect — o browser lida nativamente com Range requests.
+  if (cfg.DRIVE_API_KEY) return directGoogleDriveUrl(id);
+  return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id);
+}
 function transposeUrl(id, semitones){ return !semitones ? driveUrl(id) : `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}`; }
 function downloadUrl(id, name, semitones = 0){
   const filename = encodeURIComponent(`${safeFileName(name)}${semitones ? `_tom_${semitones > 0 ? '+' : ''}${semitones}` : ''}.mp3`);
