@@ -41,6 +41,26 @@ app.get('/manifest.json', (req, res) => {
   res.sendFile(path.join(__dirname, 'manifest.json'));
 });
 
+// V131.6 — Rota /config.js dinâmica ANTES do express.static.
+// Injeta a chave do Drive e config do Appwrite no cliente imediatamente,
+// garantindo que cfg.DRIVE_API_KEY esteja disponível antes de qualquer play.
+// Lê direto de process.env (sempre disponível) para não depender da ordem
+// de declaração das constantes abaixo.
+app.get('/config.js', (req, res) => {
+  const driveKey = process.env.GOOGLE_DRIVE_API_KEY || '';
+  res.type('application/javascript').setHeader('Cache-Control', 'no-store');
+  res.send(`window.VS_LOUVOR_CONFIG = {
+  APP_TITLE: "Biblioteca de Louvor — Igreja Amor e Vida",
+  ROOT_FOLDER_ID: ${JSON.stringify(process.env.ROOT_FOLDER_ID || '1Tcua5y0O9Bv5LRNmtIYnDCderiaN8xB8')},
+  API_KEY: ${JSON.stringify(driveKey)},
+  DRIVE_API_KEY: ${JSON.stringify(driveKey)},
+  USE_BACKEND: true,
+  APPWRITE_ENDPOINT: ${JSON.stringify(process.env.APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1')},
+  APPWRITE_PROJECT_ID: ${JSON.stringify(process.env.APPWRITE_PROJECT_ID || '69f4cb460024e484358b')},
+  APPWRITE_DATABASE_ID: ${JSON.stringify(process.env.APPWRITE_DATABASE_ID || 'louvor_avida')}
+};`);
+});
+
 app.use(express.static(__dirname, {
   etag: true,
   lastModified: true,

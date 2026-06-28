@@ -1331,7 +1331,18 @@ async function loadCloudState(){
     if (Array.isArray(userState)) favorites = userState;
     if (Array.isArray(cloudMembers) && cloudMembers.length) members = normalizeMembers(cloudMembers);
     if (Array.isArray(cloudSchedule) && cloudSchedule.length) scheduleRows = normalizeScheduleRows(cloudSchedule);
-    if (Array.isArray(cloudHistory)) usageHistory = cloudHistory;
+    if (Array.isArray(cloudHistory)) {
+      // V131.7 — Migra histórico antigo: remove o objeto 'user' pesado de
+      // eventos salvos em versões anteriores, convertendo para o campo 'u'
+      // (string curta). Isso reduz o tamanho e evita o erro 400 do Appwrite.
+      usageHistory = cloudHistory.map(e => {
+        if (e && e.user && typeof e.user === 'object') {
+          const { user, id, ...rest } = e;
+          return { ...rest, u: user.name || user.email || '' };
+        }
+        return e;
+      });
+    }
     // V112 — carrega mapa multi-mês da nuvem
     try {
       const cloudMonths = await getSharedState('allScheduleMonths');
@@ -1346,6 +1357,11 @@ async function loadCloudState(){
     saveJSON('vs_members_v1', members);
     saveJSON('vs_schedule_rows_v1', scheduleRows);
     saveJSON('vs_usage_history_v51', usageHistory);
+    // V131.7 — Se o histórico carregado da nuvem ainda estiver acima do limite
+    // (versões antigas com eventos pesados), poda e re-salva a versão enxuta.
+    if (Array.isArray(cloudHistory) && JSON.stringify(usageHistory).length > 45000) {
+      saveUsageHistoryState();
+    }
     await seedScheduleDataIfNeeded(cloudMembers, cloudSchedule);
     updateStats();
     updateFavoriteCount();
@@ -1981,7 +1997,19 @@ function saveSetlistsState(){
 }
 
 function saveUsageHistoryState(){
-  const limited = usageHistory.slice(-300);
+  // V131.7 — O Appwrite rejeita valores acima de 50.000 caracteres.
+  // O histórico crescia indefinidamente e estourava esse limite, fazendo
+  // o salvamento falhar com erro 400. Agora limitamos a 200 eventos E
+  // verificamos o tamanho real do JSON, removendo os mais antigos até caber.
+  let limited = usageHistory.slice(-200);
+
+  // Garantia extra: se ainda passar de 45.000 chars (margem de segurança),
+  // remove os eventos mais antigos até caber.
+  const MAX_CHARS = 45000;
+  while (limited.length > 20 && JSON.stringify(limited).length > MAX_CHARS) {
+    limited = limited.slice(Math.ceil(limited.length * 0.2)); // remove 20% mais antigos
+  }
+
   usageHistory = limited;
   saveJSON('vs_usage_history_v51', usageHistory);
   setSharedState('usageHistory', usageHistory).catch(err => console.warn('Histórico não sincronizado:', err));
@@ -1989,11 +2017,12 @@ function saveUsageHistoryState(){
 
 function recordUsageEvent(event){
   if (!event || !event.type) return;
-  const user = authUser ? { id: authUser.$id, name: authUser.name || authUser.email, email: authUser.email } : null;
+  // V131.7 — Guarda só o nome do usuário (string curta), não o objeto completo,
+  // para o JSON não estourar o limite de 50.000 chars do Appwrite.
+  const userName = authUser ? (authUser.name || authUser.email || '') : '';
   const item = {
-    id: `${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
     at: new Date().toISOString(),
-    user,
+    u: userName,
     ...event
   };
   usageHistory.push(item);
