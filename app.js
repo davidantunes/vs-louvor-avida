@@ -92,7 +92,7 @@ let cloudAdminEmails = [];
 let cloudAdminConfigured = false;
 let scheduleDirty = false;
 const SCHEDULE_ROLE_LABELS = {
-  minister: 'Ministro', back1: 'Back', back2: 'Back', back3: 'Back', bass: 'Baixo', drums: 'Bateria', guitar: 'Guitarra', keyboard: 'Teclado', sound: 'Tec. Som'
+  minister: 'Ministro', back1: 'Back', back2: 'Back', back3: 'Back', bass: 'Baixo', drums: 'Bateria', guitar: 'Guitarra', keyboard: 'Teclado', acoustic: 'Violão', sound: 'Tec. Som'
 };
 
 let infiniteObserver = null;
@@ -1924,7 +1924,7 @@ function normalizeScheduleRows(rows){
   return rows.map(row => ({
     day: row.day || '', date: row.date || '',
     minister: row.minister || '', back1: row.back1 || '', back2: row.back2 || '', back3: row.back3 || '',
-    bass: row.bass || '', drums: row.drums || '', guitar: row.guitar || '', keyboard: row.keyboard || '', sound: row.sound || ''
+    bass: row.bass || '', drums: row.drums || '', guitar: row.guitar || '', keyboard: row.keyboard || '', acoustic: row.acoustic || '', sound: row.sound || ''
   }));
 }
 async function seedScheduleDataIfNeeded(cloudMembers, cloudSchedule){
@@ -2494,17 +2494,34 @@ function parseExcelScheduleRows(rawRows){
   // Percorre linhas após o cabeçalho (ou da linha 1 se não achou header)
   const startIdx = headerIdx >= 0 ? headerIdx + 1 : 1;
 
+  // V131.16 — Detecta dinamicamente em qual coluna está a DATA, em vez de
+  // assumir posição fixa. Alguns Excel têm uma coluna vazia no início, o que
+  // deslocava todas as colunas e bagunçava a escala. Procuramos a coluna cujo
+  // valor é uma data (serial do Excel ou DD/MM); o dia fica na coluna anterior
+  // e as funções (Ministro, Back...) começam na coluna seguinte.
+  const isDateValue = (v) => {
+    if (typeof v === 'number' && v > 40000) return true;
+    return /^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(String(v || '').trim());
+  };
+
   for (let i = startIdx; i < rawRows.length; i++) {
     const cells = rawRows[i];
     if (!cells || cells.length < 3) continue;
 
-    // Coluna 0: dia da semana (texto) — pode estar vazio (mesclado no Excel)
-    let day = String(cells[0] || '').trim();
-    // Coluna 1: data (pode ser serial numérico do Excel ou "DD/MM")
-    let dateRaw = cells[1];
+    // Acha a coluna da data nesta linha (primeira que parece data)
+    let dateCol = -1;
+    for (let c = 0; c < Math.min(cells.length, 4); c++) {
+      if (isDateValue(cells[c])) { dateCol = c; break; }
+    }
+    if (dateCol < 0) continue; // linha sem data → observação/legenda, ignora
+
+    // Dia da semana: coluna imediatamente antes da data (se houver)
+    let day = dateCol > 0 ? String(cells[dateCol - 1] || '').trim() : '';
+
+    // Converte a data
+    let dateRaw = cells[dateCol];
     let dateStr = '';
     if (typeof dateRaw === 'number' && dateRaw > 40000) {
-      // Serial do Excel → data real
       const d = new Date(EXCEL_EPOCH.getTime() + dateRaw * 86400000);
       const dd = String(d.getDate()).padStart(2,'0');
       const mm = String(d.getMonth()+1).padStart(2,'0');
@@ -2517,13 +2534,25 @@ function parseExcelScheduleRows(rawRows){
       dateStr = String(dateRaw || '').trim();
     }
 
-    if (!dateStr) continue;
+    // Rejeita dia que seja frase longa (observação)
+    if (day && !DAYS_PT[day] && day.length > 12) continue;
 
-    // Mapeia as colunas restantes para os campos da escala
-    const [, , minister='', back1='', back2='', back3='', bass='', drums='', guitar='', keyboard='', sound=''] =
-      cells.map(c => String(c || '').trim());
+    // As funções começam na coluna seguinte à data.
+    // Estrutura: Ministro, Back, Back, Back, Baixo, Bateria, Guitarra, Teclado, Violão, Tec. Som
+    const f = dateCol + 1;
+    const get = (offset) => String(cells[f + offset] || '').trim();
+    const minister = get(0), back1 = get(1), back2 = get(2), back3 = get(3),
+          bass = get(4), drums = get(5), guitar = get(6), keyboard = get(7),
+          acoustic = get(8), sound = get(9);
 
-    rows.push({ day, date:dateStr, minister, back1, back2, back3, bass, drums, guitar, keyboard, sound });
+    // Ignora linha se algum "nome" for uma frase descritiva (observação que vazou)
+    const valoresPessoas = [minister, back1, back2, back3, bass, drums, guitar, keyboard, acoustic, sound];
+    const temFraseDescritiva = valoresPessoas.some(v =>
+      v.length > 30 || /deve ser definido|semana anterior|às \d|horas?|:\d{2}/i.test(v)
+    );
+    if (temFraseDescritiva) continue;
+
+    rows.push({ day, date:dateStr, minister, back1, back2, back3, bass, drums, guitar, keyboard, acoustic, sound });
   }
   return rows;
 }
@@ -2576,7 +2605,7 @@ function renderSchedule(){
   const rows = getFilteredScheduleRows();
   const q = normalize(el.scheduleSearch?.value || '');
   if (!rows.length) {
-    el.scheduleTableBody.innerHTML = '<tr><td colspan="10" class="schedule-empty">Nenhum resultado encontrado na escala.</td></tr>';
+    el.scheduleTableBody.innerHTML = '<tr><td colspan="11" class="schedule-empty">Nenhum resultado encontrado na escala.</td></tr>';
     if (el.scheduleCards) el.scheduleCards.innerHTML = '<div class="schedule-mobile-empty">Nenhum resultado encontrado na escala.</div>';
   } else {
     el.scheduleTableBody.innerHTML = rows.map(row => renderScheduleRow(row, q)).join('');
@@ -2586,7 +2615,7 @@ function renderSchedule(){
 }
 function renderScheduleCards(rows, q){
   if (!el.scheduleCards) return;
-  const fields = ['minister','back1','back2','back3','bass','drums','guitar','keyboard','sound'];
+  const fields = ['minister','back1','back2','back3','bass','drums','guitar','keyboard','acoustic','sound'];
   el.scheduleCards.innerHTML = rows.map(row => {
     const rowIndex = scheduleRows.findIndex(item => item.day === row.day && item.date === row.date);
     const entries = fields.map(field => {
@@ -2610,7 +2639,7 @@ function renderScheduleCards(rows, q){
 }
 
 function renderScheduleRow(row, q){
-  const fields = ['minister','back1','back2','back3','bass','drums','guitar','keyboard','sound'];
+  const fields = ['minister','back1','back2','back3','bass','drums','guitar','keyboard','acoustic','sound'];
   const nextClass = isNextSchedule(row) ? ' schedule-row-next' : '';
   const rowIndex = scheduleRows.findIndex(item => item.day === row.day && item.date === row.date);
   return `<tr class="${row.day === 'Quinta' ? 'schedule-row-alt' : ''}${nextClass}" data-row-index="${rowIndex}">
@@ -2658,7 +2687,7 @@ function highlightScheduleMatch(value, q){
 function renderScheduleSummary(rows){
   if (!el.scheduleSummary) return;
   const people = new Set();
-  rows.forEach(row => ['minister','back1','back2','back3','bass','drums','guitar','keyboard','sound'].forEach(field => { if (row[field]) people.add(row[field]); }));
+  rows.forEach(row => ['minister','back1','back2','back3','bass','drums','guitar','keyboard','acoustic','sound'].forEach(field => { if (row[field]) people.add(row[field]); }));
   const domingos = rows.filter(row => row.day === 'Domingo').length;
   const quintas = rows.filter(row => row.day === 'Quinta').length;
   el.scheduleSummary.innerHTML = `

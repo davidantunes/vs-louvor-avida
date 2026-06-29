@@ -1,8 +1,9 @@
 /* Service Worker — Biblioteca de Louvor Igreja Amor e Vida
-   v127.1 — Revertido para cache-first no shell (abre instantaneamente)
+   v131.14 — Áudio network-first; limpa cache de áudio antigo na ativação.
+   Código-fonte (app.js/css/html/config) network-first: correções chegam na hora.
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v131.14.0';
+const SW_VERSION = 'v131.16.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
