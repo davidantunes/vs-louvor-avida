@@ -1110,6 +1110,37 @@ async function applyAuthUser(user){
   }).catch(() => {});
   startLibraryLoadIfNeeded();
   await loadCloudState();
+  setupAutoRefresh();
+}
+
+// V131.17 — Re-sincroniza os dados quando o usuário volta ao app.
+// Resolve o problema de repertórios criados por outra pessoa não aparecerem
+// para quem já estava com o app aberto (antes só carregava no boot).
+let autoRefreshBound = false;
+function setupAutoRefresh(){
+  if (autoRefreshBound) return;
+  autoRefreshBound = true;
+
+  // Quando a aba/app volta a ficar visível, recarrega o estado da nuvem
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && authUser) {
+      // Não recarrega se há alterações locais pendentes (evita sobrescrever)
+      const pending = loadJSON('vs_setlists_pending_v1', false);
+      if (!pending) {
+        loadCloudState().catch(err => console.warn('Auto-refresh falhou:', err));
+      }
+    }
+  });
+
+  // Também recarrega periodicamente a cada 60s enquanto o app está visível
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && authUser) {
+      const pending = loadJSON('vs_setlists_pending_v1', false);
+      if (!pending) {
+        loadCloudState().catch(() => {});
+      }
+    }
+  }, 60000);
 }
 async function enterSystem(){
   const email = (el.loginEmail?.value || '').trim();
@@ -1683,8 +1714,18 @@ function confirmActiveSetlistConclusion(){
     clearActiveSetlist();
     return;
   }
+  // V131.17 — Paleta agora é OPCIONAL. Conclui o repertório e abre a escolha
+  // de paleta, mas o usuário pode fechar sem escolher. Um aviso lembra que
+  // a paleta ainda não foi definida.
+  clearActiveSetlist();
+  const temPaleta = active.paletteImage && active.paletteTitle;
+  if (name) {
+    toast(temPaleta
+      ? `Repertório "${name}" concluído.`
+      : `Repertório "${name}" concluído. Falta escolher a paleta de cores (opcional).`);
+  }
+  // Abre a escolha de paleta como sugestão (não obrigatória)
   startPaletteSelectionForSetlist(active, 'repertorios');
-  if (name) toast(`Repertório "${name}" concluído. Agora escolha a paleta de cores.`);
 }
 function openPaletteModal(title, imagePath, paletteId=''){
   if (!el.paletteModal) return;
@@ -3927,6 +3968,34 @@ function openEditSetlistDate(setlistId){
   }
 }
 
+// V131.17 — Renomear repertório. Permite editar o nome, além de data e músicas.
+function renameSetlist(setlistId){
+  const s = setlists.find(x => x.id === setlistId);
+  if (!s) return;
+  if (!canEditSetlist(s)) {
+    toast('Somente quem criou este repertório (ou um administrador) pode renomeá-lo.');
+    return;
+  }
+  const novoNome = prompt('Novo nome do repertório:', s.name);
+  if (novoNome === null) return; // cancelou
+  const nomeLimpo = novoNome.trim();
+  if (!nomeLimpo) {
+    toast('O nome não pode ficar vazio.');
+    return;
+  }
+  if (nomeLimpo === s.name) return; // não mudou
+  s.name = nomeLimpo;
+  s.updatedAt = new Date().toISOString();
+  saveSetlistsState();
+  renderSetlists();
+  updateStats();
+  // Se o detalhe deste repertório está aberto, atualiza o título
+  if (currentSetlistDetailId && String(currentSetlistDetailId) === String(s.id)) {
+    openSetlistDetail(s.id);
+  }
+  toast(`Repertório renomeado para "${nomeLimpo}".`);
+}
+
 function closeEditSetlistDateModal(){
   editingSetlistId = null;
   if (el.editSetlistDateModal) el.editSetlistDateModal.classList.add('hidden');
@@ -4003,7 +4072,10 @@ function createSetlistFromInput(){
   }
   const creator = currentUserIdentity();
   const s = {
-    id: String(Date.now()),
+    // V131.17 — ID único robusto: timestamp + aleatório. Antes era só Date.now(),
+    // que podia colidir se dois repertórios fossem criados no mesmo milissegundo
+    // (causava o link abrir o repertório errado e itens "sumirem" no merge).
+    id: `sl_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     name,
     trackIds: setlistTarget ? [makeSetlistEntry(setlistTarget, setlistTargetTone)] : [],
     createdById: creator.id,
@@ -4117,6 +4189,7 @@ function renderSetlists(){
         ${canEditSetlist(s) || canDeleteSetlist(s) ? `
         <div class="setlist-actions setlist-actions-row2">
           ${canEditSetlist(s) ? `<button class="mini-btn add-songs-setlist" data-id="${esc(s.id)}">➕ Adicionar músicas</button>` : ''}
+          ${canEditSetlist(s) ? `<button class="mini-btn rename-setlist" data-id="${esc(s.id)}">✏️ Renomear</button>` : ''}
           ${canEditSetlist(s) ? `<button class="mini-btn edit-setlist-date" data-id="${esc(s.id)}">📅 ${s.eventDate ? 'Alterar data' : 'Definir data'}</button>` : ''}
           ${canEditSetlist(s) ? `<button class="mini-btn archive-setlist" data-id="${esc(s.id)}" title="${isArchived ? 'Restaurar' : 'Arquivar'}">${isArchived ? '↩ Restaurar' : '📦 Arquivar'}</button>` : ''}
           ${canDeleteSetlist(s) ? `<button class="mini-btn delete-setlist" data-id="${esc(s.id)}">🗑 Excluir</button>` : ''}
@@ -4137,6 +4210,7 @@ function renderSetlists(){
     }));
     container.querySelectorAll('.archive-setlist').forEach(btn => btn.addEventListener('click', () => toggleSetlistArchive(btn.dataset.id)));
     container.querySelectorAll('.edit-setlist-date').forEach(btn => btn.addEventListener('click', () => openEditSetlistDate(btn.dataset.id)));
+    container.querySelectorAll('.rename-setlist').forEach(btn => btn.addEventListener('click', () => renameSetlist(btn.dataset.id)));
     container.querySelectorAll('.add-songs-setlist').forEach(btn => btn.addEventListener('click', () => startAddSongsToSetlist(btn.dataset.id)));
     container.querySelectorAll('.delete-setlist').forEach(btn => btn.addEventListener('click', () => {
       const setlist = setlists.find(s => s.id === btn.dataset.id);
@@ -4548,12 +4622,16 @@ function readDeepLinks(){
   }
 
   if (setlistId) {
+    // V131.17 — Abre o repertório do link com retry robusto. Antes tentava só
+    // 2x e falhava se os setlists ainda não tivessem carregado da nuvem (ou abria
+    // errado por colisão de ID, agora resolvida com IDs únicos). Agora tenta por
+    // até ~8 segundos, esperando o carregamento completar.
+    let tentativas = 0;
+    const maxTentativas = 16; // 16 x 500ms = 8s
     const openSharedSetlist = () => {
       const setlist = setlists.find(s => String(s.id) === String(setlistId));
       if (!setlist) return false;
 
-      // Links compartilhados de repertório devem abrir a playlist,
-      // sem iniciar o player automaticamente.
       location.hash = '#inicio';
       routeInternalPage();
       document.body.classList.remove('player-visible');
@@ -4564,9 +4642,16 @@ function readDeepLinks(){
       return true;
     };
 
-    if (!openSharedSetlist()) {
-      setTimeout(openSharedSetlist, 900);
-    }
+    const tentarAbrir = () => {
+      if (openSharedSetlist()) return; // conseguiu
+      tentativas++;
+      if (tentativas < maxTentativas) {
+        setTimeout(tentarAbrir, 500);
+      } else {
+        toast('Repertório não encontrado. Ele pode ter sido removido ou o link está incorreto.');
+      }
+    };
+    tentarAbrir();
   }
 }
 
