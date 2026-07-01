@@ -1347,13 +1347,19 @@ async function loadCloudState(){
     const localPendingFlag = loadJSON('vs_setlists_pending_v1', false);
 
     if (Array.isArray(collectionSetlists) && collectionSetlists.length > 0) {
-      // Collection nova tem dados → fonte de verdade
-      if (localPendingFlag) {
-        // Há mudanças locais não sincronizadas: faz merge para não perdê-las
-        setlists = mergeSetlistsDefensive(setlists, collectionSetlists);
-      } else {
-        setlists = mergeSetlistsDefensive(setlists, collectionSetlists);
-      }
+      // V131.21 — CORREÇÃO DE BUG: a table (collection) é a ÚNICA fonte de
+      // verdade sobre QUAIS repertórios existem. Antes, fazíamos um "merge"
+      // que juntava a table com o cache local do navegador — isso causava um
+      // repertório JÁ EXCLUÍDO por outra pessoa "voltar à tela", porque ele
+      // ainda estava salvo no localStorage deste dispositivo.
+      // Agora: usamos a lista da table como base. Só preservamos um repertório
+      // local que NÃO está na table se ele estiver genuinamente pendente de
+      // sincronização (acabou de ser criado agora mesmo, ainda enviando).
+      const collectionIds = new Set(collectionSetlists.map(s => s.id));
+      const aindaEnviando = setlists.filter(s =>
+        s && s.id && pendingNewSetlistIds.has(s.id) && !collectionIds.has(s.id)
+      );
+      setlists = [...collectionSetlists, ...aindaEnviando];
       saveJSON('vs_setlists_v1', setlists);
     } else if (Array.isArray(shared) && shared.length > 0) {
       // Collection vazia mas formato antigo tem dados → MIGRA uma vez
@@ -2063,6 +2069,10 @@ function saveFavoritesState(){
 // Agora: serializamos as escritas com um Promise chain — só uma escrita por vez.
 let setlistsSavePromise = Promise.resolve();
 let setlistsPendingCount = 0;
+// V131.21 — Rastreia IDs de repertórios criados/salvos que ainda não foram
+// confirmados na table do Appwrite. Evita que um recarregamento no meio do
+// salvamento apague temporariamente um repertório recém-criado.
+let pendingNewSetlistIds = new Set();
 
 function flushSetlistsPending(){
   setlistsPendingCount = Math.max(0, setlistsPendingCount - 1);
@@ -2106,6 +2116,9 @@ async function saveSingleSetlist(setlist){
     if (libraryLoaded && typeof render === 'function') render();
   } catch (_) {}
   if (!authUser) return;
+  // V131.21 — Marca como pendente ANTES de enviar, para o auto-refresh não
+  // apagar este repertório caso recarregue antes da confirmação do servidor.
+  pendingNewSetlistIds.add(setlist.id);
   try {
     const res = await fetch(`/api/appwrite/setlists/${encodeURIComponent(setlist.id)}`, {
       method: 'PUT',
@@ -2113,6 +2126,7 @@ async function saveSingleSetlist(setlist){
       body: JSON.stringify({ value: setlist })
     });
     if (!res.ok) throw new Error(await res.text());
+    pendingNewSetlistIds.delete(setlist.id); // confirmado na table
   } catch (err) {
     console.warn('Repertório não sincronizado (por-documento):', err.message);
     // Fallback: tenta o método antigo (array inteiro) para não perder o dado
@@ -2123,6 +2137,7 @@ async function saveSingleSetlist(setlist){
 async function deleteSingleSetlist(setlistId){
   setlists = setlists.filter(s => s.id !== setlistId);
   saveJSON('vs_setlists_v1', setlists);
+  pendingNewSetlistIds.delete(setlistId); // V131.21 — não é mais pendente, foi removido
   if (!authUser) return;
   try {
     const res = await fetch(`/api/appwrite/setlists/${encodeURIComponent(setlistId)}`, {
