@@ -275,6 +275,70 @@ app.put('/api/appwrite/state/:key', async (req, res) => {
     res.status(500).json({ error: error.message, key: req.params.key });
   }
 });
+// ============================================================================
+// V131.18 — Repertórios como DOCUMENTOS INDIVIDUAIS (modelo de dados novo)
+// Cada repertório é um documento na collection 'setlists', com setlist_id único.
+// Salvar/editar/remover afeta só aquele documento — elimina o problema de
+// "cria e some" e "não aparece pra todo mundo" causado por sobrescrever o
+// array inteiro. Requer a collection 'setlists' criada no Appwrite.
+// ============================================================================
+const APPWRITE_SETLISTS_COLLECTION_ID = process.env.APPWRITE_SETLISTS_COLLECTION_ID || 'setlists';
+
+// Lista todos os repertórios (cada documento tem: setlist_id, data JSON, updated_at)
+app.get('/api/appwrite/setlists', async (req, res) => {
+  try {
+    const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
+    const setlists = docs.map(d => {
+      try {
+        const parsed = JSON.parse(d.data || '{}');
+        return { ...parsed, id: d.setlist_id, _docId: d.$id, updatedAt: d.updated_at || parsed.updatedAt };
+      } catch { return null; }
+    }).filter(Boolean);
+    res.json({ setlists });
+  } catch (error) {
+    console.error('[setlists] erro ao listar:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Cria ou atualiza UM repertório (upsert por setlist_id)
+app.put('/api/appwrite/setlists/:setlistId', async (req, res) => {
+  try {
+    const setlistId = req.params.setlistId;
+    const updatedAt = new Date().toISOString();
+    const value = req.body.value || {};
+    const serialized = JSON.stringify(value);
+    if (serialized.length > 49000) {
+      console.warn(`[setlists] "${setlistId}" = ${serialized.length} chars (grande)`);
+    }
+    const doc = await upsertState(
+      APPWRITE_SETLISTS_COLLECTION_ID,
+      d => d.setlist_id === setlistId,
+      { setlist_id: setlistId, data: serialized, updated_at: updatedAt }
+    );
+    res.json({ ok: true, id: doc.$id, setlistId, updatedAt });
+  } catch (error) {
+    console.error(`[setlists] erro ao salvar "${req.params.setlistId}":`, error.message);
+    res.status(500).json({ error: error.message, setlistId: req.params.setlistId });
+  }
+});
+
+// Remove UM repertório
+app.delete('/api/appwrite/setlists/:setlistId', async (req, res) => {
+  try {
+    const setlistId = req.params.setlistId;
+    const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
+    const found = docs.find(d => d.setlist_id === setlistId);
+    if (found) {
+      await appwriteRequest('DELETE', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(found.$id)}`);
+    }
+    res.json({ ok: true, setlistId, removed: !!found });
+  } catch (error) {
+    console.error(`[setlists] erro ao remover "${req.params.setlistId}":`, error.message);
+    res.status(500).json({ error: error.message, setlistId: req.params.setlistId });
+  }
+});
+
 app.get('/api/appwrite/user-state/:userId/:key', async (req, res) => {
   try {
     const docs = await listDocuments(APPWRITE_USER_STATE_COLLECTION_ID);

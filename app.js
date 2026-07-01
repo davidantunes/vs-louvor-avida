@@ -1332,33 +1332,50 @@ async function logoutSession(){
 async function loadCloudState(){
   if (!authUser) return;
   try {
-    const [shared, userState, cloudMembers, cloudSchedule, cloudHistory] = await Promise.all([
+    const [shared, userState, cloudMembers, cloudSchedule, cloudHistory, collectionSetlists] = await Promise.all([
       getSharedState('setlists'),
       getUserState('favorites'),
       getSharedState('members'),
       getSharedState('monthlySchedule'),
-      getSharedState('usageHistory')
+      getSharedState('usageHistory'),
+      loadSetlistsFromCollection()   // V131.18 — modelo novo (por-documento)
     ]);
 
-    // V100 — Proteção anti-perda de dados:
-    // Se o usuário fez alterações LOCAIS depois do último sync bem-sucedido com o servidor,
-    // NÃO sobrescrevemos com o que veio do servidor — porque o que veio do servidor pode
-    // ser uma versão antiga (request anterior que estava em voo, ou patch que ainda não
-    // foi aplicado em sequência).
-    if (Array.isArray(shared)) {
-      const localPendingFlag = loadJSON('vs_setlists_pending_v1', false);
+    // V131.18 — Prioriza a collection nova (documentos individuais).
+    // Se ela existe e tem dados, é a fonte de verdade. Se estiver vazia mas o
+    // formato antigo (array) tiver dados, MIGRA automaticamente para a collection.
+    const localPendingFlag = loadJSON('vs_setlists_pending_v1', false);
+
+    if (Array.isArray(collectionSetlists) && collectionSetlists.length > 0) {
+      // Collection nova tem dados → fonte de verdade
       if (localPendingFlag) {
-        console.info('[setlists] Mudanças locais pendentes — preservando local e re-sincronizando.');
+        // Há mudanças locais não sincronizadas: faz merge para não perdê-las
+        setlists = mergeSetlistsDefensive(setlists, collectionSetlists);
+      } else {
+        setlists = mergeSetlistsDefensive(setlists, collectionSetlists);
+      }
+      saveJSON('vs_setlists_v1', setlists);
+    } else if (Array.isArray(shared) && shared.length > 0) {
+      // Collection vazia mas formato antigo tem dados → MIGRA uma vez
+      console.info('[setlists] Migrando repertórios do formato antigo para a collection nova...');
+      setlists = mergeSetlistsDefensive(setlists, shared);
+      saveJSON('vs_setlists_v1', setlists);
+      // Envia cada repertório para a collection nova (migração)
+      for (const s of setlists) {
+        saveSingleSetlist(s).catch(() => {});
+      }
+    } else if (Array.isArray(shared)) {
+      // Sem dados em nenhum lado, mas mantém compatibilidade
+      if (localPendingFlag) {
         setSharedState('setlists', setlists).catch(err => console.warn('Resync pendente falhou:', err));
       } else {
-        // V126.1 — Merge agora preserva eventDate/archived do remoto mesmo
-        // quando o local tem updatedAt igual ou posterior (corrige bug onde
-        // Chrome não mostrava repertório arquivado que iOS já mostrava).
         setlists = mergeSetlistsDefensive(setlists, shared);
-        // Persiste o resultado do merge para o próximo carregamento
         saveJSON('vs_setlists_v1', setlists);
       }
     }
+    // Limpa o flag de pending após carregar (as escritas por-documento são atômicas)
+    if (localPendingFlag) { setlistsPendingCount = 0; saveJSON('vs_setlists_pending_v1', false); }
+
     if (Array.isArray(userState)) favorites = userState;
     if (Array.isArray(cloudMembers) && cloudMembers.length) members = normalizeMembers(cloudMembers);
     if (Array.isArray(cloudSchedule) && cloudSchedule.length) scheduleRows = normalizeScheduleRows(cloudSchedule);
@@ -2056,27 +2073,79 @@ function flushSetlistsPending(){
 
 function saveSetlistsState(){
   saveJSON('vs_setlists_v1', setlists);
-  // V100 — marca que tem alterações pendentes (lida em loadCloudState para evitar overwrite)
-  setlistsPendingCount += 1;
-  saveJSON('vs_setlists_pending_v1', true);
-  // V100 — Serializa as escritas: cada chamada espera a anterior antes de enviar.
-  // Sempre envia o `setlists` ATUAL (capturado no momento do envio, não da chamada).
+  // V131.18 — Modelo novo: salva cada repertório como documento individual.
+  // Assim, salvar NÃO sobrescreve os repertórios de outras pessoas (resolve
+  // "cria e some"). Como são poucos repertórios, o custo é baixo.
+  // A escrita é serializada para não sobrecarregar, e cada uma é independente.
   setlistsSavePromise = setlistsSavePromise
-    .then(() => setSharedState('setlists', setlists))
-    .then(() => flushSetlistsPending())
-    .catch(err => {
-      console.warn('Repertórios não sincronizados:', err);
-      flushSetlistsPending();
-      // Re-tenta uma vez depois de 2s
-      setTimeout(() => {
-        setSharedState('setlists', setlists).catch(e => console.warn('Retry falhou:', e));
-      }, 2000);
-    });
-  // V94 — re-pré-cache e re-render
+    .then(async () => {
+      for (const s of setlists) {
+        await saveSingleSetlist(s);
+      }
+    })
+    .catch(err => console.warn('Repertórios não sincronizados:', err));
+  // re-pré-cache e re-render
   try {
     if (typeof precacheSetlistAudios === 'function') precacheSetlistAudios();
     if (libraryLoaded && typeof render === 'function') render();
   } catch (_) {}
+}
+
+// ============================================================================
+// V131.18 — Persistência por-documento (modelo de dados novo).
+// Salva/remove UM repertório de cada vez na collection 'setlists' do Appwrite.
+// Cada repertório é um documento independente, então salvar um NÃO sobrescreve
+// os outros — resolve "cria e some" e "não aparece pra todo mundo".
+// Mantém saveJSON local e o render; a escrita na nuvem é por-documento.
+// ============================================================================
+async function saveSingleSetlist(setlist){
+  if (!setlist || !setlist.id) return;
+  saveJSON('vs_setlists_v1', setlists); // mantém cópia local completa
+  try {
+    if (typeof precacheSetlistAudios === 'function') precacheSetlistAudios();
+    if (libraryLoaded && typeof render === 'function') render();
+  } catch (_) {}
+  if (!authUser) return;
+  try {
+    const res = await fetch(`/api/appwrite/setlists/${encodeURIComponent(setlist.id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value: setlist })
+    });
+    if (!res.ok) throw new Error(await res.text());
+  } catch (err) {
+    console.warn('Repertório não sincronizado (por-documento):', err.message);
+    // Fallback: tenta o método antigo (array inteiro) para não perder o dado
+    setSharedState('setlists', setlists).catch(() => {});
+  }
+}
+
+async function deleteSingleSetlist(setlistId){
+  setlists = setlists.filter(s => s.id !== setlistId);
+  saveJSON('vs_setlists_v1', setlists);
+  if (!authUser) return;
+  try {
+    const res = await fetch(`/api/appwrite/setlists/${encodeURIComponent(setlistId)}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error(await res.text());
+  } catch (err) {
+    console.warn('Repertório não removido da nuvem:', err.message);
+    // Fallback: sincroniza o array (sem o removido) pelo método antigo
+    setSharedState('setlists', setlists).catch(() => {});
+  }
+}
+
+// Carrega repertórios da collection nova. Retorna array ou null se indisponível.
+async function loadSetlistsFromCollection(){
+  try {
+    const res = await fetch('/api/appwrite/setlists');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data.setlists) ? data.setlists : null;
+  } catch {
+    return null;
+  }
 }
 
 function saveUsageHistoryState(){
@@ -2759,6 +2828,22 @@ function directDriveMedia(id){ return `https://drive.google.com/uc?export=downlo
 function thumbnailUrl(id){ return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800`; }
 function driveUrl(id){ return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id); }
 function transposeUrl(id, semitones){ return !semitones ? driveUrl(id) : `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}`; }
+
+// V131.19 — Áudio migrado para o Appwrite Storage.
+// Se a música (pelo nome do arquivo) está no mapa de migração, geramos a URL
+// direta do Appwrite Storage, que é confiável e não depende do Google Drive.
+function appwriteAudioUrl(fileId){
+  const endpoint = (cfg && cfg.APPWRITE_ENDPOINT) || 'https://nyc.cloud.appwrite.io/v1';
+  const project = (cfg && cfg.APPWRITE_PROJECT_ID) || '';
+  const bucket = (window.VS_AUDIO_BUCKET_ID) || '6a414dae001076f7ea39';
+  return `${endpoint}/storage/buckets/${encodeURIComponent(bucket)}/files/${encodeURIComponent(fileId)}/view?project=${encodeURIComponent(project)}`;
+}
+// Retorna o ID do Appwrite para uma track, se ela foi migrada (busca pelo fileName)
+function appwriteFileIdFor(track){
+  if (!track || !window.VS_AUDIO_MAP) return '';
+  const fname = track.fileName || '';
+  return window.VS_AUDIO_MAP[fname] || '';
+}
 function downloadUrl(id, name, semitones = 0){
   const filename = encodeURIComponent(`${safeFileName(name)}${semitones ? `_tom_${semitones > 0 ? '+' : ''}${semitones}` : ''}.mp3`);
   if (semitones) return `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}&download=1&filename=${filename}`;
@@ -3724,13 +3809,29 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   // baixa o áudio corretamente (status 206). As URLs diretas do Google Drive
   // falham no navegador por CORS. Então usamos o proxy do servidor PRIMEIRO,
   // e as URLs diretas apenas como reserva caso o servidor fique indisponível.
-  const candidates = semitones
-    ? [transposeUrl(track.id, semitones)]
-    : [
-        `/api/audio/${encodeURIComponent(track.id)}`,
-        driveDirectApiUrl(track.id),
-        driveDirectDownloadUrl(track.id)
-      ];
+  // V131.19 — Se a música foi migrada para o Appwrite Storage, ela é a fonte
+  // PRIMÁRIA (confiável, sem depender do Google Drive). O Drive fica como
+  // fallback para músicas ainda não migradas.
+  const appwriteId = appwriteFileIdFor(track);
+  let candidates;
+  if (semitones) {
+    // Transposição só o servidor faz (processa o áudio do Drive)
+    candidates = [transposeUrl(track.id, semitones)];
+  } else if (appwriteId) {
+    // Música migrada: Appwrite primeiro, Drive como reserva
+    candidates = [
+      appwriteAudioUrl(appwriteId),
+      `/api/audio/${encodeURIComponent(track.id)}`,
+      driveDirectApiUrl(track.id)
+    ];
+  } else {
+    // Não migrada: fluxo antigo do Drive
+    candidates = [
+      `/api/audio/${encodeURIComponent(track.id)}`,
+      driveDirectApiUrl(track.id),
+      driveDirectDownloadUrl(track.id)
+    ];
+  }
 
   el.audio._candidates = candidates;
   el.audio._candidateIndex = 0;
@@ -4217,9 +4318,9 @@ function renderSetlists(){
       if (!canDeleteSetlist(setlist)) { toast('Somente quem criou este repertório pode excluí-lo.'); return; }
       if (!confirm('Excluir este repertório permanentemente?')) return;
       const deletedId = btn.dataset.id;
-      setlists = setlists.filter(s => s.id !== deletedId);
       if (activeSetlistId === deletedId) clearActiveSetlist();
-      saveSetlistsState();
+      // V131.18 — Remove o documento da collection (não só do array local)
+      deleteSingleSetlist(deletedId);
       updateStats();
       renderSetlists();
       render();

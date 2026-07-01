@@ -3,7 +3,7 @@
    Código-fonte (app.js/css/html/config) network-first: correções chegam na hora.
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v131.17.0';
+const SW_VERSION = 'v131.20.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -91,6 +91,7 @@ self.addEventListener('fetch', (event) => {
       url.pathname === '/' ||
       url.pathname === '/index.html' ||
       url.pathname === '/app.js' ||
+      url.pathname === '/audio-mapa.js' ||
       url.pathname === '/styles.css' ||
       url.pathname === '/config.js'
   )) {
