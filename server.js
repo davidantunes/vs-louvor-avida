@@ -570,12 +570,22 @@ function detectKey(text){
 }
 
 async function buildLibrary(rootFolderId) {
-  // Recursão BFS com paralelização limitada (até 4 pastas simultâneas)
-  const tracks = [];
-  const seen = new Set();
-  const seenNames = new Set();
-  let dupedByName = 0;
-  async function walk(folderId, singerName, inheritedCover) {
+  // V131.22 — CORREÇÃO DE BUG: a desduplicação por nome era feita DURANTE a
+  // varredura paralela de pastas (até 4 simultâneas). Como a ordem de chegada
+  // dos resultados depende do tempo de resposta da rede, quando havia dois
+  // arquivos com nomes parecidos (ex: duas versões de "Galileu" em pastas
+  // diferentes), o "vencedor" da deduplicação podia MUDAR a cada reconstrução
+  // da biblioteca — fazendo o ID de uma música variar sem motivo aparente.
+  // Isso causava o sumiço da música em repertórios (o ID salvo virava órfão).
+  //
+  // Agora: primeiro coletamos TODOS os candidatos (a varredura continua
+  // paralela, só para velocidade), e SÓ DEPOIS, com a lista completa,
+  // ordenamos de forma ESTÁVEL (por caminho da pasta + nome do arquivo) antes
+  // de decidir qual arquivo vence em caso de nome duplicado. Assim, o mesmo
+  // arquivo físico sempre vence, toda vez — o resultado é sempre igual.
+  const candidatos = [];
+
+  async function walk(folderId, singerName, inheritedCover, folderPath) {
     const files = await listFolder(folderId);
     const audioFiles = files.filter(f =>
       f.mimeType !== 'application/vnd.google-apps.folder' &&
@@ -590,43 +600,58 @@ async function buildLibrary(rootFolderId) {
       ? `/api/audio/${encodeURIComponent(imageFiles[0].id)}`
       : inheritedCover;
     for (const f of audioFiles) {
-      if (seen.has(f.id)) continue;
-      // V99 — desduplicação extra por nome normalizado
-      const normalizedName = String(f.name)
-        .toLowerCase()
-        .replace(/\.[a-z0-9]+$/, '')
-        .replace(/[\s_\-]+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (normalizedName && seenNames.has(normalizedName)) {
-        dupedByName++;
-        continue;
-      }
-      seen.add(f.id);
-      if (normalizedName) seenNames.add(normalizedName);
-      tracks.push({
-        id: f.id,
-        fileName: f.name,
-        name: cleanTrackName(f.name),
-        singer: singerName || 'Diversos',
-        ext: getExt(f.name),
-        key: detectKey(f.name),
-        tags: [],
-        coverUrl: cover || ''
-      });
+      candidatos.push({ f, singerName: singerName || 'Diversos', cover: cover || '', folderPath: folderPath || '' });
     }
     const queue = [...subfolders];
     const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
       while (queue.length) {
         const folder = queue.shift();
         if (!folder) break;
-        await walk(folder.id, singerName || folder.name, cover);
+        await walk(folder.id, singerName || folder.name, cover, `${folderPath || ''}/${folder.name}`);
       }
     });
     await Promise.all(workers);
   }
-  await walk(rootFolderId, '', '');
-  if (dupedByName > 0) console.log(`[library] ${dupedByName} duplicata(s) por nome removida(s).`);
+  await walk(rootFolderId, '', '', '');
+
+  // Ordenação ESTÁVEL e determinística: mesmo caminho de pasta + nome sempre
+  // produz a mesma ordem, independente da velocidade de rede.
+  candidatos.sort((a, b) => {
+    const pathCmp = a.folderPath.localeCompare(b.folderPath, 'pt-BR');
+    if (pathCmp !== 0) return pathCmp;
+    return a.f.name.localeCompare(b.f.name, 'pt-BR');
+  });
+
+  const tracks = [];
+  const seen = new Set();
+  const seenNames = new Set();
+  let dupedByName = 0;
+  for (const { f, singerName, cover } of candidatos) {
+    if (seen.has(f.id)) continue;
+    const normalizedName = String(f.name)
+      .toLowerCase()
+      .replace(/\.[a-z0-9]+$/, '')
+      .replace(/[\s_\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (normalizedName && seenNames.has(normalizedName)) {
+      dupedByName++;
+      continue;
+    }
+    seen.add(f.id);
+    if (normalizedName) seenNames.add(normalizedName);
+    tracks.push({
+      id: f.id,
+      fileName: f.name,
+      name: cleanTrackName(f.name),
+      singer: singerName,
+      ext: getExt(f.name),
+      key: detectKey(f.name),
+      tags: [],
+      coverUrl: cover
+    });
+  }
+  if (dupedByName > 0) console.log(`[library] ${dupedByName} duplicata(s) por nome removida(s) (escolha agora estável).`);
   tracks.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
   return tracks;
 }
@@ -748,6 +773,36 @@ app.get('/api/diagnostics/audio/:id', async (req, res) => {
     result.error = e.message;
   }
   res.json(result);
+});
+
+// V131.22 — Diagnóstico: procura por música(s) com nome parecido na biblioteca
+// já indexada, mostrando TODOS os arquivos que batem (mesmo os que a
+// deduplicação descartou), para confirmar se há duplicatas causando
+// instabilidade de ID. Use /api/diagnostics/find-duplicates?q=galileu
+app.get('/api/diagnostics/find-duplicates', async (req, res) => {
+  try {
+    if (!requireApiKey(res)) return;
+    const q = String(req.query.q || '').toLowerCase().trim();
+    if (!q) return res.status(400).json({ error: 'Parâmetro ?q= obrigatório (nome ou parte do nome a buscar).' });
+
+    // Busca DIRETO no Google Drive (não usa o cache da biblioteca), então
+    // mostra TODOS os arquivos que existem agora, incluindo duplicatas.
+    const searchUrl = `${GOOGLE_API}?q=${encodeURIComponent(`name contains '${q}' and trashed = false`)}&fields=files(id,name,parents,mimeType,createdTime,modifiedTime)&pageSize=50&key=${encodeURIComponent(API_KEY)}`;
+    const driveRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VSLouvor/1.0' } });
+    if (!driveRes.ok) {
+      return res.status(driveRes.status).json({ error: await driveRes.text() });
+    }
+    const data = await driveRes.json();
+    const files = (data.files || []).filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+    res.json({
+      query: q,
+      totalEncontrado: files.length,
+      duplicataProvavel: files.length > 1,
+      arquivos: files.map(f => ({ id: f.id, name: f.name, createdTime: f.createdTime, modifiedTime: f.modifiedTime }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/api/diagnostics/missing-keys', (req, res) => {
