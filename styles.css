@@ -7692,4 +7692,4 @@ details[open] .archived-setlists-toggle::before{
 /* V131.26 — O modal de visualização da paleta abre POR CIMA do modal de
    detalhe do repertório (ambos ficam abertos ao mesmo tempo). Sem isso,
    os dois tinham o mesmo z-index e a paleta ficava escondida atrás. */
-#setlistPaletteViewModal{z-index:120;}
+#setlistPaletteViewModal{z-index:180 !important;}

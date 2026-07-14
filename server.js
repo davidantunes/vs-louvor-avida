@@ -4,9 +4,27 @@ const fetch = require('node-fetch');
 const { spawn } = require('child_process');
 const ffmpeg = require('ffmpeg-static');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+function positiveNumberOr(value, fallback, minimum = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= minimum ? parsed : fallback;
+}
+
+// V131.29 — Cache temporário dos áudios com tom alterado.
+// O endpoint antigo enviava a saída do FFmpeg diretamente por streaming, sem
+// Content-Length e sem suporte a Range. Nesse formato o navegador reproduzia,
+// mas não conseguia mover o cursor de tempo. Agora a versão transposta é gerada
+// uma vez em arquivo MP3 e depois servida como mídia seekable (200/206).
+const TRANSPOSE_CACHE_DIR = process.env.TRANSPOSE_CACHE_DIR || path.join(os.tmpdir(), 'vs-louvor-transpose-cache');
+const TRANSPOSE_CACHE_MAX_BYTES = positiveNumberOr(process.env.TRANSPOSE_CACHE_MAX_BYTES, 350 * 1024 * 1024, 64 * 1024 * 1024);
+const TRANSPOSE_CACHE_MAX_AGE_MS = positiveNumberOr(process.env.TRANSPOSE_CACHE_MAX_AGE_MS, 24 * 60 * 60 * 1000, 60 * 60 * 1000);
+const transposeJobs = new Map();
 
 // V96 — Compressão gzip/brotli automática para HTML, CSS, JS, JSON.
 // Reduz ~80% do tráfego de texto. Não comprime áudio (já comprimido).
@@ -68,12 +86,16 @@ app.use(express.static(__dirname, {
     // Imagens/fontes: 7 dias (mudam raramente)
     if (/\.(png|jpg|jpeg|webp|svg|gif|woff2?|ttf|eot)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400');
-    // JS/CSS: 1h com stale-while-revalidate de 24h.
-    // O SW já controla o cache no cliente; esse header é para o CDN do Cloudflare.
-    // V127.2: aumentado de 5min para 1h — com Render Starter não há cold start,
-    // e o banner SW_UPDATED avisa o usuário quando há nova versão.
-    } else if (/\.(css|js)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    // V131.28 — JS/CSS/HTML: no-cache (SEMPRE revalida com o servidor).
+    // CORREÇÃO CRÍTICA: o max-age=3600 + stale-while-revalidate anterior fazia
+    // o CACHE HTTP DO NAVEGADOR segurar app.js/styles.css antigos por até 24h —
+    // e o fetch() "network-first" do Service Worker era atendido por esse cache,
+    // entregando código velho achando que era da rede. Correções de deploy não
+    // chegavam aos usuários. Com no-cache + ETag, o navegador pergunta ao
+    // servidor a cada uso e recebe 304 (barato) se não mudou, ou o arquivo
+    // novo imediatamente se mudou.
+    } else if (/\.(css|js|html)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     }
   }
 }));
@@ -1159,48 +1181,229 @@ app.get('/api/audio/:id', async (req, res) => {
   }
 });
 
+function transposeCachePath(id, semitones) {
+  const safeId = crypto.createHash('sha1').update(String(id)).digest('hex');
+  const signedTone = semitones >= 0 ? `p${semitones}` : `m${Math.abs(semitones)}`;
+  return path.join(TRANSPOSE_CACHE_DIR, `${safeId}_${signedTone}.mp3`);
+}
+
+async function isUsableAudioFile(filePath) {
+  try {
+    const stat = await fs.promises.stat(filePath);
+    return stat.isFile() && stat.size > 1024;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function cleanupTransposeCache() {
+  await fs.promises.mkdir(TRANSPOSE_CACHE_DIR, { recursive: true });
+  const names = await fs.promises.readdir(TRANSPOSE_CACHE_DIR).catch(() => []);
+  const now = Date.now();
+  const entries = [];
+
+  for (const name of names) {
+    if (!name.endsWith('.mp3')) continue;
+    const filePath = path.join(TRANSPOSE_CACHE_DIR, name);
+    try {
+      const stat = await fs.promises.stat(filePath);
+      if (!stat.isFile()) continue;
+      if (now - stat.mtimeMs > TRANSPOSE_CACHE_MAX_AGE_MS) {
+        await fs.promises.unlink(filePath).catch(() => {});
+        continue;
+      }
+      entries.push({ filePath, size: stat.size, mtimeMs: stat.mtimeMs });
+    } catch (_) {}
+  }
+
+  // Mantém os arquivos mais recentes dentro do limite configurado.
+  entries.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  let used = 0;
+  for (const entry of entries) {
+    used += entry.size;
+    if (used > TRANSPOSE_CACHE_MAX_BYTES) {
+      await fs.promises.unlink(entry.filePath).catch(() => {});
+    }
+  }
+}
+
+function generateTransposedAudio(id, semitones, outputPath) {
+  return new Promise(async (resolve, reject) => {
+    const tempPath = `${outputPath}.tmp-${process.pid}-${Date.now()}`;
+    let settled = false;
+    let proc = null;
+
+    const finish = async (error) => {
+      if (settled) return;
+      settled = true;
+      if (error) {
+        await fs.promises.unlink(tempPath).catch(() => {});
+        reject(error);
+        return;
+      }
+      try {
+        const stat = await fs.promises.stat(tempPath);
+        if (!stat.isFile() || stat.size <= 1024) throw new Error('FFmpeg gerou um arquivo de áudio vazio.');
+        await fs.promises.rename(tempPath, outputPath);
+        resolve(outputPath);
+      } catch (renameError) {
+        await fs.promises.unlink(tempPath).catch(() => {});
+        reject(renameError);
+      }
+    };
+
+    try {
+      const response = await fetch(googleMediaUrl(id), {
+        method: 'GET',
+        redirect: 'follow',
+        headers: { 'User-Agent': 'VSLouvor/1.0' }
+      });
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        const error = new Error(`Google Drive retornou ${response.status}: ${body.slice(0, 180)}`);
+        error.status = response.status;
+        return finish(error);
+      }
+
+      const factor = Math.pow(2, semitones / 12);
+      const tempo = 1 / factor;
+      const filter = `asetrate=44100*${factor},aresample=44100,atempo=${tempo}`;
+      const args = [
+        '-hide_banner',
+        '-loglevel', 'error',
+        '-i', 'pipe:0',
+        '-vn',
+        '-filter:a', filter,
+        '-map_metadata', '-1',
+        '-f', 'mp3',
+        '-b:a', '192k',
+        '-write_xing', '1',
+        '-y',
+        tempPath
+      ];
+
+      proc = spawn(ffmpeg, args, { stdio: ['pipe', 'ignore', 'pipe'] });
+      let stderr = '';
+      proc.stderr.on('data', chunk => {
+        stderr += String(chunk);
+        if (stderr.length > 4000) stderr = stderr.slice(-4000);
+      });
+      proc.on('error', error => finish(error));
+      proc.on('close', code => {
+        if (code === 0) finish();
+        else finish(new Error(`FFmpeg finalizou com código ${code}${stderr ? `: ${stderr.trim()}` : ''}`));
+      });
+
+      response.body.on('error', error => {
+        try { proc.kill('SIGKILL'); } catch (_) {}
+        finish(error);
+      });
+      proc.stdin.on('error', error => {
+        // EPIPE geralmente é consequência de um erro já capturado no FFmpeg.
+        if (error.code !== 'EPIPE') finish(error);
+      });
+      response.body.pipe(proc.stdin);
+    } catch (error) {
+      if (proc) {
+        try { proc.kill('SIGKILL'); } catch (_) {}
+      }
+      finish(error);
+    }
+  });
+}
+
+async function ensureTransposedAudio(id, semitones) {
+  await fs.promises.mkdir(TRANSPOSE_CACHE_DIR, { recursive: true });
+  const outputPath = transposeCachePath(id, semitones);
+  if (await isUsableAudioFile(outputPath)) return outputPath;
+
+  if (!transposeJobs.has(outputPath)) {
+    const job = (async () => {
+      await cleanupTransposeCache().catch(error => console.warn('[transpose-cache] limpeza falhou:', error.message));
+      if (await isUsableAudioFile(outputPath)) return outputPath;
+      return generateTransposedAudio(id, semitones, outputPath);
+    })().finally(() => transposeJobs.delete(outputPath));
+    transposeJobs.set(outputPath, job);
+  }
+  return transposeJobs.get(outputPath);
+}
+
+function parseSingleByteRange(rangeHeader, size) {
+  if (!rangeHeader) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(String(rangeHeader).trim());
+  if (!match || (!match[1] && !match[2])) return false;
+
+  let start;
+  let end;
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) return false;
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Number(match[2]) : size - 1;
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start >= size || end < start) return false;
+  end = Math.min(end, size - 1);
+  return { start, end };
+}
+
+async function sendSeekableAudioFile(req, res, filePath, downloadFilename = '') {
+  const stat = await fs.promises.stat(filePath);
+  const size = stat.size;
+  const parsedRange = parseSingleByteRange(req.headers.range, size);
+
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.setHeader('Last-Modified', stat.mtime.toUTCString());
+  if (downloadFilename) {
+    res.setHeader('Content-Disposition', `attachment; filename="${String(downloadFilename).replace(/["\r\n]/g, '_')}"`);
+  }
+
+  if (req.headers.range && parsedRange === false) {
+    res.status(416).setHeader('Content-Range', `bytes */${size}`);
+    return res.end();
+  }
+
+  let stream;
+  if (parsedRange) {
+    const { start, end } = parsedRange;
+    res.status(206);
+    res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`);
+    res.setHeader('Content-Length', String(end - start + 1));
+    stream = fs.createReadStream(filePath, { start, end });
+  } else {
+    res.status(200);
+    res.setHeader('Content-Length', String(size));
+    stream = fs.createReadStream(filePath);
+  }
+
+  stream.on('error', error => {
+    console.error('[transpose] erro ao ler cache:', error.message);
+    if (!res.headersSent) res.status(500).end();
+    else try { res.end(); } catch (_) {}
+  });
+  stream.pipe(res);
+}
+
 app.get('/api/transpose/:id', async (req, res) => {
   if (!requireApiKey(res)) return;
   const id = req.params.id;
-  const semitones = Math.max(-12, Math.min(12, Number(req.query.semitones || 0)));
-  const factor = Math.pow(2, semitones / 12);
-  const tempo = 1 / factor;
+  const requestedSemitones = Number(req.query.semitones || 0);
+  const semitones = Number.isFinite(requestedSemitones)
+    ? Math.max(-12, Math.min(12, requestedSemitones))
+    : 0;
 
   try {
-    const response = await fetch(googleMediaUrl(id));
-    if (!response.ok) return res.status(response.status).send(await response.text());
-
-    res.setHeader('Content-Type', 'audio/mpeg');
-    if (req.query.download) {
-      const filename = req.query.filename || `audio_tom_${semitones}.mp3`;
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    }
-
-    // Transposição simples com FFmpeg.
-    // Mantém aproximadamente o andamento usando atempo, e altera pitch via asetrate.
-    const filter = `asetrate=44100*${factor},aresample=44100,atempo=${tempo}`;
-    const args = [
-      '-hide_banner',
-      '-loglevel', 'error',
-      '-i', 'pipe:0',
-      '-vn',
-      '-filter:a', filter,
-      '-f', 'mp3',
-      '-b:a', '192k',
-      'pipe:1'
-    ];
-
-    const proc = spawn(ffmpeg, args);
-    response.body.pipe(proc.stdin);
-    proc.stdout.pipe(res);
-
-    proc.stderr.on('data', data => console.error(String(data)));
-    proc.on('close', code => {
-      if (code !== 0) console.error(`FFmpeg finalizou com código ${code}`);
-    });
+    const filePath = await ensureTransposedAudio(id, semitones);
+    const filename = req.query.download ? (req.query.filename || `audio_tom_${semitones}.mp3`) : '';
+    await sendSeekableAudioFile(req, res, filePath, filename);
   } catch (error) {
-    console.error(error);
-    res.status(500).send('Erro ao transpor áudio.');
+    console.error('[transpose]', error);
+    if (!res.headersSent) res.status(error.status || 500).send('Erro ao transpor áudio.');
   }
 });
 

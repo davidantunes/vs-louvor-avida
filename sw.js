@@ -3,7 +3,7 @@
    Código-fonte (app.js/css/html/config) network-first: correções chegam na hora.
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v131.27.0';
+const SW_VERSION = 'v131.29.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -143,7 +143,10 @@ async function audioCacheFirst(req) {
 async function networkFirst(req, cacheName) {
   const cache = await caches.open(cacheName);
   try {
-    const resp = await fetch(req);
+    // V131.28 — cache:'no-cache' força a revalidação com o SERVIDOR, furando o
+    // cache HTTP do navegador. Sem isso, o fetch() era atendido pelo cache de
+    // disco (max-age antigo) e entregava código velho achando que era da rede.
+    const resp = await fetch(req, { cache: 'no-cache' });
     if (resp && resp.ok) cache.put(req, resp.clone()).catch(() => {});
     return resp;
   } catch (err) {
