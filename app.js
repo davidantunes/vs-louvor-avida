@@ -2867,10 +2867,38 @@ function transposeUrl(id, semitones, appwriteId = '', ready = false){
   if (ready) params.set('ready', '1');
   return `/api/transpose/${encodeURIComponent(id)}?${params.toString()}`;
 }
-function transposeStatusUrl(id, semitones, appwriteId = ''){
+function transposeStatusUrl(id, semitones, appwriteId = '', prepare = false){
   const params = new URLSearchParams({ semitones: String(semitones) });
   if (appwriteId) params.set('aw', appwriteId);
+  if (prepare) params.set('prepare', '1');
   return `/api/transpose-status/${encodeURIComponent(id)}?${params.toString()}`;
+}
+
+// V131.33 — Inicia a geração do tom em segundo plano sem transferir o MP3 para
+// o navegador. É chamado assim que o tom é escolhido e também no prewarm dos
+// botões do repertório, reduzindo a espera quando o usuário apertar Play.
+const transposePrepareRequests = new Map();
+function prepareTransposeAudio(track, semitones){
+  const step = Number(semitones || 0);
+  if (!track || !step) return Promise.resolve(null);
+  const appwriteId = appwriteFileIdFor(track);
+  const key = `${track.id}:${step}:${appwriteId || ''}`;
+  const existing = transposePrepareRequests.get(key);
+  if (existing) return existing;
+
+  const request = fetch(transposeStatusUrl(track.id, step, appwriteId, true), {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache' }
+  })
+    .then(response => response.ok ? response.json() : null)
+    .catch(() => null)
+    .finally(() => {
+      // Evita rajadas de chamadas, mas permite uma nova tentativa depois.
+      setTimeout(() => transposePrepareRequests.delete(key), 15000);
+    });
+
+  transposePrepareRequests.set(key, request);
+  return request;
 }
 
 // V131.19 — Áudio migrado para o Appwrite Storage.
@@ -3913,7 +3941,11 @@ function findTrack(id){ return allTracks.find(t => t.id === id); }
 function prewarmTrackAudio(track, semitones = null){
   if (!track || current?.id === track.id) return;
   const sourceSemitones = semitones !== null && semitones !== undefined ? semitones : Number(track.repertoireSemitones || 0);
-  const source = sourceSemitones ? transposeUrl(track.id, Number(sourceSemitones || 0)) : driveUrl(track.id);
+  if (sourceSemitones) {
+    prepareTransposeAudio(track, Number(sourceSemitones || 0));
+    return;
+  }
+  const source = driveUrl(track.id);
   // Não troca o player principal; apenas pede ao navegador para começar a resolver/conectar ao arquivo.
   try {
     const link = document.createElement('link');
@@ -3955,9 +3987,12 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   const appwriteId = appwriteFileIdFor(track);
   let candidates;
   if (semitones) {
-    // V131.30 — usa Appwrite como fonte quando a música já foi migrada.
-    // Na primeira execução o servidor toca progressivamente enquanto gera o cache.
-    candidates = [transposeUrl(track.id, semitones, appwriteId)];
+    // V131.33 — A primeira reprodução também usa ready=1. O servidor aguarda o
+    // arquivo completo e só então responde com Content-Length/Accept-Ranges.
+    // Pode haver alguns segundos de preparação, mas assim que o áudio começa o
+    // cursor já funciona, sem recarregar a página e sem trocar de stream.
+    prepareTransposeAudio(track, semitones);
+    candidates = [transposeUrl(track.id, semitones, appwriteId, true)];
   } else if (appwriteId) {
     // V131.25 — Música migrada: usa o PROXY do servidor (/api/aw-audio), que
     // encaminha Range e propaga Content-Length — o navegador calcula a duração
@@ -3985,13 +4020,14 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   el.audio._transposeAppwriteId = appwriteId || '';
   el.audio._transposePromoted = false;
   el.audio._transposePromotionInProgress = false;
-  el.audio._transposeSeekableReady = !semitones;
+  // ready=1 garante que até a primeira resposta transposta já seja seekable.
+  el.audio._transposeSeekableReady = true;
   el.audio._transposePendingSeekPct = null;
   el.audio._transposeSeekToastShown = false;
   clearTransposeReadyWatch();
 
   loadAudioCandidate(0);
-  if (semitones) watchTransposeReady(track, semitones, appwriteId);
+  // V131.33 — não há mais stream progressivo para promover depois.
 
   recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: formatKeyLabel(track.key), changedKey: alteredToneLabel || '', semitones });
   syncProgressUI();
@@ -4023,11 +4059,8 @@ function loadAudioCandidate(index){
   }
 }
 
-// V131.32 — A primeira transposição é enviada progressivamente para começar a
-// tocar rápido. Assim que o arquivo completo fica pronto, o player SEMPRE troca
-// para uma URL seekable com Content-Length/Range. A versão anterior tentava
-// detectar se o stream já era seekable pelo objeto HTMLAudioElement; no Chrome
-// essa detecção podia dar falso positivo e impedir a troca até recarregar a página.
+// Compatibilidade com sessões antigas abertas durante um deploy anterior.
+// Na V131.33 o fluxo normal já inicia em ready=1 e não depende desta promoção.
 function clearTransposeReadyWatch(){
   if (!el.audio) return;
   if (el.audio._transposeReadyTimer) clearTimeout(el.audio._transposeReadyTimer);
@@ -4257,9 +4290,8 @@ function onSeek(){
   const pct = Number(el.progressBar.value) || 0;
   el.progressFill.style.width = `${pct}%`;
 
-  // V131.32 — Durante a primeira geração o stream progressivo não aceita Range.
-  // Guarda o seek solicitado e troca automaticamente para o arquivo final assim
-  // que ele estiver pronto, sem precisar atualizar a página.
+  // Compatibilidade defensiva para uma aba antiga que ainda esteja usando
+  // uma fonte progressiva de versão anterior.
   if (queueTransposeSeek(pct)) return;
 
   if (!duration) return;
@@ -4313,6 +4345,7 @@ function openToneModal(track){
     btn.classList.add('active');
 
     if (el.toneSelected) el.toneSelected.textContent = selectedToneLabel;
+    if (selectedSemitone) prepareTransposeAudio(track, selectedSemitone);
     el.downloadToneBtn.href = downloadUrl(track.id, track.name, selectedSemitone, appwriteFileIdFor(track));
     // V97 — textos curtos: o tom escolhido já fica nos info-strips acima
     el.playToneBtn.textContent = '▶ Ouvir Música';
