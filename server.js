@@ -946,12 +946,48 @@ app.get('/api/admin/users', async (req, res) => {
 // streaming, permitindo seek imediato.
 const APPWRITE_AUDIO_BUCKET_ID = process.env.APPWRITE_AUDIO_BUCKET_ID || '6a414dae001076f7ea39';
 
+// V131.27 — Cache em memória do tamanho de cada arquivo do Appwrite
+// (consultado uma vez via metadata; evita repetir a chamada a cada play/seek).
+const awFileSizeCache = new Map();
+
+async function awGetFileSize(fileId, awEndpoint, awProject) {
+  if (awFileSizeCache.has(fileId)) return awFileSizeCache.get(fileId);
+  try {
+    const metaUrl = `${awEndpoint}/storage/buckets/${encodeURIComponent(APPWRITE_AUDIO_BUCKET_ID)}/files/${encodeURIComponent(fileId)}?project=${encodeURIComponent(awProject)}`;
+    const r = await fetch(metaUrl, { headers: { 'User-Agent': 'VSLouvor/1.0' } });
+    if (r.ok) {
+      const meta = await r.json();
+      const size = Number(meta.sizeOriginal || meta.size || 0);
+      if (size > 0) { awFileSizeCache.set(fileId, size); return size; }
+    }
+  } catch (_) {}
+  return 0;
+}
+
 app.get('/api/aw-audio/:fileId', async (req, res) => {
   try {
     const fileId = req.params.fileId;
     const awEndpoint = APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1';
     const awProject = APPWRITE_PROJECT_ID || '69f4cb460024e484358b';
     const awUrl = `${awEndpoint}/storage/buckets/${encodeURIComponent(APPWRITE_AUDIO_BUCKET_ID)}/files/${encodeURIComponent(fileId)}/view?project=${encodeURIComponent(awProject)}`;
+
+    // Tamanho real do arquivo (necessário para o navegador calcular a duração
+    // e para montarmos respostas 206 corretas mesmo se o Appwrite não ajudar)
+    const totalSize = await awGetFileSize(fileId, awEndpoint, awProject);
+
+    // Interpreta o Range pedido pelo navegador (formato: bytes=início-fim)
+    let rangeStart = null, rangeEnd = null;
+    const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if (m && (m[1] !== '' || m[2] !== '')) {
+      rangeStart = m[1] === '' ? null : parseInt(m[1], 10);
+      rangeEnd = m[2] === '' ? null : parseInt(m[2], 10);
+      if (rangeStart === null && rangeEnd !== null && totalSize) {
+        // sufixo: últimos N bytes
+        rangeStart = Math.max(0, totalSize - rangeEnd);
+        rangeEnd = totalSize - 1;
+      }
+      if (rangeStart !== null && rangeEnd === null && totalSize) rangeEnd = totalSize - 1;
+    }
 
     const upstreamHeaders = { 'User-Agent': 'VSLouvor/1.0' };
     if (req.headers.range) upstreamHeaders['Range'] = req.headers.range;
@@ -964,25 +1000,104 @@ app.get('/api/aw-audio/:fileId', async (req, res) => {
       return res.status(awRes.status).json({ stage: 'appwrite-response', status: awRes.status });
     }
 
-    res.status(awRes.status);
     res.setHeader('Content-Type', awRes.headers.get('content-type') || 'audio/mpeg');
     res.setHeader('Accept-Ranges', 'bytes');
-    const cl = awRes.headers.get('content-length');
-    const cr = awRes.headers.get('content-range');
-    if (cl) res.setHeader('Content-Length', cl);
-    if (cr) res.setHeader('Content-Range', cr);
     res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
 
-    awRes.body.on('error', (err) => {
-      console.error('[aw-audio] stream error:', err.message);
-      if (!res.headersSent) res.status(500).end();
-      else try { res.end(); } catch(_) {}
-    });
+    const upstreamCL = awRes.headers.get('content-length');
+    const upstreamCR = awRes.headers.get('content-range');
+
+    if (awRes.status === 206) {
+      // Appwrite honrou o Range — repassa como está
+      res.status(206);
+      if (upstreamCR) res.setHeader('Content-Range', upstreamCR);
+      if (upstreamCL) res.setHeader('Content-Length', upstreamCL);
+      awRes.body.on('error', () => { try { res.end(); } catch(_){} });
+      return awRes.body.pipe(res);
+    }
+
+    // Appwrite respondeu 200 (corpo completo).
+    if (rangeStart !== null && totalSize > 0) {
+      // O navegador pediu Range mas o Appwrite ignorou: NÓS recortamos os
+      // bytes e montamos a resposta 206 correta. Isso garante o seek
+      // independente do comportamento do Appwrite.
+      const start = Math.min(rangeStart, totalSize - 1);
+      const end = Math.min(rangeEnd ?? (totalSize - 1), totalSize - 1);
+      const windowLen = end - start + 1;
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${totalSize}`);
+      res.setHeader('Content-Length', String(windowLen));
+
+      let skipped = 0, sent = 0;
+      awRes.body.on('data', (chunk) => {
+        if (sent >= windowLen) return;
+        let buf = chunk;
+        if (skipped < start) {
+          const toSkip = Math.min(start - skipped, buf.length);
+          skipped += toSkip;
+          if (toSkip >= buf.length) return;
+          buf = buf.slice(toSkip);
+        }
+        const remaining = windowLen - sent;
+        if (buf.length > remaining) buf = buf.slice(0, remaining);
+        sent += buf.length;
+        res.write(buf);
+        if (sent >= windowLen) {
+          try { awRes.body.destroy(); } catch(_){}
+          res.end();
+        }
+      });
+      awRes.body.on('end', () => { try { res.end(); } catch(_){} });
+      awRes.body.on('error', () => { try { res.end(); } catch(_){} });
+      return;
+    }
+
+    // Sem Range: resposta completa. Garante o Content-Length (do upstream ou
+    // do metadata) — sem ele o navegador não calcula a duração da música.
+    res.status(200);
+    if (upstreamCL) res.setHeader('Content-Length', upstreamCL);
+    else if (totalSize > 0) res.setHeader('Content-Length', String(totalSize));
+    awRes.body.on('error', () => { try { res.end(); } catch(_){} });
     awRes.body.pipe(res);
   } catch (error) {
     console.error('[aw-audio] catch:', error.name, error.message);
     if (!res.headersSent) res.status(500).json({ stage: 'catch', error: error.message });
   }
+});
+
+// V131.27 — Diagnóstico: mostra exatamente como o Appwrite responde a uma
+// requisição normal e a uma com Range, para confirmar o comportamento real.
+// Use /api/diagnostics/aw-audio/<fileId>
+app.get('/api/diagnostics/aw-audio/:fileId', async (req, res) => {
+  const fileId = req.params.fileId;
+  const awEndpoint = APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1';
+  const awProject = APPWRITE_PROJECT_ID || '69f4cb460024e484358b';
+  const awUrl = `${awEndpoint}/storage/buckets/${encodeURIComponent(APPWRITE_AUDIO_BUCKET_ID)}/files/${encodeURIComponent(fileId)}/view?project=${encodeURIComponent(awProject)}`;
+  const result = { fileId, tests: {} };
+  try {
+    const size = await awGetFileSize(fileId, awEndpoint, awProject);
+    result.metadataSize = size;
+    const plain = await fetch(awUrl, { headers: { 'User-Agent': 'VSLouvor/1.0' } });
+    result.tests.plain = {
+      status: plain.status,
+      contentType: plain.headers.get('content-type'),
+      contentLength: plain.headers.get('content-length'),
+      acceptRanges: plain.headers.get('accept-ranges'),
+      transferEncoding: plain.headers.get('transfer-encoding')
+    };
+    try { plain.body.destroy(); } catch(_){}
+    const ranged = await fetch(awUrl, { headers: { 'User-Agent': 'VSLouvor/1.0', 'Range': 'bytes=0-1023' } });
+    result.tests.range = {
+      status: ranged.status,
+      contentLength: ranged.headers.get('content-length'),
+      contentRange: ranged.headers.get('content-range'),
+      honrouRange: ranged.status === 206
+    };
+    try { ranged.body.destroy(); } catch(_){}
+  } catch (e) {
+    result.error = e.message;
+  }
+  res.json(result);
 });
 
 app.get('/api/audio/:id', async (req, res) => {
