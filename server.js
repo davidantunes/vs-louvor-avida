@@ -603,11 +603,17 @@ async function buildLibrary(rootFolderId) {
       candidatos.push({ f, singerName: singerName || 'Diversos', cover: cover || '', folderPath: folderPath || '' });
     }
     const queue = [...subfolders];
-    const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+    // V131.23 — Reduz concorrência de 4→2 pastas simultâneas e adiciona um
+    // pequeno espaçamento entre chamadas ao Drive. Isso diminui o risco do
+    // Google bloquear o IP do servidor por "tráfego automatizado" (o mesmo
+    // bloqueio "Sorry..." que vimos durante a migração), à custa de a
+    // reconstrução da biblioteca ser um pouco mais lenta.
+    const workers = Array.from({ length: Math.min(2, queue.length) }, async () => {
       while (queue.length) {
         const folder = queue.shift();
         if (!folder) break;
         await walk(folder.id, singerName || folder.name, cover, `${folderPath || ''}/${folder.name}`);
+        await new Promise(r => setTimeout(r, 120));
       }
     });
     await Promise.all(workers);
@@ -775,30 +781,37 @@ app.get('/api/diagnostics/audio/:id', async (req, res) => {
   res.json(result);
 });
 
-// V131.22 — Diagnóstico: procura por música(s) com nome parecido na biblioteca
-// já indexada, mostrando TODOS os arquivos que batem (mesmo os que a
-// deduplicação descartou), para confirmar se há duplicatas causando
-// instabilidade de ID. Use /api/diagnostics/find-duplicates?q=galileu
+// V131.24 — CORREÇÃO: a busca global "name contains" no Drive inteiro
+// (usada na v131.22) dava 403 "insufficientFilePermissions" — buscas amplas
+// com apenas a chave de API têm restrições diferentes do acesso a arquivos
+// individuais dentro de uma pasta conhecida. Agora navegamos a árvore de
+// pastas a partir da raiz configurada (mesmo método comprovado que já
+// funciona para montar a biblioteca), procurando o nome em cada arquivo.
 app.get('/api/diagnostics/find-duplicates', async (req, res) => {
   try {
     if (!requireApiKey(res)) return;
     const q = String(req.query.q || '').toLowerCase().trim();
     if (!q) return res.status(400).json({ error: 'Parâmetro ?q= obrigatório (nome ou parte do nome a buscar).' });
+    const rootId = req.query.rootId || process.env.ROOT_FOLDER_ID || '1Tcua5y0O9Bv5LRNmtIYnDCderiaN8xB8';
 
-    // Busca DIRETO no Google Drive (não usa o cache da biblioteca), então
-    // mostra TODOS os arquivos que existem agora, incluindo duplicatas.
-    const searchUrl = `${GOOGLE_API}?q=${encodeURIComponent(`name contains '${q}' and trashed = false`)}&fields=files(id,name,parents,mimeType,createdTime,modifiedTime)&pageSize=50&key=${encodeURIComponent(API_KEY)}`;
-    const driveRes = await fetch(searchUrl, { headers: { 'User-Agent': 'VSLouvor/1.0' } });
-    if (!driveRes.ok) {
-      return res.status(driveRes.status).json({ error: await driveRes.text() });
+    const encontrados = [];
+    async function walk(folderId, folderPath) {
+      const files = await listFolder(folderId);
+      for (const f of files) {
+        if (f.mimeType === 'application/vnd.google-apps.folder') {
+          await walk(f.id, `${folderPath}/${f.name}`);
+        } else if (f.name.toLowerCase().includes(q)) {
+          encontrados.push({ id: f.id, name: f.name, folderPath });
+        }
+      }
     }
-    const data = await driveRes.json();
-    const files = (data.files || []).filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+    await walk(rootId, '');
+
     res.json({
       query: q,
-      totalEncontrado: files.length,
-      duplicataProvavel: files.length > 1,
-      arquivos: files.map(f => ({ id: f.id, name: f.name, createdTime: f.createdTime, modifiedTime: f.modifiedTime }))
+      totalEncontrado: encontrados.length,
+      duplicataProvavel: encontrados.length > 1,
+      arquivos: encontrados
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -921,6 +934,54 @@ app.get('/api/admin/users', async (req, res) => {
   } catch (e) {
     console.error('[admin/users]', e);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// V131.25 — Proxy de áudio do APPWRITE STORAGE com suporte a Range.
+// A URL direta /view do Appwrite servia o áudio sem headers de range
+// (Content-Length/Accept-Ranges), o que fazia o navegador não conseguir
+// calcular a duração (Infinity) → cursor de tempo travado e delay em partes
+// não baixadas. Este proxy usa o MESMO padrão comprovado do /api/audio do
+// Drive: encaminha o header Range do navegador e propaga os headers de
+// streaming, permitindo seek imediato.
+const APPWRITE_AUDIO_BUCKET_ID = process.env.APPWRITE_AUDIO_BUCKET_ID || '6a414dae001076f7ea39';
+
+app.get('/api/aw-audio/:fileId', async (req, res) => {
+  try {
+    const fileId = req.params.fileId;
+    const awEndpoint = APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1';
+    const awProject = APPWRITE_PROJECT_ID || '69f4cb460024e484358b';
+    const awUrl = `${awEndpoint}/storage/buckets/${encodeURIComponent(APPWRITE_AUDIO_BUCKET_ID)}/files/${encodeURIComponent(fileId)}/view?project=${encodeURIComponent(awProject)}`;
+
+    const upstreamHeaders = { 'User-Agent': 'VSLouvor/1.0' };
+    if (req.headers.range) upstreamHeaders['Range'] = req.headers.range;
+
+    const awRes = await fetch(awUrl, { method: 'GET', redirect: 'follow', headers: upstreamHeaders });
+
+    if (!awRes.ok && awRes.status !== 206) {
+      const errBody = await awRes.text().catch(() => '');
+      console.error(`[aw-audio] Appwrite ${awRes.status}:`, errBody.slice(0, 150));
+      return res.status(awRes.status).json({ stage: 'appwrite-response', status: awRes.status });
+    }
+
+    res.status(awRes.status);
+    res.setHeader('Content-Type', awRes.headers.get('content-type') || 'audio/mpeg');
+    res.setHeader('Accept-Ranges', 'bytes');
+    const cl = awRes.headers.get('content-length');
+    const cr = awRes.headers.get('content-range');
+    if (cl) res.setHeader('Content-Length', cl);
+    if (cr) res.setHeader('Content-Range', cr);
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+
+    awRes.body.on('error', (err) => {
+      console.error('[aw-audio] stream error:', err.message);
+      if (!res.headersSent) res.status(500).end();
+      else try { res.end(); } catch(_) {}
+    });
+    awRes.body.pipe(res);
+  } catch (error) {
+    console.error('[aw-audio] catch:', error.name, error.message);
+    if (!res.headersSent) res.status(500).json({ stage: 'catch', error: error.message });
   }
 });
 

@@ -3,7 +3,7 @@
    Código-fonte (app.js/css/html/config) network-first: correções chegam na hora.
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v131.22.0';
+const SW_VERSION = 'v131.25.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -78,6 +78,10 @@ self.addEventListener('fetch', (event) => {
   // API — network first (dados sempre frescos), fallback ao cache
   if (sameOrigin && url.pathname.startsWith('/api/')) {
     if (url.pathname.startsWith('/api/transpose/')) return;
+    // V131.25 — Requisições de ÁUDIO com Range (seek) chegam aqui porque
+    // isAudioRequest as ignora de propósito. Deixa o navegador falar direto
+    // com o servidor, sem o SW no meio — streaming e seek limpos.
+    if (url.pathname.startsWith('/api/audio/') || url.pathname.startsWith('/api/aw-audio/')) return;
     event.respondWith(networkFirst(req, API_CACHE));
     return;
   }

@@ -853,12 +853,23 @@
       <div class="modal-actions modal-actions-top">
         <button id="playSetlistDetail" class="btn btn-primary">▶ Tocar repertório</button>
         <button id="addMusicSetlistDetail" class="btn btn-secondary" type="button">+ Adicionar música</button>
-        <button id="changeSetlistPaletteBtn" class="btn btn-secondary" type="button">Trocar paleta</button>
+        <button id="changeSetlistPaletteBtn" class="btn btn-secondary" type="button">🎨 Paleta</button>
         <button id="shareSetlistDetail" class="btn btn-secondary">Compartilhar</button>
-        <button id="exportSetlistArtBtn" class="btn btn-secondary" type="button">Exportar arte</button>
       </div>
-      <div id="setlistDetailPalette" class="setlist-detail-palette"></div>
       <div id="setlistDetailTracks" class="reorder-list"></div>
+    </div>
+  </div>
+
+  <div id="setlistPaletteViewModal" class="modal hidden">
+    <div class="modal-card glass">
+      <button id="closeSetlistPaletteView" class="modal-close">×</button>
+      <span class="kicker">Paleta do culto</span>
+      <h3 id="setlistPaletteViewTitle">Paleta</h3>
+      <div id="setlistPaletteViewBody" class="setlist-detail-palette"></div>
+      <div class="modal-actions">
+        <button id="setlistPaletteViewChangeBtn" class="btn btn-secondary hidden" type="button">Trocar paleta</button>
+        <button id="setlistPaletteViewCloseBtn" class="btn btn-primary" type="button">Fechar</button>
+      </div>
     </div>
   </div>
 

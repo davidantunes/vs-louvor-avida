@@ -222,6 +222,12 @@ const el = {
   setlistSharedHero: document.getElementById('setlistSharedHero'),
   setlistDetailTracks: document.getElementById('setlistDetailTracks'),
   setlistDetailPalette: document.getElementById('setlistDetailPalette'),
+  setlistPaletteViewModal: document.getElementById('setlistPaletteViewModal'),
+  setlistPaletteViewTitle: document.getElementById('setlistPaletteViewTitle'),
+  setlistPaletteViewBody: document.getElementById('setlistPaletteViewBody'),
+  setlistPaletteViewChangeBtn: document.getElementById('setlistPaletteViewChangeBtn'),
+  setlistPaletteViewCloseBtn: document.getElementById('setlistPaletteViewCloseBtn'),
+  closeSetlistPaletteView: document.getElementById('closeSetlistPaletteView'),
   playSetlistDetail: document.getElementById('playSetlistDetail'),
   addMusicSetlistDetail: document.getElementById('addMusicSetlistDetail'),
   changeSetlistPaletteBtn: document.getElementById('changeSetlistPaletteBtn'),
@@ -579,13 +585,25 @@ function bindEvents(){
     render();
     toast(`Repertório “${s.name}” ativo. Adicione músicas na biblioteca.`);
   });
+  // V131.25 — O botão "🎨 Paleta" agora abre um modal mostrando a paleta
+  // escolhida (visível para todos). A troca fica dentro do modal, só para
+  // quem pode editar.
   if (el.changeSetlistPaletteBtn) el.changeSetlistPaletteBtn.addEventListener('click', () => {
+    const s = setlists.find(x => x.id === currentSetlistDetailId);
+    if (!s) return;
+    openSetlistPaletteView(s);
+  });
+  if (el.closeSetlistPaletteView) el.closeSetlistPaletteView.addEventListener('click', closeSetlistPaletteView);
+  if (el.setlistPaletteViewCloseBtn) el.setlistPaletteViewCloseBtn.addEventListener('click', closeSetlistPaletteView);
+  if (el.setlistPaletteViewModal) el.setlistPaletteViewModal.addEventListener('click', e => { if (e.target === el.setlistPaletteViewModal) closeSetlistPaletteView(); });
+  if (el.setlistPaletteViewChangeBtn) el.setlistPaletteViewChangeBtn.addEventListener('click', () => {
     const s = setlists.find(x => x.id === currentSetlistDetailId);
     if (!s) return;
     if (!canEditSetlist(s)) {
       toast('Somente quem criou este repertório pode alterar a paleta.');
       return;
     }
+    closeSetlistPaletteView();
     startPaletteSelectionForSetlist(s, 'setlist-detail');
   });
   el.shareSetlistDetail.addEventListener('click', () => {
@@ -3833,11 +3851,15 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
     // Transposição só o servidor faz (processa o áudio do Drive)
     candidates = [transposeUrl(track.id, semitones)];
   } else if (appwriteId) {
-    // Música migrada: Appwrite primeiro, Drive como reserva
+    // V131.25 — Música migrada: usa o PROXY do servidor (/api/aw-audio), que
+    // encaminha Range e propaga Content-Length — o navegador calcula a duração
+    // e o cursor de tempo (seek) funciona. A URL direta /view do Appwrite não
+    // enviava esses headers, travando o seek e causando delay. A direta fica
+    // como reserva, e o Drive como última opção.
     candidates = [
+      `/api/aw-audio/${encodeURIComponent(appwriteId)}`,
       appwriteAudioUrl(appwriteId),
-      `/api/audio/${encodeURIComponent(track.id)}`,
-      driveDirectApiUrl(track.id)
+      `/api/audio/${encodeURIComponent(track.id)}`
     ];
   } else {
     // Não migrada: fluxo antigo do Drive
@@ -4527,10 +4549,11 @@ function openSetlistDetail(id){
   }
   const canEdit = canEditSetlist(setlist);
   if (el.addMusicSetlistDetail) el.addMusicSetlistDetail.classList.toggle('hidden', !canEdit);
-  if (el.changeSetlistPaletteBtn) el.changeSetlistPaletteBtn.classList.toggle('hidden', !canEdit);
+  // V131.25 — O botão "🎨 Paleta" fica visível para TODOS (é visualização);
+  // a ação de trocar, dentro do modal, é que fica restrita a quem pode editar.
+  if (el.changeSetlistPaletteBtn) el.changeSetlistPaletteBtn.classList.remove('hidden');
 
   renderSharedSetlistHero(setlist);
-  renderSetlistDetailPalette(setlist, owner);
   renderSetlistDetailTracks();
   el.setlistDetailModal.classList.remove('hidden');
 
@@ -4580,27 +4603,32 @@ function closeSetlistDetail(){
     }
   }
 }
-function renderSetlistDetailPalette(setlist, owner=false){
-  if (!el.setlistDetailPalette) return;
+// V131.25 — A paleta agora é exibida num MODAL próprio (aberto pelo botão
+// "🎨 Paleta"), em vez de um box inline que embolava o layout mobile.
+function openSetlistPaletteView(setlist){
+  if (!el.setlistPaletteViewModal || !el.setlistPaletteViewBody) return;
   const hasPalette = Boolean(setlist?.paletteTitle);
   const img = setlist?.paletteImage || 'assets/logo-avida.jpg';
   const title = setlist?.paletteTitle || 'Paleta ainda não definida';
-  const isSharedView = String(sharedSetlistContextId || '') === String(setlist?.id || '');
+  const canEdit = canEditSetlist(setlist);
   const helper = hasPalette
-    ? (isSharedView ? 'Esta paleta acompanha o link compartilhado para orientar o uniforme do culto.' : 'Esta é a paleta vinculada a este repertório.')
-    : (owner ? 'Escolha uma paleta para definir o uniforme visual do culto.' : 'O criador ainda não definiu uma paleta para este repertório.');
-  el.setlistDetailPalette.innerHTML = `
-    <div class="setlist-detail-palette-card ${hasPalette ? '' : 'is-empty'} ${isSharedView ? 'is-shared' : ''}">
+    ? 'Esta é a paleta vinculada a este repertório — o uniforme visual do culto.'
+    : (canEdit ? 'Escolha uma paleta para definir o uniforme visual do culto.' : 'O criador ainda não definiu uma paleta para este repertório.');
+  if (el.setlistPaletteViewTitle) el.setlistPaletteViewTitle.textContent = setlist?.name || 'Paleta';
+  el.setlistPaletteViewBody.innerHTML = `
+    <div class="setlist-detail-palette-card ${hasPalette ? '' : 'is-empty'}">
       <img src="${esc(img)}" alt="${esc(title)}">
       <div class="setlist-detail-palette-copy">
-        <span class="setlist-palette-label">${isSharedView ? 'Paleta compartilhada do culto' : 'Paleta do culto'}</span>
+        <span class="setlist-palette-label">Paleta do culto</span>
         <strong>${esc(title)}</strong>
         <small>${esc(helper)}</small>
       </div>
-      ${owner ? '<button class="btn btn-secondary btn-compact inline-change-palette" type="button">Trocar paleta</button>' : ''}
     </div>`;
-  const inlineBtn = el.setlistDetailPalette.querySelector('.inline-change-palette');
-  if (inlineBtn) inlineBtn.addEventListener('click', () => startPaletteSelectionForSetlist(setlist, 'setlist-detail'));
+  if (el.setlistPaletteViewChangeBtn) el.setlistPaletteViewChangeBtn.classList.toggle('hidden', !canEdit);
+  el.setlistPaletteViewModal.classList.remove('hidden');
+}
+function closeSetlistPaletteView(){
+  if (el.setlistPaletteViewModal) el.setlistPaletteViewModal.classList.add('hidden');
 }
 function renderSetlistDetailTracks(){
   const setlist = setlists.find(s => s.id === currentSetlistDetailId);
