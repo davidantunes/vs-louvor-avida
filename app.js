@@ -2911,15 +2911,108 @@ function clearDriveLibraryCache(){
     .forEach(key => localStorage.removeItem(key));
 }
 
-async function forceRefreshDriveLibrary(){
+let hardRefreshInProgress = false;
+
+// V131.31 — Limpeza forte dos caches técnicos sem apagar dados do usuário.
+// Preserva sessão, favoritos, repertórios, escala, histórico, tema e preferências.
+async function hardResetSystemCache(){
+  const result = { server: false, cacheStorage: 0, serviceWorker: false };
+
+  // O endpoint também envia Clear-Site-Data: "cache", limpando o cache HTTP
+  // do navegador e invalidando os caches em memória do servidor.
+  try {
+    const response = await fetch(`/api/cache/hard-reset?t=${Date.now()}`, {
+      method: 'POST',
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: {
+        'Cache-Control': 'no-cache, no-store',
+        'Pragma': 'no-cache',
+        'X-VS-Cache-Reset': '1'
+      }
+    });
+    if (!response.ok) throw new Error(`Servidor retornou ${response.status}`);
+    result.server = true;
+  } catch (error) {
+    console.warn('Não foi possível limpar o cache do servidor:', error);
+  }
+
+  // Remove todos os caches administrados pelo Service Worker neste domínio,
+  // inclusive shell, APIs e áudios offline antigos.
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      const deleted = await Promise.all(keys.map(key => caches.delete(key)));
+      result.cacheStorage = deleted.filter(Boolean).length;
+    }
+  } catch (error) {
+    console.warn('Não foi possível limpar o Cache Storage:', error);
+  }
+
+  // Solicita uma segunda limpeza ao SW ativo e força a busca da versão atual.
+  // Não aguardamos resposta assíncrona para evitar canais de mensagem pendentes.
+  try {
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      navigator.serviceWorker.controller?.postMessage({ type: 'CLEAR_ALL_CACHES' });
+      if (registration) await registration.update();
+      result.serviceWorker = true;
+    }
+  } catch (error) {
+    console.warn('Não foi possível atualizar o Service Worker:', error);
+  }
+
   clearDriveLibraryCache();
-  allTracks = [];
-  indexedTrackCount = 0;
-  discoveredFolderCount = 0;
-  indexedFolderCount = 0;
-  render();
-  toast('Atualizando biblioteca de músicas...');
-  await loadLibrary(true);
+  return result;
+}
+
+async function forceRefreshDriveLibrary(){
+  if (hardRefreshInProgress) return;
+  hardRefreshInProgress = true;
+
+  const refreshButton = el.refresh;
+  refreshButton?.classList.add('is-refreshing');
+  if (refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.setAttribute('aria-busy', 'true');
+    refreshButton.title = 'Limpando cache e atualizando biblioteca...';
+  }
+
+  toast('Limpando o cache e atualizando a biblioteca...');
+
+  try {
+    const cacheResult = await hardResetSystemCache();
+
+    allTracks = [];
+    indexedTrackCount = 0;
+    discoveredFolderCount = 0;
+    indexedFolderCount = 0;
+    libraryLoaded = false;
+    libraryLoadStarted = true;
+    render();
+
+    await loadLibrary(true);
+
+    if (allTracks.length) {
+      const partial = !cacheResult.server;
+      toast(partial
+        ? 'Biblioteca atualizada e cache local limpo. O cache do servidor não respondeu.'
+        : 'Cache limpo e biblioteca atualizada com sucesso.');
+    } else {
+      toast('Cache limpo. A biblioteca continuará atualizando em segundo plano.');
+    }
+  } catch (error) {
+    console.error('Falha no hard reset da biblioteca:', error);
+    toast('O cache foi limpo, mas houve uma falha ao atualizar a biblioteca. Tente novamente.');
+  } finally {
+    hardRefreshInProgress = false;
+    refreshButton?.classList.remove('is-refreshing');
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.removeAttribute('aria-busy');
+      refreshButton.title = 'Atualizar biblioteca e limpar cache';
+    }
+  }
 }
 function esc(str){ return String(str).replace(/[&<>'"]/g, ch => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[ch])); }
 
@@ -3365,7 +3458,7 @@ async function loadLibrary(force = false){
     // mostramos uma mensagem amigável e continuamos tentando em background.
     if (useBackend()) {
       try {
-        const url = `/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}${force ? '&force=1' : ''}`;
+        const url = `/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}${force ? `&force=1&t=${Date.now()}` : ''}`;
 
         // Timeout de 8s: se o servidor não responde, avisa o usuário
         const controller = new AbortController();
@@ -3380,7 +3473,7 @@ async function loadLibrary(force = false){
           el.status.textContent = 'Aguardando servidor...';
         }, 8000);
 
-        const resp = await fetch(url, { credentials: 'omit', signal: controller.signal });
+        const resp = await fetch(url, { credentials: 'omit', signal: controller.signal, cache: force ? 'no-store' : 'default' });
         clearTimeout(timeoutId);
 
         if (resp.ok) {
@@ -3891,6 +3984,10 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   el.audio._transposeSemitones = Number(semitones || 0);
   el.audio._transposeAppwriteId = appwriteId || '';
   el.audio._transposePromoted = false;
+  el.audio._transposePromotionInProgress = false;
+  el.audio._transposeSeekableReady = !semitones;
+  el.audio._transposePendingSeekPct = null;
+  el.audio._transposeSeekToastShown = false;
   clearTransposeReadyWatch();
 
   loadAudioCandidate(0);
@@ -3926,10 +4023,11 @@ function loadAudioCandidate(index){
   }
 }
 
-// V131.30 — A primeira transposição é enviada progressivamente para começar a
-// tocar rápido. Quando o arquivo completo fica pronto no cache, o player troca
-// silenciosamente para a versão com Content-Length/Range, preservando posição
-// e habilitando o cursor de tempo durante a mesma execução.
+// V131.32 — A primeira transposição é enviada progressivamente para começar a
+// tocar rápido. Assim que o arquivo completo fica pronto, o player SEMPRE troca
+// para uma URL seekable com Content-Length/Range. A versão anterior tentava
+// detectar se o stream já era seekable pelo objeto HTMLAudioElement; no Chrome
+// essa detecção podia dar falso positivo e impedir a troca até recarregar a página.
 function clearTransposeReadyWatch(){
   if (!el.audio) return;
   if (el.audio._transposeReadyTimer) clearTimeout(el.audio._transposeReadyTimer);
@@ -3937,7 +4035,7 @@ function clearTransposeReadyWatch(){
   el.audio._transposeReadyToken = '';
 }
 
-function watchTransposeReady(track, semitones, appwriteId = ''){
+function watchTransposeReady(track, semitones, appwriteId = '', immediate = false){
   clearTransposeReadyWatch();
   const token = `${track.id}:${Number(semitones)}:${appwriteId || ''}:${Date.now()}`;
   el.audio._transposeReadyToken = token;
@@ -3952,68 +4050,141 @@ function watchTransposeReady(track, semitones, appwriteId = ''){
 
     attempts += 1;
     try {
-      const response = await fetch(transposeStatusUrl(track.id, semitones, appwriteId), { cache: 'no-store' });
+      const response = await fetch(transposeStatusUrl(track.id, semitones, appwriteId), {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       if (response.ok) {
         const status = await response.json();
         if (status.ready) {
           clearTransposeReadyWatch();
-          promoteTransposeToSeekable(track, semitones, appwriteId);
+          promoteTransposeToSeekable(track, semitones, appwriteId, status.version || '');
           return;
         }
       }
     } catch (_) {}
 
-    if (attempts < 240 && el.audio._transposeReadyToken === token) {
-      el.audio._transposeReadyTimer = setTimeout(poll, 1000);
+    if (attempts < 600 && el.audio._transposeReadyToken === token) {
+      // Consulta mais rápida enquanto existe um clique de seek aguardando.
+      const delay = Number.isFinite(el.audio._transposePendingSeekPct) ? 350 : 800;
+      el.audio._transposeReadyTimer = setTimeout(poll, delay);
     } else {
       clearTransposeReadyWatch();
     }
   };
 
-  el.audio._transposeReadyTimer = setTimeout(poll, 700);
+  el.audio._transposeReadyTimer = setTimeout(poll, immediate ? 0 : 350);
 }
 
-function promoteTransposeToSeekable(track, semitones, appwriteId = ''){
-  const audio = el.audio;
-  if (!audio || audio._transposePromoted) return;
-  if (!current || current.id !== track.id || Number(audio._transposeSemitones || 0) !== Number(semitones)) return;
+function applyTransposeResumePosition(audio, targetResolver, shouldResume, expectedReadyUrl){
+  let applied = false;
+  let retries = 0;
 
-  // Alguns navegadores tornam o próprio stream totalmente seekable ao receber
-  // o último byte. Nesse caso não há motivo para recarregar.
-  try {
-    const duration = audio.duration;
-    const end = audio.seekable && audio.seekable.length ? audio.seekable.end(audio.seekable.length - 1) : 0;
-    if (Number.isFinite(duration) && duration > 0 && end >= duration - 0.5) {
-      audio._transposePromoted = true;
-      syncProgressUI();
-      return;
-    }
-  } catch (_) {}
+  const apply = () => {
+    if (applied) return true;
+    const activeSource = String(audio.currentSrc || audio.src || '');
+    if (expectedReadyUrl && !activeSource.includes(expectedReadyUrl)) return false;
+    const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+    if (!duration) return false;
 
-  audio._transposePromoted = true;
-  const resumeAt = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
-  const shouldResume = !audio.paused;
-  const readyUrl = transposeUrl(track.id, semitones, appwriteId, true);
-  audio._candidates = [readyUrl];
-  audio._candidateIndex = 0;
+    const requested = Number(targetResolver(duration));
+    const target = Number.isFinite(requested)
+      ? Math.min(Math.max(0, requested), Math.max(0, duration - 0.1))
+      : 0;
 
-  const restorePosition = () => {
     try {
-      if (resumeAt > 0 && Number.isFinite(audio.duration)) {
-        audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.1));
+      audio.currentTime = target;
+      applied = true;
+      audio._transposeSeekableReady = true;
+      audio._transposePromotionInProgress = false;
+      audio._transposePendingSeekPct = null;
+      audio._transposeSeekToastShown = false;
+      syncProgressUI();
+
+      if (shouldResume) {
+        const playPromise = audio.play();
+        if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
       }
-    } catch (_) {}
-    syncProgressUI();
-    if (shouldResume) {
-      const playPromise = audio.play();
-      if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
+      return true;
+    } catch (_) {
+      return false;
     }
   };
 
-  audio.addEventListener('loadedmetadata', restorePosition, { once: true });
+  const retry = () => {
+    if (apply() || retries >= 20) return;
+    retries += 1;
+    setTimeout(retry, 100);
+  };
+
+  audio.addEventListener('loadedmetadata', retry, { once: true });
+  audio.addEventListener('durationchange', retry, { once: true });
+  audio.addEventListener('canplay', retry, { once: true });
+  retry();
+}
+
+function promoteTransposeToSeekable(track, semitones, appwriteId = '', cacheVersion = ''){
+  const audio = el.audio;
+  if (!audio || audio._transposePromotionInProgress || audio._transposeSeekableReady) return;
+  if (!current || current.id !== track.id || Number(audio._transposeSemitones || 0) !== Number(semitones)) return;
+
+  audio._transposePromotionInProgress = true;
+  audio._transposePromoted = true;
+
+  const resumeAt = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  const shouldResume = !audio.paused;
+
+  const params = new URLSearchParams({
+    semitones: String(semitones),
+    ready: '1',
+    cv: cacheVersion || String(Date.now())
+  });
+  if (appwriteId) params.set('aw', appwriteId);
+  const readyUrl = `/api/transpose/${encodeURIComponent(track.id)}?${params.toString()}`;
+
+  audio._candidates = [readyUrl];
+  audio._candidateIndex = 0;
+
+  const readyUrlMarker = `cv=${encodeURIComponent(params.get('cv') || '')}`;
+  applyTransposeResumePosition(
+    audio,
+    (duration) => Number.isFinite(audio._transposePendingSeekPct)
+      ? (Number(audio._transposePendingSeekPct) / 100) * duration
+      : resumeAt,
+    shouldResume,
+    readyUrlMarker
+  );
+
   audio.preload = 'auto';
   audio.src = readyUrl;
   try { audio.load(); } catch (_) {}
+}
+
+// Quando o usuário tenta mover o cursor antes do arquivo final ficar pronto,
+// guardamos a posição escolhida e aplicamos automaticamente ao terminar.
+// Não é possível fazer seek real no stream progressivo porque ele ainda está
+// sendo criado; esta fila evita exigir recarregamento da página.
+function queueTransposeSeek(pct){
+  const audio = el.audio;
+  if (!audio || !Number(audio._transposeSemitones || 0) || audio._transposeSeekableReady) return false;
+
+  audio._transposePendingSeekPct = Math.min(100, Math.max(0, Number(pct) || 0));
+  el.progressFill.style.width = `${audio._transposePendingSeekPct}%`;
+
+  if (!audio._transposeSeekToastShown) {
+    audio._transposeSeekToastShown = true;
+    toast('Preparando a música transposta. A posição será aplicada automaticamente.');
+  }
+
+  if (current) {
+    watchTransposeReady(
+      current,
+      Number(audio._transposeSemitones || 0),
+      audio._transposeAppwriteId || '',
+      true
+    );
+  }
+  return true;
 }
 
 // URLs diretas do Google Drive (browser acessa sem passar pelo servidor)
@@ -4067,7 +4238,10 @@ function playNext(){
 function syncProgressUI(){
   const duration = Number.isFinite(el.audio.duration) ? el.audio.duration : 0;
   const currentTime = Number.isFinite(el.audio.currentTime) ? el.audio.currentTime : 0;
-  const pct = duration ? (currentTime / duration) * 100 : 0;
+  const pendingSeekPct = Number.isFinite(el.audio._transposePendingSeekPct) && !el.audio._transposeSeekableReady
+    ? Number(el.audio._transposePendingSeekPct)
+    : null;
+  const pct = pendingSeekPct !== null ? pendingSeekPct : (duration ? (currentTime / duration) * 100 : 0);
   // V123 — Não sobrescreve o valor da barra enquanto o usuário está arrastando,
   // senão a posição visual "briga" com o gesto e trava o arrasto.
   if (!isUserSeeking) {
@@ -4082,6 +4256,12 @@ function onSeek(){
   // V123 — Atualiza o preenchimento visual imediatamente, mesmo sem duration ainda.
   const pct = Number(el.progressBar.value) || 0;
   el.progressFill.style.width = `${pct}%`;
+
+  // V131.32 — Durante a primeira geração o stream progressivo não aceita Range.
+  // Guarda o seek solicitado e troca automaticamente para o arquivo final assim
+  // que ele estiver pronto, sem precisar atualizar a página.
+  if (queueTransposeSeek(pct)) return;
+
   if (!duration) return;
   el.audio.currentTime = (pct / 100) * duration;
   el.currentTime.textContent = formatTime(el.audio.currentTime);
