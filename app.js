@@ -2860,7 +2860,18 @@ function useBackend(){ return cfg.USE_BACKEND && location.protocol !== 'file:'; 
 function directDriveMedia(id){ return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`; }
 function thumbnailUrl(id){ return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800`; }
 function driveUrl(id){ return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id); }
-function transposeUrl(id, semitones){ return !semitones ? driveUrl(id) : `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}`; }
+function transposeUrl(id, semitones, appwriteId = '', ready = false){
+  if (!semitones) return driveUrl(id);
+  const params = new URLSearchParams({ semitones: String(semitones) });
+  if (appwriteId) params.set('aw', appwriteId);
+  if (ready) params.set('ready', '1');
+  return `/api/transpose/${encodeURIComponent(id)}?${params.toString()}`;
+}
+function transposeStatusUrl(id, semitones, appwriteId = ''){
+  const params = new URLSearchParams({ semitones: String(semitones) });
+  if (appwriteId) params.set('aw', appwriteId);
+  return `/api/transpose-status/${encodeURIComponent(id)}?${params.toString()}`;
+}
 
 // V131.19 — Áudio migrado para o Appwrite Storage.
 // Se a música (pelo nome do arquivo) está no mapa de migração, geramos a URL
@@ -2877,9 +2888,12 @@ function appwriteFileIdFor(track){
   const fname = track.fileName || '';
   return window.VS_AUDIO_MAP[fname] || '';
 }
-function downloadUrl(id, name, semitones = 0){
+function downloadUrl(id, name, semitones = 0, appwriteId = ''){
   const filename = encodeURIComponent(`${safeFileName(name)}${semitones ? `_tom_${semitones > 0 ? '+' : ''}${semitones}` : ''}.mp3`);
-  if (semitones) return `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}&download=1&filename=${filename}`;
+  if (semitones) {
+    const aw = appwriteId ? `&aw=${encodeURIComponent(appwriteId)}` : '';
+    return `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}${aw}&download=1&filename=${filename}`;
+  }
   return useBackend() ? `/api/audio/${encodeURIComponent(id)}?download=1&filename=${filename}` : directDriveMedia(id);
 }
 function driveViewUrl(id){ return `https://drive.google.com/file/d/${id}/view`; }
@@ -3848,8 +3862,9 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   const appwriteId = appwriteFileIdFor(track);
   let candidates;
   if (semitones) {
-    // Transposição só o servidor faz (processa o áudio do Drive)
-    candidates = [transposeUrl(track.id, semitones)];
+    // V131.30 — usa Appwrite como fonte quando a música já foi migrada.
+    // Na primeira execução o servidor toca progressivamente enquanto gera o cache.
+    candidates = [transposeUrl(track.id, semitones, appwriteId)];
   } else if (appwriteId) {
     // V131.25 — Música migrada: usa o PROXY do servidor (/api/aw-audio), que
     // encaminha Range e propaga Content-Length — o navegador calcula a duração
@@ -3873,8 +3888,13 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   el.audio._candidates = candidates;
   el.audio._candidateIndex = 0;
   el.audio._trackId = track.id;
+  el.audio._transposeSemitones = Number(semitones || 0);
+  el.audio._transposeAppwriteId = appwriteId || '';
+  el.audio._transposePromoted = false;
+  clearTransposeReadyWatch();
 
   loadAudioCandidate(0);
+  if (semitones) watchTransposeReady(track, semitones, appwriteId);
 
   recordUsageEvent({ type: 'play', trackId: track.id, trackName: track.name, singer: track.singer, originalKey: formatKeyLabel(track.key), changedKey: alteredToneLabel || '', semitones });
   syncProgressUI();
@@ -3906,6 +3926,96 @@ function loadAudioCandidate(index){
   }
 }
 
+// V131.30 — A primeira transposição é enviada progressivamente para começar a
+// tocar rápido. Quando o arquivo completo fica pronto no cache, o player troca
+// silenciosamente para a versão com Content-Length/Range, preservando posição
+// e habilitando o cursor de tempo durante a mesma execução.
+function clearTransposeReadyWatch(){
+  if (!el.audio) return;
+  if (el.audio._transposeReadyTimer) clearTimeout(el.audio._transposeReadyTimer);
+  el.audio._transposeReadyTimer = null;
+  el.audio._transposeReadyToken = '';
+}
+
+function watchTransposeReady(track, semitones, appwriteId = ''){
+  clearTransposeReadyWatch();
+  const token = `${track.id}:${Number(semitones)}:${appwriteId || ''}:${Date.now()}`;
+  el.audio._transposeReadyToken = token;
+  let attempts = 0;
+
+  const poll = async () => {
+    if (el.audio._transposeReadyToken !== token) return;
+    if (!current || current.id !== track.id || Number(el.audio._transposeSemitones || 0) !== Number(semitones)) {
+      clearTransposeReadyWatch();
+      return;
+    }
+
+    attempts += 1;
+    try {
+      const response = await fetch(transposeStatusUrl(track.id, semitones, appwriteId), { cache: 'no-store' });
+      if (response.ok) {
+        const status = await response.json();
+        if (status.ready) {
+          clearTransposeReadyWatch();
+          promoteTransposeToSeekable(track, semitones, appwriteId);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    if (attempts < 240 && el.audio._transposeReadyToken === token) {
+      el.audio._transposeReadyTimer = setTimeout(poll, 1000);
+    } else {
+      clearTransposeReadyWatch();
+    }
+  };
+
+  el.audio._transposeReadyTimer = setTimeout(poll, 700);
+}
+
+function promoteTransposeToSeekable(track, semitones, appwriteId = ''){
+  const audio = el.audio;
+  if (!audio || audio._transposePromoted) return;
+  if (!current || current.id !== track.id || Number(audio._transposeSemitones || 0) !== Number(semitones)) return;
+
+  // Alguns navegadores tornam o próprio stream totalmente seekable ao receber
+  // o último byte. Nesse caso não há motivo para recarregar.
+  try {
+    const duration = audio.duration;
+    const end = audio.seekable && audio.seekable.length ? audio.seekable.end(audio.seekable.length - 1) : 0;
+    if (Number.isFinite(duration) && duration > 0 && end >= duration - 0.5) {
+      audio._transposePromoted = true;
+      syncProgressUI();
+      return;
+    }
+  } catch (_) {}
+
+  audio._transposePromoted = true;
+  const resumeAt = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  const shouldResume = !audio.paused;
+  const readyUrl = transposeUrl(track.id, semitones, appwriteId, true);
+  audio._candidates = [readyUrl];
+  audio._candidateIndex = 0;
+
+  const restorePosition = () => {
+    try {
+      if (resumeAt > 0 && Number.isFinite(audio.duration)) {
+        audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.1));
+      }
+    } catch (_) {}
+    syncProgressUI();
+    if (shouldResume) {
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
+    }
+  };
+
+  audio.addEventListener('loadedmetadata', restorePosition, { once: true });
+  audio.preload = 'auto';
+  audio.src = readyUrl;
+  try { audio.load(); } catch (_) {}
+}
+
 // URLs diretas do Google Drive (browser acessa sem passar pelo servidor)
 function driveDirectApiUrl(id){
   const key = (cfg && (cfg.DRIVE_API_KEY || cfg.API_KEY)) || '';
@@ -3917,6 +4027,7 @@ function driveDirectDownloadUrl(id){
 }
 
 function closePlayer(){
+  clearTransposeReadyWatch();
   try { el.audio.pause(); } catch(_) {}
   randomContinuousMode = false;
   shuffleMode = false;
@@ -4022,7 +4133,7 @@ function openToneModal(track){
     btn.classList.add('active');
 
     if (el.toneSelected) el.toneSelected.textContent = selectedToneLabel;
-    el.downloadToneBtn.href = downloadUrl(track.id, track.name, selectedSemitone);
+    el.downloadToneBtn.href = downloadUrl(track.id, track.name, selectedSemitone, appwriteFileIdFor(track));
     // V97 — textos curtos: o tom escolhido já fica nos info-strips acima
     el.playToneBtn.textContent = '▶ Ouvir Música';
     el.downloadToneBtn.textContent = '⤓ Baixar Música';
