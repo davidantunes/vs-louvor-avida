@@ -3290,30 +3290,41 @@ async function refreshLibraryInBackground(){
     libraryLoadingInBackground = true;
     resetProgressCounters();
 
-    // V127 — background refresh com timeout de 30s (não trava a UI)
+    // V131.30 — timeout de 45s (era 30s) + até 3 tentativas em loop. Como o
+    // servidor reaproveita a MESMA reconstrução em andamento
+    // (libraryBuildPromise) para qualquer requisição concorrente, tentar de
+    // novo é barato — só espera o trabalho que já está rolando terminar.
     if (useBackend()) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-        const resp = await fetch(`/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}`, {
-          credentials: 'omit', signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        if (resp.ok) {
-          const data = await resp.json();
-          if (Array.isArray(data.tracks) && data.tracks.length) {
-            const fresh = dedupeTracksById(data.tracks);
-            allTracks = fresh;
-            saveJSON('vs_drive_cache_v79', { updatedAt: Date.now(), tracks: allTracks });
-            afterLibraryLoaded();
-            el.status.textContent = 'Biblioteca atualizada.';
-            return;
+      for (let tentativa = 1; tentativa <= 3; tentativa++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 45000);
+          const resp = await fetch(`/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}`, {
+            credentials: 'omit', signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (Array.isArray(data.tracks) && data.tracks.length) {
+              const fresh = dedupeTracksById(data.tracks);
+              allTracks = fresh;
+              saveJSON('vs_drive_cache_v79', { updatedAt: Date.now(), tracks: allTracks });
+              afterLibraryLoaded();
+              el.status.textContent = 'Biblioteca atualizada.';
+              return;
+            }
           }
+          break; // resposta ok mas sem tracks — não insiste
+        } catch (e) {
+          if (e.name === 'AbortError' && tentativa < 3) {
+            console.warn(`Reconstrução ainda em andamento no servidor, tentativa ${tentativa}/3...`);
+            continue;
+          }
+          if (e.name !== 'AbortError') console.warn('Refresh em background falhou:', e);
+          return; // Não tenta o fallback progressivo em background — muito pesado
         }
-      } catch (e) {
-        if (e.name !== 'AbortError') console.warn('Refresh em background falhou:', e);
-        return; // Não tenta o fallback progressivo em background — muito pesado
       }
+      return;
     }
 
     const freshTracks = [];
@@ -3369,7 +3380,11 @@ async function loadLibrary(force = false){
       try {
         const url = `/api/library?rootId=${encodeURIComponent(cfg.ROOT_FOLDER_ID)}${force ? '&force=1' : ''}`;
 
-        // Timeout de 8s: se o servidor não responde, avisa o usuário
+        // V131.30 — Timeout de 20s (era 8s). A varredura do Drive ficou mais
+        // lenta de propósito (v131.23, para evitar bloqueio do Google), então
+        // uma reconstrução completa da biblioteca pode passar de 8s com
+        // facilidade. O servidor continua construindo em segundo plano mesmo
+        // se o navegador desistir — aumentar a espera evita o aviso prematuro.
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
           controller.abort();
@@ -3380,7 +3395,7 @@ async function loadLibrary(force = false){
               '<small style="opacity:.6">Isso pode levar até 1 minuto na primeira abertura do dia.<br>Você pode usar o app normalmente enquanto espera.</small>';
           }
           el.status.textContent = 'Aguardando servidor...';
-        }, 8000);
+        }, 20000);
 
         const resp = await fetch(url, { credentials: 'omit', signal: controller.signal });
         clearTimeout(timeoutId);
