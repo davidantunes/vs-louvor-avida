@@ -3,7 +3,7 @@
    Código-fonte (app.js/css/html/config) network-first: correções chegam na hora.
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v131.30.0';
+const SW_VERSION = 'v131.29.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -126,7 +126,7 @@ async function audioCacheFirst(req) {
   try {
     const resp = await fetch(req);
     // Só cacheia respostas completas e boas (200). Nunca cacheia erro/parcial.
-    if (resp && resp.ok && resp.status === 200 && resp.headers.get('X-VS-Transpose-Mode') !== 'generating') {
+    if (resp && resp.ok && resp.status === 200) {
       cache.put(req, resp.clone())
         .then(() => trimCache(AUDIO_CACHE, AUDIO_CACHE_MAX_ENTRIES))
         .catch(() => {});
@@ -176,7 +176,7 @@ async function precacheAudios(urls) {
       const already = await cache.match(u, { ignoreVary: true });
       if (already) continue;
       const resp = await fetch(u, { mode: 'cors', credentials: 'omit' }).catch(() => null);
-      if (resp && resp.ok && resp.status === 200 && resp.headers.get('X-VS-Transpose-Mode') !== 'generating') {
+      if (resp && resp.ok && resp.status === 200) {
         await cache.put(u, resp.clone()).catch(() => {});
         added++;
       }
