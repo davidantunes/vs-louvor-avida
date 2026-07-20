@@ -759,6 +759,45 @@
     <a href="#tutorialPage"><span class="dock-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.1 9a3 3 0 1 1 5.8 1c-.5 1.2-1.8 1.8-2.4 2.4-.4.4-.5.8-.5 1.6"/><path d="M12 17.5h.01"/><circle cx="12" cy="12" r="9"/></svg></span><small>Tutorial</small></a>
   </nav>
 
+  <!-- V131.37 — Modal de perfil do usuário. O JS já existia (openProfileModal,
+       updateProfileModal etc.), mas o HTML nunca tinha sido criado — o botão
+       do avatar no topo não fazia nada ao clicar. -->
+  <div id="profileModal" class="modal hidden">
+    <div class="modal-card glass profile-modal-card">
+      <button id="closeProfileModal" class="modal-close">×</button>
+      <span class="kicker">Perfil</span>
+      <div class="profile-modal-head">
+        <div id="profileAvatar" class="profile-modal-avatar"></div>
+        <div>
+          <h3 id="profileName" class="profile-modal-name">—</h3>
+          <p id="profileEmail" class="profile-modal-email">—</p>
+        </div>
+      </div>
+      <div class="profile-modal-grid">
+        <div class="profile-modal-stat">
+          <span>Cargo</span>
+          <strong id="profileRole">—</strong>
+        </div>
+        <div class="profile-modal-stat">
+          <span>Permissão</span>
+          <strong id="profilePermission">—</strong>
+        </div>
+        <div class="profile-modal-stat">
+          <span>Favoritas</span>
+          <strong id="profileFavorites">0</strong>
+        </div>
+        <div class="profile-modal-stat">
+          <span>Repertórios</span>
+          <strong id="profileSetlists">0</strong>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="profileStartTourBtn" class="btn btn-secondary" type="button">🎯 Rever tutorial</button>
+        <button id="profileLogoutBtn" class="btn btn-secondary" type="button">🚪 Sair</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toneModal" class="modal hidden">
     <div class="modal-card glass">
       <button id="closeTone" class="modal-close">×</button>

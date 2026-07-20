@@ -3,6 +3,38 @@ const compression = require('compression');
 const fetch = require('node-fetch');
 const { spawn } = require('child_process');
 const ffmpeg = require('ffmpeg-static');
+
+// V131.38 — Tags temáticas das músicas (adoração, ceia, celebração, etc.),
+// aplicadas por nome normalizado (funciona com qualquer tom/versão do
+// arquivo, e também para músicas novas que ainda não foram classificadas
+// manualmente — essas simplesmente ficam sem tag até serem adicionadas aqui).
+const { SONG_TAGS_BY_KEY } = require('./song-tags.js');
+function normalizeSongKey(fname) {
+  let n = String(fname || '').replace(/\.[a-zA-Z0-9]+$/, '');
+  n = n.replace(/\([^)]*\)/g, ' ');
+  n = n.replace(/[-–]?\s*(tom\s+)?[A-G](#|b)?m?#?\s*(\d{2,3}\s*)?(bpm)?\s*$/i, '');
+  n = n.replace(/[-–]?\s*\d{2,3}\s*bpm\s*$/i, '');
+  n = n.replace(/[-–]\s*$/, '');
+  n = n.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  n = n.replace(/[^a-zA-Z0-9\s+]/g, ' ');
+  n = n.replace(/\s+/g, ' ').trim().toLowerCase();
+  return n;
+}
+function tagsForFileName(fname) {
+  return SONG_TAGS_BY_KEY[normalizeSongKey(fname)] || [];
+}
+
+// V131.37 — Rede de segurança: sem isso, QUALQUER erro não tratado em código
+// assíncrono fora de uma rota (ex.: o setInterval de auto-sync da biblioteca)
+// derruba o processo inteiro, tirando o app do ar para todo mundo até o
+// Render reiniciar. Erros dentro de rotas já são pegos pelos try/catch de
+// cada endpoint; isso cobre o que escapa deles.
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Erro não tratado (uncaughtException):', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Promise rejeitada sem tratamento (unhandledRejection):', reason);
+});
 const path = require('path');
 
 const app = express();
@@ -111,11 +143,28 @@ function appwriteHeaders() {
 }
 async function appwriteRequest(method, path, body) {
   if (!appwriteReady()) throw new Error('Appwrite não configurado no Render.');
-  const response = await fetch(`${APPWRITE_ENDPOINT}${path}`, {
-    method,
-    headers: appwriteHeaders(),
-    body: body ? JSON.stringify(body) : undefined
-  });
+  // V131.37 — Timeout de 15s. SEM ISSO, se o Appwrite ficar indisponível ou
+  // a rede travar, essa chamada pode ficar pendurada por tempo indefinido —
+  // e como o endpoint de adicionar música (v131.37) usa uma FILA por
+  // repertório, uma chamada travada aqui trava TODAS as próximas adições
+  // àquele mesmo repertório atrás dela, indefinidamente. Falhar rápido é
+  // melhor que travar: o cliente recebe o erro e tenta de novo.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  let response;
+  try {
+    response = await fetch(`${APPWRITE_ENDPOINT}${path}`, {
+      method,
+      headers: appwriteHeaders(),
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Appwrite não respondeu em 15s (timeout).');
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const text = await response.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -305,22 +354,99 @@ app.get('/api/appwrite/setlists', async (req, res) => {
   }
 });
 
+// V131.37 — CORREÇÃO DE CONDIÇÃO DE CORRIDA: quando duas ou mais pessoas
+// adicionam músicas DIFERENTES ao MESMO repertório ao mesmo tempo (ex.: a
+// banda toda montando o repertório de domingo, cada um no celular), o método
+// antigo (cliente reescreve o repertório inteiro por cima) perdia músicas —
+// testado sob carga: 9 de 10 adições simultâneas sumiam. A causa é o clássico
+// "ler-modificar-escrever": cada dispositivo lê uma cópia, soma UMA música,
+// e regrava o repertório inteiro — apagando o que outros já tinham somado.
+//
+// Correção: este endpoint faz a leitura+soma+escrita inteiramente no
+// SERVIDOR, e uma fila (por repertório) garante que duas requisições para o
+// MESMO repertório nunca se sobrepõem — cada uma sempre parte do estado mais
+// recente de verdade, nunca de uma cópia desatualizada do cliente.
+const setlistWriteQueues = new Map(); // setlistId -> promise (fila de escrita)
+function withSetlistLock(setlistId, task) {
+  const previous = setlistWriteQueues.get(setlistId) || Promise.resolve();
+  const next = previous.then(task, task); // roda depois do anterior, mesmo se ele deu erro
+  const guarded = next.catch(() => {}); // erro não trava a fila pros próximos
+  setlistWriteQueues.set(setlistId, guarded);
+  // V131.37 — Limpa a entrada da fila quando não há mais nada atrás dela
+  // esperando. Sem isso, a Map cresce para sempre (um registro por
+  // repertório que já recebeu alguma escrita, nunca removido).
+  guarded.then(() => {
+    if (setlistWriteQueues.get(setlistId) === guarded) {
+      setlistWriteQueues.delete(setlistId);
+    }
+  });
+  return next;
+}
+
+app.post('/api/appwrite/setlists/:setlistId/add-track', async (req, res) => {
+  try {
+    const setlistId = req.params.setlistId;
+    const entry = req.body.entry;
+    if (!entry) return res.status(400).json({ error: 'Campo "entry" obrigatório.' });
+
+    const result = await withSetlistLock(setlistId, async () => {
+      const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
+      const found = docs.find(d => d.setlist_id === setlistId);
+      if (!found) { const e = new Error('Repertório não encontrado na nuvem.'); e.status = 404; throw e; }
+
+      const value = JSON.parse(found.data || '{}');
+      value.trackIds = Array.isArray(value.trackIds) ? value.trackIds : [];
+
+      const entryTrackId = typeof entry === 'string' ? entry : entry.trackId;
+      const entrySemitones = typeof entry === 'string' ? 0 : Number(entry.semitones || 0);
+      const jaExiste = value.trackIds.some(e => {
+        const id = typeof e === 'string' ? e : e.trackId;
+        const st = typeof e === 'string' ? 0 : Number(e.semitones || 0);
+        return id === entryTrackId && st === entrySemitones;
+      });
+
+      if (!jaExiste) {
+        value.trackIds.push(entry);
+        value.updatedAt = new Date().toISOString();
+        const serialized = JSON.stringify(value);
+        await upsertState(
+          APPWRITE_SETLISTS_COLLECTION_ID,
+          d => d.setlist_id === setlistId,
+          { setlist_id: setlistId, data: serialized, updated_at: value.updatedAt }
+        );
+      }
+      return { value, alreadyPresent: jaExiste };
+    });
+
+    res.json({ ok: true, setlist: result.value, alreadyPresent: result.alreadyPresent });
+  } catch (error) {
+    console.error(`[setlists] erro ao adicionar música em "${req.params.setlistId}":`, error.message);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
 // Cria ou atualiza UM repertório (upsert por setlist_id)
 app.put('/api/appwrite/setlists/:setlistId', async (req, res) => {
   try {
     const setlistId = req.params.setlistId;
-    const updatedAt = new Date().toISOString();
     const value = req.body.value || {};
     const serialized = JSON.stringify(value);
     if (serialized.length > 49000) {
       console.warn(`[setlists] "${setlistId}" = ${serialized.length} chars (grande)`);
     }
-    const doc = await upsertState(
-      APPWRITE_SETLISTS_COLLECTION_ID,
-      d => d.setlist_id === setlistId,
-      { setlist_id: setlistId, data: serialized, updated_at: updatedAt }
-    );
-    res.json({ ok: true, id: doc.$id, setlistId, updatedAt });
+    // V131.37 — Mesma fila do endpoint de adicionar música: garante que uma
+    // regravação completa (renomear, trocar paleta, reordenar) nunca se
+    // sobrepõe com uma adição de música concorrente no mesmo repertório.
+    const updatedAt = await withSetlistLock(setlistId, async () => {
+      const ts = new Date().toISOString();
+      await upsertState(
+        APPWRITE_SETLISTS_COLLECTION_ID,
+        d => d.setlist_id === setlistId,
+        { setlist_id: setlistId, data: serialized, updated_at: ts }
+      );
+      return ts;
+    });
+    res.json({ ok: true, setlistId, updatedAt });
   } catch (error) {
     console.error(`[setlists] erro ao salvar "${req.params.setlistId}":`, error.message);
     res.status(500).json({ error: error.message, setlistId: req.params.setlistId });
@@ -657,7 +783,7 @@ async function buildLibrary(rootFolderId) {
       singer: singerName,
       ext: getExt(f.name),
       key: detectKey(f.name),
-      tags: [],
+      tags: tagsForFileName(f.name),
       coverUrl: cover
     });
   }

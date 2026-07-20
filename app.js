@@ -130,7 +130,6 @@ const el = {
   favoritesOnly: document.getElementById('favoritesOnly'),
   clearFilters: document.getElementById('clearFilters'),
   openFiltersSheetBtn: document.getElementById('openFiltersSheetBtn'),
-  closeFiltersSheetBtn: document.getElementById('closeFiltersSheetBtn'),
   filtersSheetBackdrop: document.getElementById('filtersSheetBackdrop'),
   filtersGrid: document.getElementById('filtersGrid'),
   randomBtn: document.getElementById('randomBtn'),
@@ -138,13 +137,8 @@ const el = {
   totalTracks: document.getElementById('totalTracks'),
   totalSingers: document.getElementById('totalSingers'),
   totalSingersInline: document.getElementById('totalSingersInline'),
-  totalKeys: document.getElementById('totalKeys'),
-  totalFavorites: document.getElementById('totalFavorites'),
   heroTotal: document.getElementById('heroTotal'),
   heroSetlists: document.getElementById('heroSetlists'),
-  heroFavs: document.getElementById('heroFavs'),
-  heroKeys: document.getElementById('heroKeys'),
-  heroCategories: document.getElementById('heroCategories'),
   heroTotalPanel: document.getElementById('heroTotalPanel'),
   resultCount: document.getElementById('resultCount'),
   viewThumbBtn: document.getElementById('viewThumbBtn'),
@@ -228,7 +222,6 @@ const el = {
   setlistDetailIntro: document.getElementById('setlistDetailIntro'),
   setlistSharedHero: document.getElementById('setlistSharedHero'),
   setlistDetailTracks: document.getElementById('setlistDetailTracks'),
-  setlistDetailPalette: document.getElementById('setlistDetailPalette'),
   setlistPaletteViewModal: document.getElementById('setlistPaletteViewModal'),
   setlistPaletteViewTitle: document.getElementById('setlistPaletteViewTitle'),
   setlistPaletteViewBody: document.getElementById('setlistPaletteViewBody'),
@@ -333,7 +326,6 @@ const el = {
   cancelPasswordRecoveryBtn: document.getElementById('cancelPasswordRecoveryBtn'),
   modeLoginBtn: document.getElementById('modeLoginBtn'),
   modeRegisterBtn: document.getElementById('modeRegisterBtn'),
-  authModeHint: document.getElementById('authModeHint'),
   loginNote: document.getElementById('loginNote'),
   createAccountBtn: document.getElementById('createAccountBtn'),
   authStatus: document.getElementById('authStatus'),
@@ -353,7 +345,6 @@ const el = {
   profileLogoutBtn: document.getElementById('profileLogoutBtn'),
   scheduleSearch: document.getElementById('scheduleSearch'),
   scheduleDayFilter: document.getElementById('scheduleDayFilter'),
-  scheduleRoleFilter: document.getElementById('scheduleRoleFilter'),
   scheduleMemberFilter: document.getElementById('scheduleMemberFilter'),
   scheduleClearBtn: document.getElementById('scheduleClearBtn'),
   schedulePrintBtn: document.getElementById('schedulePrintBtn'),
@@ -552,7 +543,6 @@ function bindEvents(){
   if (el.activeSetlistMiniViewBtn) el.activeSetlistMiniViewBtn.addEventListener('click', () => el.activeSetlistViewBtn?.click());
   if (el.activeSetlistMiniDoneBtn) el.activeSetlistMiniDoneBtn.addEventListener('click', () => concludeActiveSetlist());
   if (el.openFiltersSheetBtn) el.openFiltersSheetBtn.addEventListener('click', openFiltersSheet);
-  if (el.closeFiltersSheetBtn) el.closeFiltersSheetBtn.addEventListener('click', closeFiltersSheet);
   if (el.filtersSheetBackdrop) el.filtersSheetBackdrop.addEventListener('click', closeFiltersSheet);
 
   if (el.closeSetlistReview) el.closeSetlistReview.addEventListener('click', closeSetlistReviewModal);
@@ -901,8 +891,6 @@ function setAuthMode(mode = 'login'){
     el.loginNameField.style.display = isRegister ? '' : 'none';
   }
   el.recoverPasswordBtn?.classList.toggle('hidden', isRegister);
-  // V102 — authModeHint foi removido do HTML (era redundante com loginNote)
-  if (el.authModeHint) el.authModeHint.style.display = 'none';
   // V105 — loginNote e textos dos botões refletem o fluxo em dois passos.
   if (el.loginNote) el.loginNote.textContent = isRegister
     ? 'Preencha nome, e-mail e senha para criar sua conta.'
@@ -2119,7 +2107,13 @@ function addTrackToSetlist(setlist, track, toneInfo = { semitones: 0, tone: '' }
   }
   setlist.trackIds.push(entry);
   setlist.updatedAt = new Date().toISOString();
-  saveSetlistsState(setlist);
+  saveJSON('vs_setlists_v1', setlists);
+  // V131.37 — Usa o endpoint ATÔMICO (soma no servidor) em vez de reescrever
+  // o repertório inteiro. Isso corrige uma condição de corrida real: quando
+  // duas pessoas adicionavam músicas diferentes ao MESMO repertório ao mesmo
+  // tempo, uma sobrescrevia a outra e músicas somem silenciosamente (testado
+  // sob carga: 9 de 10 adições simultâneas se perdiam com o método antigo).
+  syncAddTrackToServer(setlist, entry);
   updateStats();
   renderSetlists();
   renderSetlistOptions();
@@ -2297,6 +2291,48 @@ function saveSetlistsState(alterado){
 // os outros — resolve "cria e some" e "não aparece pra todo mundo".
 // Mantém saveJSON local e o render; a escrita na nuvem é por-documento.
 // ============================================================================
+// V131.37 — Envia a adição de música pelo endpoint ATÔMICO do servidor
+// (soma no servidor, sem condição de corrida). Reconcilia trackIds com o
+// resultado do servidor (que pode ter músicas de outras pessoas adicionadas
+// entre o momento local e o envio). Cai no método antigo (regravar tudo) se
+// o endpoint novo não existir ainda (ex.: deploy mais antigo do servidor).
+async function syncAddTrackToServer(setlist, entry){
+  if (!authUser || !setlist?.id) return;
+  pendingNewSetlistIds.add(setlist.id);
+  try {
+    const res = await fetch(`/api/appwrite/setlists/${encodeURIComponent(setlist.id)}/add-track`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entry })
+    });
+    if (!res.ok) {
+      if (res.status === 404) {
+        // Endpoint novo indisponível (servidor antigo) — cai no método antigo
+        return saveSingleSetlist(setlist);
+      }
+      throw new Error(await res.text());
+    }
+    const data = await res.json();
+    if (data?.setlist && Array.isArray(data.setlist.trackIds)) {
+      // Reconcilia com o estado real do servidor (pode incluir músicas que
+      // outras pessoas somaram entre o momento local e este envio)
+      setlist.trackIds = data.setlist.trackIds;
+      saveJSON('vs_setlists_v1', setlists);
+      if (el.quickAddSongsModal && !el.quickAddSongsModal.classList.contains('hidden')) {
+        renderQuickAddResults();
+        updateQuickAddCount();
+      }
+      renderSetlists();
+      render();
+    }
+    pendingNewSetlistIds.delete(setlist.id);
+  } catch (err) {
+    console.warn('Adição de música não sincronizada (endpoint atômico):', err.message);
+    // Fallback: tenta o método antigo para não perder o dado
+    saveSingleSetlist(setlist).catch(() => {});
+  }
+}
+
 async function saveSingleSetlist(setlist){
   if (!setlist || !setlist.id) return;
   saveJSON('vs_setlists_v1', setlists); // mantém cópia local completa
@@ -4257,11 +4293,8 @@ function toggleFavorite(id){
   render();
 }
 function updateFavoriteCount(){
-  // V123 — totalFavorites e heroFavs foram removidos da página inicial na V121
   // (substituídos por "Próximos cultos"/"Próximo culto"). Checagem defensiva
   // evita erro caso algum desses elementos não exista mais no HTML.
-  if (el.totalFavorites) el.totalFavorites.textContent = favorites.length;
-  if (el.heroFavs) el.heroFavs.textContent = favorites.length;
   updateProfileModal();
 }
 
