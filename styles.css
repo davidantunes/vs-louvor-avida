@@ -7692,7 +7692,7 @@ details[open] .archived-setlists-toggle::before{
 /* V131.26 — O modal de visualização da paleta abre POR CIMA do modal de
    detalhe do repertório (ambos ficam abertos ao mesmo tempo). Sem isso,
    os dois tinham o mesmo z-index e a paleta ficava escondida atrás. */
-#setlistPaletteViewModal{z-index:120;}
+#setlistPaletteViewModal{z-index:120 !important;}
 
 /* ============================================================================
    V131.31 — Modal de busca rápida de músicas (novo repertório)
@@ -7739,3 +7739,10 @@ details[open] .archived-setlists-toggle::before{
   .quick-add-footer{flex-direction:column;align-items:stretch;}
   .quick-add-footer .btn{width:100%;}
 }
+
+/* V131.32 — O modal de busca rápida (novo repertório) fica ABERTO enquanto
+   o usuário troca o tom ou vê detalhes de uma música — esses modais
+   precisam abrir por cima dele, senão ficam escondidos atrás. */
+#quickAddSongsModal{z-index:110 !important;}
+#toneModal{z-index:130 !important;}
+#songModal{z-index:130 !important;}
