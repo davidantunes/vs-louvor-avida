@@ -205,6 +205,13 @@ const el = {
   closeEditSetlistDate: document.getElementById('closeEditSetlistDate'),
   createSetlistBtn: document.getElementById('createSetlistBtn'),
   setlistOptions: document.getElementById('setlistOptions'),
+  quickAddSongsModal: document.getElementById('quickAddSongsModal'),
+  quickAddSetlistTitle: document.getElementById('quickAddSetlistTitle'),
+  quickAddSearchInput: document.getElementById('quickAddSearchInput'),
+  quickAddResults: document.getElementById('quickAddResults'),
+  quickAddCount: document.getElementById('quickAddCount'),
+  quickAddFinishBtn: document.getElementById('quickAddFinishBtn'),
+  closeQuickAddSongs: document.getElementById('closeQuickAddSongs'),
   activeSetlistBanner: document.getElementById('activeSetlistBanner'),
   activeSetlistName: document.getElementById('activeSetlistName'),
   activeSetlistMeta: document.getElementById('activeSetlistMeta'),
@@ -594,6 +601,15 @@ function bindEvents(){
     openSetlistPaletteView(s);
   });
   if (el.closeSetlistPaletteView) el.closeSetlistPaletteView.addEventListener('click', closeSetlistPaletteView);
+
+  // V131.31 — Modal de busca rápida de músicas
+  if (el.closeQuickAddSongs) el.closeQuickAddSongs.addEventListener('click', closeQuickAddSongsModal);
+  if (el.quickAddSongsModal) el.quickAddSongsModal.addEventListener('click', e => { if (e.target === el.quickAddSongsModal) closeQuickAddSongsModal(); });
+  if (el.quickAddFinishBtn) el.quickAddFinishBtn.addEventListener('click', finishQuickAddSongs);
+  if (el.quickAddSearchInput) el.quickAddSearchInput.addEventListener('input', () => {
+    clearTimeout(quickAddDebounceTimer);
+    quickAddDebounceTimer = setTimeout(renderQuickAddResults, 120);
+  });
   if (el.setlistPaletteViewCloseBtn) el.setlistPaletteViewCloseBtn.addEventListener('click', closeSetlistPaletteView);
   if (el.setlistPaletteViewModal) el.setlistPaletteViewModal.addEventListener('click', e => { if (e.target === el.setlistPaletteViewModal) closeSetlistPaletteView(); });
   if (el.setlistPaletteViewChangeBtn) el.setlistPaletteViewChangeBtn.addEventListener('click', () => {
@@ -1951,11 +1967,107 @@ function activateSetlistAndOpenLibrary(setlist){
   if (!setlist) return;
   setActiveSetlist(setlist.id);
   closeSetlistModal();
-  location.hash = '#biblioteca';
-  routeInternalPage();
-  render();
+  // V131.31 — Em vez de navegar para a biblioteca inteira (onde o campo de
+  // busca ficava fora de vista, exigindo rolar a tela), abre um modal de
+  // busca dedicado, direto na frente do usuário.
+  openQuickAddSongsModal(setlist);
   recordUsageEvent({ type: 'setlist_active', setlistId: setlist.id, setlistName: setlist.name, message: `Repertório ativo: "${setlist.name}".` });
-  toast(`Repertório “${setlist.name}” ativo. Adicione músicas na biblioteca.`);
+}
+
+// ============================================================================
+// V131.31 — Modal de busca rápida de músicas, aberto logo após criar um
+// repertório (nome + data). Substitui o fluxo antigo de "vá para a
+// biblioteca e role até achar o campo de busca".
+// ============================================================================
+let quickAddDebounceTimer = null;
+
+function openQuickAddSongsModal(setlist){
+  if (!el.quickAddSongsModal) return;
+  if (el.quickAddSetlistTitle) el.quickAddSetlistTitle.textContent = `Adicionar músicas — ${setlist.name}`;
+  if (el.quickAddSearchInput) el.quickAddSearchInput.value = '';
+  renderQuickAddResults();
+  updateQuickAddCount();
+  el.quickAddSongsModal.classList.remove('hidden');
+  setTimeout(() => el.quickAddSearchInput?.focus(), 80);
+}
+
+function closeQuickAddSongsModal(){
+  el.quickAddSongsModal?.classList.add('hidden');
+}
+
+function renderQuickAddResults(){
+  if (!el.quickAddResults) return;
+  const raw = (el.quickAddSearchInput?.value || '').trim();
+  const q = normalize(raw);
+
+  if (!q) {
+    el.quickAddResults.innerHTML = '<div class="empty quick-add-empty">Digite para buscar músicas na biblioteca.</div>';
+    return;
+  }
+  if (!allTracks.length) {
+    el.quickAddResults.innerHTML = '<div class="empty quick-add-empty">A biblioteca ainda está carregando...</div>';
+    return;
+  }
+
+  const matches = allTracks.filter(t => {
+    const blob = normalize(`${t.name} ${t.singer} ${t.fileName || ''} ${t.key || ''}`);
+    return blob.includes(q);
+  }).slice(0, 40);
+
+  if (!matches.length) {
+    el.quickAddResults.innerHTML = '<div class="empty quick-add-empty">Nenhuma música encontrada para essa busca.</div>';
+    return;
+  }
+
+  const active = getActiveEditableSetlist();
+  el.quickAddResults.innerHTML = matches.map(t => {
+    const already = active ? isTrackPresentInSetlist(active, t.id) : false;
+    return `
+      <div class="quick-add-row ${already ? 'is-added' : ''}" data-id="${esc(t.id)}">
+        <div class="quick-add-row-info">
+          <strong>${esc(t.name)}</strong>
+          <span>${esc(t.singer)} • Tom ${esc(formatKeyLabel(t.key || '—'))}</span>
+        </div>
+        <div class="quick-add-row-actions">
+          <button class="action-btn primary play-btn" data-id="${esc(t.id)}" aria-label="Tocar" title="Tocar"></button>
+          <button class="action-icon tone-btn-open" data-id="${esc(t.id)}" title="Alterar tom" aria-label="Alterar tom">♬</button>
+          <button class="action-icon quick-add-btn ${already ? 'is-added' : ''}" data-id="${esc(t.id)}" title="${already ? 'Já adicionada' : 'Adicionar'}" aria-label="${already ? 'Já adicionada' : 'Adicionar'}">${already ? '✓' : '+'}</button>
+        </div>
+      </div>`;
+  }).join('');
+
+  bindTrackCardEvents(el.quickAddResults); // reaproveita play-btn e tone-btn-open
+
+  el.quickAddResults.querySelectorAll('.quick-add-btn:not([data-bound])').forEach(btn => {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+      const track = findTrack(btn.dataset.id);
+      const activeNow = getActiveEditableSetlist();
+      if (!activeNow || !track) return;
+      if (isTrackPresentInSetlist(activeNow, track.id)) {
+        toast('Essa música já está no repertório.');
+        return;
+      }
+      addTrackToSetlist(activeNow, track, { semitones: 0, tone: '' }, { toastMessage: null });
+    });
+  });
+}
+
+function updateQuickAddCount(){
+  if (!el.quickAddCount) return;
+  const active = getActiveEditableSetlist();
+  const n = active ? countValidSetlistTracks(active) : 0;
+  el.quickAddCount.textContent = `${n} música${n === 1 ? '' : 's'} adicionada${n === 1 ? '' : 's'}`;
+}
+
+function finishQuickAddSongs(){
+  const active = getActiveEditableSetlist();
+  if (!active || countValidSetlistTracks(active) === 0) {
+    toast('Adicione pelo menos uma música antes de concluir o repertório.');
+    return;
+  }
+  closeQuickAddSongsModal();
+  confirmActiveSetlistConclusion();
 }
 function addTrackToSetlist(setlist, track, toneInfo = { semitones: 0, tone: '' }, options = {}){
   if (!setlist || !track) return false;
@@ -1977,6 +2089,12 @@ function addTrackToSetlist(setlist, track, toneInfo = { semitones: 0, tone: '' }
   render();
   pulseAddedTrack(track.id);
   if (options.closeModal) closeSetlistModal();
+  // V131.31 — Se o modal de busca rápida (novo repertório) estiver aberto,
+  // atualiza a lista e o contador na hora, para o usuário ver o "✓" no ato.
+  if (el.quickAddSongsModal && !el.quickAddSongsModal.classList.contains('hidden')) {
+    renderQuickAddResults();
+    updateQuickAddCount();
+  }
   recordUsageEvent({ type: 'setlist_updated', setlistId: setlist.id, setlistName: setlist.name, trackCount: setlist.trackIds.length, message: `Música adicionada ao repertório "${setlist.name}".` });
   toast(options.toastMessage || 'Música adicionada ao repertório.');
   return true;

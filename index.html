@@ -778,6 +778,24 @@
     </div>
   </div>
 
+  <!-- V131.31 — Modal de busca rápida: aberto logo após criar o repertório
+       (nome + data). Campo de busca sempre visível, resultados aparecem ao
+       digitar, com tom/tocar/adicionar direto na lista. -->
+  <div id="quickAddSongsModal" class="modal hidden">
+    <div class="modal-card glass quick-add-modal">
+      <button id="closeQuickAddSongs" class="modal-close">×</button>
+      <span class="kicker">Novo repertório</span>
+      <h3 id="quickAddSetlistTitle">Adicionar músicas</h3>
+      <p class="quick-add-helper">Digite o nome da música ou do cantor para buscar.</p>
+      <input id="quickAddSearchInput" type="text" class="quick-add-search" placeholder="🔎 Buscar música..." autocomplete="off">
+      <div id="quickAddResults" class="quick-add-results"></div>
+      <div class="quick-add-footer">
+        <span id="quickAddCount" class="quick-add-count">0 música(s) adicionada(s)</span>
+        <button id="quickAddFinishBtn" class="btn btn-primary" type="button">Concluir repertório</button>
+      </div>
+    </div>
+  </div>
+
   <div id="setlistModal" class="modal hidden">
     <div class="modal-card glass">
       <button id="closeSetlist" class="modal-close">×</button>

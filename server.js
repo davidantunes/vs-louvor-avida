@@ -1232,3 +1232,34 @@ const server = app.listen(PORT, () => {
 server.keepAliveTimeout = 120000;  // 120s (padrão é 5s)
 server.headersTimeout = 120000;    // 120s
 server.requestTimeout = 0;         // sem limite para streams longos
+
+// ============================================================================
+// V131.31 — AUTO-SYNC: reconstrói a biblioteca sozinha em segundo plano a
+// cada 20 minutos, sem que ninguém precise clicar em nada. Uma música
+// adicionada ao Drive aparece no app em até ~20 minutos automaticamente.
+//
+// Por que não é instantâneo: o app usa apenas uma CHAVE DE API do Google
+// Drive (sem login/OAuth). Notificações em tempo real do Drive (webhooks)
+// só existem para contas de serviço com OAuth configurado — exigiria um
+// projeto separado no Google Cloud, verificação de domínio e renovação
+// semanal de canal. Esta atualização periódica é o equilíbrio prático entre
+// automação e simplicidade, sem essa complexidade adicional.
+//
+// A reconstrução usa o mesmo processo cauteloso (2 pastas simultâneas, com
+// pausa) que já existe para evitar bloqueio de tráfego do Google.
+// ============================================================================
+const AUTO_SYNC_INTERVAL_MS = 20 * 60 * 1000; // 20 minutos
+setInterval(async () => {
+  try {
+    const rootId = process.env.ROOT_FOLDER_ID || '1Tcua5y0O9Bv5LRNmtIYnDCderiaN8xB8';
+    const antes = libraryCache ? libraryCache.tracks.length : 0;
+    const tracks = await buildLibrary(rootId);
+    const depois = tracks.length;
+    libraryCache = { tracks, builtAt: Date.now(), rootId };
+    if (depois !== antes) {
+      console.log(`[auto-sync] Biblioteca atualizada: ${antes} → ${depois} música(s).`);
+    }
+  } catch (error) {
+    console.warn('[auto-sync] Falhou (tentará de novo em 20min):', error.message);
+  }
+}, AUTO_SYNC_INTERVAL_MS);
