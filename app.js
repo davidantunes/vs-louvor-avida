@@ -124,9 +124,7 @@ const el = {
   themeToggle: document.getElementById('themeToggle'),
   status: document.getElementById('status'),
   musicFilter: document.getElementById('musicFilter'),
-  keyFilter: document.getElementById('keyFilter'),
   tagFilter: document.getElementById('tagFilter'),
-  typeFilter: document.getElementById('typeFilter'),
   favoritesOnly: document.getElementById('favoritesOnly'),
   clearFilters: document.getElementById('clearFilters'),
   openFiltersSheetBtn: document.getElementById('openFiltersSheetBtn'),
@@ -420,9 +418,7 @@ function bindEvents(){
   el.viewThumbBtn.addEventListener('click', () => setViewMode('thumbnails'));
   el.viewDetailBtn.addEventListener('click', () => setViewMode('details'));
   el.musicFilter.addEventListener('change', render);
-  el.keyFilter.addEventListener('change', render);
   el.tagFilter.addEventListener('change', render);
-  el.typeFilter.addEventListener('change', render);
   el.refresh.addEventListener('click', () => forceRefreshDriveLibrary());
   if (el.loadingSkipBtn) el.loadingSkipBtn.addEventListener('click', () => {
     hideLoading();
@@ -3736,14 +3732,10 @@ function afterLibraryLoaded(){
 
 function populateFilters(){
   const musicNames = unique(allTracks.map(t => t.name)).sort(localeSort);
-  const keys = unique(allTracks.map(t => t.key).filter(Boolean)).sort(localeSort);
   const tags = unique(allTracks.flatMap(t => t.tags || [])).sort(localeSort);
-  const types = unique(allTracks.map(t => t.ext.toUpperCase())).sort(localeSort);
 
   fillSelect(el.musicFilter, 'Todas as músicas', musicNames);
-  fillSelect(el.keyFilter, 'Todos os tons', keys);
   fillSelect(el.tagFilter, 'Todas as tags', tags);
-  fillSelect(el.typeFilter, 'Todos os arquivos', types);
 }
 function fillSelect(select, placeholder, values){
   const current = select.value;
@@ -3815,9 +3807,7 @@ function updateStats(){
 function clearFilters(){
   el.search.value = '';
   el.musicFilter.value = '';
-  el.keyFilter.value = '';
   el.tagFilter.value = '';
-  el.typeFilter.value = '';
   isFavoritesFilter = false;
   el.favoritesOnly.classList.remove('favorites-active');
   render();
@@ -3828,9 +3818,7 @@ function getFiltered(){
   const result = allTracks.filter(t => {
     if (isFavoritesFilter && !favorites.includes(t.id)) return false;
     if (el.musicFilter.value && t.name !== el.musicFilter.value) return false;
-    if (el.keyFilter.value && t.key !== el.keyFilter.value) return false;
     if (el.tagFilter.value && !(t.tags || []).includes(el.tagFilter.value)) return false;
-    if (el.typeFilter.value && t.ext.toUpperCase() !== el.typeFilter.value) return false;
     if (!q) return true;
     const blob = normalize(`${t.name} ${t.singer} ${t.fileName} ${(t.tags||[]).join(' ')} ${t.key}`);
     return blob.includes(q);
