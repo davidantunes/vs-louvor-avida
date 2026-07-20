@@ -1736,7 +1736,29 @@ function renderPaletteSelectionTarget(){
     return;
   }
   el.paletteSelectionTarget.classList.remove('hidden');
-  el.paletteSelectionTarget.innerHTML = `<strong>Escolha a paleta do repertório:</strong> <span>${esc(target.name)}</span>`;
+  // V131.36 — Paleta é opcional: botão "Concluir repertório" direto aqui,
+  // para quem não quer escolher paleta não precise voltar manualmente.
+  el.paletteSelectionTarget.innerHTML = `
+    <div class="palette-selection-target-row">
+      <div><strong>Escolha a paleta do repertório:</strong> <span>${esc(target.name)}</span></div>
+      <button id="paletteTargetFinishBtn" class="btn btn-secondary btn-compact" type="button">Concluir sem paleta</button>
+    </div>`;
+  const finishBtn = document.getElementById('paletteTargetFinishBtn');
+  if (finishBtn) finishBtn.addEventListener('click', () => finishSetlistFromPaletteScreen(target));
+}
+
+// V131.36 — Conclui o repertório direto da tela de paletas, sem exigir
+// escolha (a paleta sempre foi opcional; agora dá para pular na própria tela).
+function finishSetlistFromPaletteScreen(setlist){
+  if (!setlist) return;
+  clearPendingPaletteSetlist();
+  clearActiveSetlist();
+  pendingPaletteReturnTarget = '';
+  toast(`Repertório "${setlist.name}" concluído.`);
+  location.hash = '#repertorios';
+  routeInternalPage();
+  render();
+  setTimeout(() => openSetlistDetail(setlist.id), 150);
 }
 
 function renderSetlistReviewTracks(setlist){
@@ -1776,17 +1798,21 @@ function confirmActiveSetlistConclusion(){
     clearActiveSetlist();
     return;
   }
-  // V131.17 — Paleta agora é OPCIONAL. Conclui o repertório e abre a escolha
-  // de paleta, mas o usuário pode fechar sem escolher. Um aviso lembra que
-  // a paleta ainda não foi definida.
   clearActiveSetlist();
-  const temPaleta = active.paletteImage && active.paletteTitle;
-  if (name) {
-    toast(temPaleta
-      ? `Repertório "${name}" concluído.`
-      : `Repertório "${name}" concluído. Falta escolher a paleta de cores (opcional).`);
+  const temPaleta = Boolean(active.paletteImage && active.paletteTitle);
+  if (temPaleta) {
+    // V131.36 — Já tem paleta escolhida: não precisa passar pela tela de
+    // paletas de novo. Vai direto para o repertório concluído.
+    toast(`Repertório "${name}" concluído.`);
+    location.hash = '#repertorios';
+    routeInternalPage();
+    render();
+    setTimeout(() => openSetlistDetail(active.id), 150);
+    return;
   }
-  // Abre a escolha de paleta como sugestão (não obrigatória)
+  // V131.17 — Paleta é OPCIONAL. Abre a escolha como sugestão; o usuário
+  // pode fechar sem escolher, ou usar "Concluir sem paleta" na própria tela.
+  if (name) toast(`Repertório "${name}" concluído. Falta escolher a paleta de cores (opcional).`);
   startPaletteSelectionForSetlist(active, 'repertorios');
 }
 function openPaletteModal(title, imagePath, paletteId=''){
