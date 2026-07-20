@@ -585,12 +585,11 @@ function bindEvents(){
       toast('Somente quem criou este repertório pode adicionar músicas.');
       return;
     }
+    // V131.35 — Antes ia para a biblioteca inteira (rolar até achar a busca).
+    // Agora abre o mesmo modal de busca rápida usado na criação do repertório.
     setActiveSetlist(s.id);
     closeSetlistDetail();
-    location.hash = '#biblioteca';
-    routeInternalPage();
-    render();
-    toast(`Repertório “${s.name}” ativo. Adicione músicas na biblioteca.`);
+    openQuickAddSongsModal(s);
   });
   // V131.25 — O botão "🎨 Paleta" agora abre um modal mostrando a paleta
   // escolhida (visível para todos). A troca fica dentro do modal, só para
@@ -1654,8 +1653,7 @@ function setActiveSetlist(id){
 }
 
 // V131.11 — Inicia o fluxo de adicionar músicas a um repertório existente.
-// Torna o repertório ativo e leva o usuário à biblioteca, onde cada música
-// tem o botão de adicionar ao repertório ativo.
+// Torna o repertório ativo e abre o modal de busca rápida de músicas.
 function startAddSongsToSetlist(id){
   const setlist = setlists.find(s => s.id === id);
   if (!setlist) return;
@@ -1663,12 +1661,11 @@ function startAddSongsToSetlist(id){
     toast('Somente quem criou este repertório (ou um administrador) pode adicionar músicas.');
     return;
   }
+  // V131.35 — Consistente com o resto do app: usa o mesmo modal de busca
+  // rápida em vez de mandar o usuário para a biblioteca inteira.
   setActiveSetlist(id);
   closeSetlistDetail();
-  location.hash = '#biblioteca';
-  routeInternalPage();
-  render();
-  toast(`Repertório ativo: "${setlist.name}". Toque ➕ nas músicas para adicioná-las.`);
+  openQuickAddSongsModal(setlist);
 }
 function clearActiveSetlist(){
   activeSetlistId = '';
@@ -1871,6 +1868,11 @@ function applyPaletteToSetlist(setlist, palette){
   renderSetlists();
   render();
   const shareAfter = pendingPaletteShareSetlistId && String(pendingPaletteShareSetlistId) === String(setlist.id);
+  // V131.34 — Captura o destino de retorno ANTES de limpar, e efetivamente
+  // navega para lá. A variável já existia (pendingPaletteReturnTarget) mas
+  // nunca era usada: depois de escolher a paleta, a tela ficava parada na
+  // página de Paletas, sem feedback de conclusão nem retorno automático.
+  const returnTarget = pendingPaletteReturnTarget;
   closePaletteModal();
   closePaletteChooseSetlistModal();
   clearPendingPaletteSetlist();
@@ -1881,9 +1883,18 @@ function applyPaletteToSetlist(setlist, palette){
     pendingPaletteShareSetlistId = '';
     copyText(buildSetlistShareUrl(setlist.id), 'Paleta definida e link do repertório copiado.');
   } else {
-    toast(`Paleta "${palette.title}" definida para o repertório "${setlistName}".`);
+    toast(`✓ Paleta "${palette.title}" adicionada ao repertório "${setlistName}".`);
   }
-  if (currentSetlistDetailId && String(currentSetlistDetailId) === String(setlist.id)) openSetlistDetail(setlist.id);
+  if (currentSetlistDetailId && String(currentSetlistDetailId) === String(setlist.id)) {
+    openSetlistDetail(setlist.id);
+  } else if (returnTarget === 'repertorios') {
+    // Volta para a tela de Repertórios e abre o repertório recém-criado,
+    // para o usuário ver a lista final de músicas e concluir.
+    location.hash = '#repertorios';
+    routeInternalPage();
+    render();
+    setTimeout(() => openSetlistDetail(setlist.id), 150);
+  }
 }
 
 // ============================================================
