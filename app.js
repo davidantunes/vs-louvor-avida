@@ -607,9 +607,21 @@ function bindEvents(){
     closeSetlistPaletteView();
     startPaletteSelectionForSetlist(s, 'setlist-detail');
   });
+  // V131.40 — "Compartilhar" virou "Copiar link": copia direto (sem abrir
+  // modal de opções), avisa que copiou, e leva para a tela de Repertórios.
   el.shareSetlistDetail.addEventListener('click', () => {
     const s = setlists.find(x => x.id === currentSetlistDetailId);
-    if (s) shareSetlistWithPaletteCheck(s);
+    if (!s) return;
+    const url = buildSetlistShareUrl(s.id);
+    navigator.clipboard.writeText(url)
+      .then(() => toast('Link do repertório copiado.'))
+      .catch(() => alert(url))
+      .finally(() => {
+        closeSetlistDetail();
+        location.hash = '#repertorios';
+        routeInternalPage();
+        render();
+      });
   });
 
   if (el.closePaletteModal) el.closePaletteModal.addEventListener('click', closePaletteModal);
