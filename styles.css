@@ -7803,3 +7803,16 @@ details[open] .archived-setlists-toggle::before{
 #loginScreen.is-recovery-request #loginEmailField{
   grid-column:1 / -1;
 }
+/* V131.47 — Garantia extra: esconde o campo Senha por CSS com !important,
+   redundante ao estilo inline que o JS já aplica. Mesma estratégia que já
+   funciona comprovadamente para o campo Nome — não depende só do JavaScript
+   rodar na ordem certa. */
+#loginScreen.is-recovery-request #loginPasswordField{
+  display:none !important;
+  visibility:hidden !important;
+  height:0 !important;
+  min-height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  overflow:hidden !important;
+}

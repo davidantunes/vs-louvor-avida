@@ -1015,7 +1015,7 @@ function showLoginMode(){
   el.mainAuthActions?.classList.remove('hidden');
   el.mainAuthGrid?.classList.remove('hidden');
   el.loginPasswordField?.classList.remove('hidden');
-  if (el.loginPasswordField) el.loginPasswordField.style.display = '';
+  if (el.loginPasswordField) el.loginPasswordField.style.removeProperty('display');
   setAuthStatus('', false);
   setAuthMode('login');
   showLogin();
@@ -1039,10 +1039,15 @@ function startRecoveryRequest(){
   document.querySelector('.login-options-row')?.classList.add('hidden');
   el.mainAuthActions?.classList.add('hidden');
   el.loginPasswordField?.classList.add('hidden');
-  if (el.loginPasswordField) el.loginPasswordField.style.display = 'none';
+  // V131.48 — BLINDAGEM DEFINITIVA: usa style.setProperty(..., 'important')
+  // em vez de style.display='none'. Isso dá ao estilo INLINE a prioridade
+  // "important", que vence QUALQUER regra de folha de estilo externa,
+  // não importa a especificidade dela — não depende mais de encontrar e
+  // vencer alguma regra concorrente escondida no CSS.
+  if (el.loginPasswordField) el.loginPasswordField.style.setProperty('display', 'none', 'important');
   // Defesa extra: garante que o campo Nome (só usado no cadastro) não
   // apareça aqui, independente de qual regra de CSS decide isso.
-  if (el.loginNameField) { el.loginNameField.classList.add('hidden'); el.loginNameField.style.display = 'none'; }
+  if (el.loginNameField) { el.loginNameField.classList.add('hidden'); el.loginNameField.style.setProperty('display', 'none', 'important'); }
   el.resetPasswordBox?.classList.add('hidden');
   el.recoveryRequestBox?.classList.remove('hidden');
   setAuthStatus('Informe o e-mail da sua conta para receber o link de recuperação.', false);
