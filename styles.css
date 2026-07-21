@@ -7792,3 +7792,9 @@ details[open] .archived-setlists-toggle::before{
 #loginScreen .login-card .auth-grid.hidden{
   display:none !important;
 }
+
+/* V131.45 — Quando o campo Senha some no passo "esqueci minha senha", o
+   e-mail ocupa a largura toda em vez de deixar um vão vazio à direita. */
+#loginScreen[data-auth-mode="recovery-request"] #loginEmailField{
+  grid-column:1 / -1;
+}

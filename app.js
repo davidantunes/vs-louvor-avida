@@ -1014,6 +1014,7 @@ function showLoginMode(){
   el.mainAuthActions?.classList.remove('hidden');
   el.mainAuthGrid?.classList.remove('hidden');
   el.loginPasswordField?.classList.remove('hidden');
+  if (el.loginPasswordField) el.loginPasswordField.style.display = '';
   setAuthStatus('', false);
   setAuthMode('login');
   showLogin();
@@ -1025,11 +1026,13 @@ function showLoginMode(){
 // formulário de login inteiro continuava visível depois desse clique.
 function startRecoveryRequest(){
   authMode = 'recovery-request';
+  if (el.loginScreen) el.loginScreen.dataset.authMode = 'recovery-request';
   el.loginScreen?.classList.remove('hidden');
   document.querySelector('.auth-mode-switch')?.classList.add('hidden');
   document.querySelector('.login-options-row')?.classList.add('hidden');
   el.mainAuthActions?.classList.add('hidden');
   el.loginPasswordField?.classList.add('hidden');
+  if (el.loginPasswordField) el.loginPasswordField.style.display = 'none';
   el.resetPasswordBox?.classList.add('hidden');
   el.recoveryRequestBox?.classList.remove('hidden');
   setAuthStatus('Informe o e-mail da sua conta para receber o link de recuperação.', false);
