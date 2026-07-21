@@ -1009,6 +1009,7 @@ function isRecoveryRoute(){
 function showLoginMode(){
   el.resetPasswordBox?.classList.add('hidden');
   el.recoveryRequestBox?.classList.add('hidden');
+  el.loginScreen?.classList.remove('is-recovery-request');
   document.querySelector('.auth-mode-switch')?.classList.remove('hidden');
   document.querySelector('.login-options-row')?.classList.remove('hidden');
   el.mainAuthActions?.classList.remove('hidden');
@@ -1026,13 +1027,22 @@ function showLoginMode(){
 // formulário de login inteiro continuava visível depois desse clique.
 function startRecoveryRequest(){
   authMode = 'recovery-request';
-  if (el.loginScreen) el.loginScreen.dataset.authMode = 'recovery-request';
+  // V131.46 — CORREÇÃO: usar uma CLASSE separada (não o atributo
+  // data-auth-mode) para o CSS de layout. O atributo data-auth-mode é usado
+  // por outra regra que esconde o campo "Nome" quando vale "login" —
+  // sobrescrever esse valor para "recovery-request" quebrava aquela regra
+  // e o campo Nome voltava a aparecer (com autofill do navegador jogando
+  // o e-mail dentro dele). Uma classe adicional não tem esse conflito.
+  el.loginScreen?.classList.add('is-recovery-request');
   el.loginScreen?.classList.remove('hidden');
   document.querySelector('.auth-mode-switch')?.classList.add('hidden');
   document.querySelector('.login-options-row')?.classList.add('hidden');
   el.mainAuthActions?.classList.add('hidden');
   el.loginPasswordField?.classList.add('hidden');
   if (el.loginPasswordField) el.loginPasswordField.style.display = 'none';
+  // Defesa extra: garante que o campo Nome (só usado no cadastro) não
+  // apareça aqui, independente de qual regra de CSS decide isso.
+  if (el.loginNameField) { el.loginNameField.classList.add('hidden'); el.loginNameField.style.display = 'none'; }
   el.resetPasswordBox?.classList.add('hidden');
   el.recoveryRequestBox?.classList.remove('hidden');
   setAuthStatus('Informe o e-mail da sua conta para receber o link de recuperação.', false);

@@ -7795,6 +7795,11 @@ details[open] .archived-setlists-toggle::before{
 
 /* V131.45 — Quando o campo Senha some no passo "esqueci minha senha", o
    e-mail ocupa a largura toda em vez de deixar um vão vazio à direita. */
-#loginScreen[data-auth-mode="recovery-request"] #loginEmailField{
+/* V131.46 — CORREÇÃO: trocado o seletor de [data-auth-mode="recovery-request"]
+   para uma classe própria (.is-recovery-request). O atributo data-auth-mode
+   é usado por outra regra que depende do valor "login" para esconder o
+   campo Nome — sobrescrevê-lo quebrava aquela regra e o campo Nome
+   reaparecia com autofill do navegador jogando o e-mail dentro dele. */
+#loginScreen.is-recovery-request #loginEmailField{
   grid-column:1 / -1;
 }
