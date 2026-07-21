@@ -313,6 +313,11 @@ const el = {
   togglePasswordBtn: document.getElementById('togglePasswordBtn'),
   rememberSession: document.getElementById('rememberSession'),
   recoverPasswordBtn: document.getElementById('recoverPasswordBtn'),
+  mainAuthGrid: document.getElementById('mainAuthGrid'),
+  mainAuthActions: document.getElementById('mainAuthActions'),
+  recoveryRequestBox: document.getElementById('recoveryRequestBox'),
+  sendRecoveryBtn: document.getElementById('sendRecoveryBtn'),
+  cancelRecoveryRequestBtn: document.getElementById('cancelRecoveryRequestBtn'),
   resetPasswordBox: document.getElementById('resetPasswordBox'),
   resetPassword: document.getElementById('resetPassword'),
   resetPasswordConfirm: document.getElementById('resetPasswordConfirm'),
@@ -708,7 +713,12 @@ function bindEvents(){
   if (el.modeLoginBtn) el.modeLoginBtn.addEventListener('click', () => setAuthMode('login'));
   if (el.modeRegisterBtn) el.modeRegisterBtn.addEventListener('click', () => setAuthMode('register'));
   if (el.togglePasswordBtn) el.togglePasswordBtn.addEventListener('click', () => togglePasswordVisibility('loginPassword', 'togglePasswordBtn'));
-  if (el.recoverPasswordBtn) el.recoverPasswordBtn.addEventListener('click', recoverPassword);
+  // V131.42 — "Esqueci minha senha" agora abre um passo dedicado (só e-mail,
+  // sem o campo Senha à vista) em vez de disparar o envio direto enquanto o
+  // formulário de login inteiro continuava visível.
+  if (el.recoverPasswordBtn) el.recoverPasswordBtn.addEventListener('click', startRecoveryRequest);
+  if (el.sendRecoveryBtn) el.sendRecoveryBtn.addEventListener('click', recoverPassword);
+  if (el.cancelRecoveryRequestBtn) el.cancelRecoveryRequestBtn.addEventListener('click', showLoginMode);
   if (el.toggleResetPasswordBtn) el.toggleResetPasswordBtn.addEventListener('click', () => togglePasswordVisibility('resetPassword', 'toggleResetPasswordBtn'));
   if (el.toggleResetPasswordConfirmBtn) el.toggleResetPasswordConfirmBtn.addEventListener('click', () => togglePasswordVisibility('resetPasswordConfirm', 'toggleResetPasswordConfirmBtn'));
   if (el.confirmPasswordRecoveryBtn) el.confirmPasswordRecoveryBtn.addEventListener('click', confirmPasswordRecovery);
@@ -722,7 +732,11 @@ function bindEvents(){
   if (el.profileLogoutBtn) el.profileLogoutBtn.addEventListener('click', () => { closeProfileModal(); logoutSession(); });
   ['loginName','loginEmail','loginPassword'].forEach(key => { const node = el[key]; if (node) node.addEventListener('input', () => validateAuthField(key)); });
   if (el.loginName) el.loginName.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
-  if (el.loginEmail) el.loginEmail.addEventListener('keydown', e => { if (e.key === 'Enter') enterSystem(); });
+  if (el.loginEmail) el.loginEmail.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    // V131.42 — Durante o pedido de recuperação, Enter recupera, não loga.
+    authMode === 'recovery-request' ? recoverPassword() : enterSystem();
+  });
   if (el.loginPassword) el.loginPassword.addEventListener('keydown', e => { if (e.key === 'Enter') authMode === 'register' ? createAccount() : enterSystem(); });
   if (el.logoutBtn) el.logoutBtn.addEventListener('click', logoutSession);
 
@@ -994,13 +1008,32 @@ function isRecoveryRoute(){
 
 function showLoginMode(){
   el.resetPasswordBox?.classList.add('hidden');
+  el.recoveryRequestBox?.classList.add('hidden');
   document.querySelector('.auth-mode-switch')?.classList.remove('hidden');
   document.querySelector('.login-options-row')?.classList.remove('hidden');
-  document.querySelector('.auth-actions')?.classList.remove('hidden');
-  document.querySelector('.auth-grid')?.classList.remove('hidden');
+  el.mainAuthActions?.classList.remove('hidden');
+  el.mainAuthGrid?.classList.remove('hidden');
+  el.loginPasswordField?.classList.remove('hidden');
   setAuthStatus('', false);
   setAuthMode('login');
   showLogin();
+}
+
+// V131.42 — Passo dedicado para PEDIR a recuperação: some com o campo Senha
+// e com os botões de Entrar/Criar cadastro, deixando claro que só o e-mail
+// é necessário aqui. Corrige a confusão de "pede a senha atual" — antes o
+// formulário de login inteiro continuava visível depois desse clique.
+function startRecoveryRequest(){
+  authMode = 'recovery-request';
+  el.loginScreen?.classList.remove('hidden');
+  document.querySelector('.auth-mode-switch')?.classList.add('hidden');
+  document.querySelector('.login-options-row')?.classList.add('hidden');
+  el.mainAuthActions?.classList.add('hidden');
+  el.loginPasswordField?.classList.add('hidden');
+  el.resetPasswordBox?.classList.add('hidden');
+  el.recoveryRequestBox?.classList.remove('hidden');
+  setAuthStatus('Informe o e-mail da sua conta para receber o link de recuperação.', false);
+  setTimeout(() => el.loginEmail?.focus(), 80);
 }
 
 function showPasswordRecoveryMode(){
@@ -1010,8 +1043,9 @@ function showPasswordRecoveryMode(){
   document.body.classList.add('app-locked');
   document.querySelector('.auth-mode-switch')?.classList.add('hidden');
   document.querySelector('.login-options-row')?.classList.add('hidden');
-  document.querySelector('.auth-actions')?.classList.add('hidden');
-  document.querySelector('.auth-grid')?.classList.add('hidden');
+  el.mainAuthActions?.classList.add('hidden');
+  el.mainAuthGrid?.classList.add('hidden');
+  el.recoveryRequestBox?.classList.add('hidden');
   el.resetPasswordBox?.classList.remove('hidden');
   setAuthStatus('Informe e confirme sua nova senha para concluir a recuperação.', false);
   setTimeout(() => el.resetPassword?.focus(), 80);
@@ -1089,8 +1123,8 @@ function showLogin(){
   el.resetPasswordBox?.classList.add('hidden');
   document.querySelector('.auth-mode-switch')?.classList.remove('hidden');
   document.querySelector('.login-options-row')?.classList.remove('hidden');
-  document.querySelector('.auth-actions')?.classList.remove('hidden');
-  document.querySelector('.auth-grid')?.classList.remove('hidden');
+  el.mainAuthActions?.classList.remove('hidden');
+  el.mainAuthGrid?.classList.remove('hidden');
   setAuthMode(authMode || 'login');
   el.loginScreen?.classList.remove('hidden');
   el.loginScreen?.removeAttribute('inert');
@@ -1337,13 +1371,16 @@ async function recoverPassword(){
     return setAuthStatus('Informe um e-mail válido para recuperar a senha.', true);
   }
   if (!appwriteAccount) return setAuthStatus('Serviço de autenticação indisponível. Tente novamente.', true);
+  if (el.sendRecoveryBtn) el.sendRecoveryBtn.disabled = true;
   try {
     setAuthStatus('Enviando instruções de recuperação...', false);
     const recoveryUrl = `${location.origin}${location.pathname}`;
     await appwriteAccount.createRecovery(email, recoveryUrl);
-    setAuthStatus('Enviamos as instruções de recuperação para o e-mail informado.', false);
+    setAuthStatus('✓ E-mail enviado! Verifique sua caixa de entrada (e o spam) e clique no link para criar uma nova senha.', false);
   } catch (error) {
     setAuthStatus(translateAppwriteError(error, 'recuperar'), true);
+  } finally {
+    if (el.sendRecoveryBtn) el.sendRecoveryBtn.disabled = false;
   }
 }
 async function logoutSession(){
