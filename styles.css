@@ -7781,3 +7781,14 @@ details[open] .archived-setlists-toggle::before{
   #profileModal .modal-actions{flex-direction:column;}
   #profileModal .modal-actions .btn{width:100%;}
 }
+
+/* V131.44 — CORREÇÃO: a regra "#loginScreen .login-card .auth-grid{display:
+   grid !important}" (linha ~1922) tinha mais especificidade (1 ID + 2
+   classes) que ".auth-grid.hidden{display:none !important}" (0 ID + 2
+   classes) — então esconder o grid de login/senha NUNCA funcionava de
+   verdade, mesmo com a classe "hidden" sendo adicionada corretamente pelo
+   JS. Essa regra iguala o escopo completo (mesma especificidade da
+   concorrente + a classe hidden), garantindo que sempre vence. */
+#loginScreen .login-card .auth-grid.hidden{
+  display:none !important;
+}
