@@ -1885,7 +1885,8 @@ function applyPaletteToSetlist(setlist, palette){
   setlist.paletteTitle = palette.title || '';
   setlist.paletteImage = palette.image || '';
   setlist.updatedAt = new Date().toISOString();
-  saveSetlistsState(setlist);
+  saveJSON('vs_setlists_v1', setlists);
+  syncSetlistMeta(setlist, { paletteId: setlist.paletteId, paletteTitle: setlist.paletteTitle, paletteImage: setlist.paletteImage });
   updateStats();
   renderSetlists();
   render();
@@ -2337,6 +2338,67 @@ async function syncAddTrackToServer(setlist, entry){
   } catch (err) {
     console.warn('Adição de música não sincronizada (endpoint atômico):', err.message);
     // Fallback: tenta o método antigo para não perder o dado
+    saveSingleSetlist(setlist).catch(() => {});
+  }
+}
+
+// V131.41 — Remove UMA música de forma atômica (por trackId+semitones, não
+// pelo array inteiro). Um teste de carga provou que remover música com o
+// método antigo (regravar tudo) podia apagar uma música que outra pessoa
+// tinha acabado de adicionar simultaneamente — 20/20 rounds falhavam.
+async function syncRemoveTrackFromServer(setlist, trackId, semitones){
+  if (!authUser || !setlist?.id) return;
+  pendingNewSetlistIds.add(setlist.id);
+  try {
+    const res = await fetch(`/api/appwrite/setlists/${encodeURIComponent(setlist.id)}/remove-track`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trackId, semitones: semitones || 0 })
+    });
+    if (!res.ok) {
+      if (res.status === 404) return saveSingleSetlist(setlist);
+      throw new Error(await res.text());
+    }
+    const data = await res.json();
+    if (data?.setlist && Array.isArray(data.setlist.trackIds)) {
+      setlist.trackIds = data.setlist.trackIds;
+      saveJSON('vs_setlists_v1', setlists);
+      renderSetlists();
+      render();
+    }
+    pendingNewSetlistIds.delete(setlist.id);
+  } catch (err) {
+    console.warn('Remoção de música não sincronizada (endpoint atômico):', err.message);
+    saveSingleSetlist(setlist).catch(() => {});
+  }
+}
+
+// V131.41 — Atualiza SÓ os metadados (nome, data, paleta, arquivamento) sem
+// jamais enviar trackIds — elimina a chance de renomear/trocar paleta/
+// arquivar apagar por acidente uma música adicionada em paralelo por outra
+// pessoa (mesmo teste de carga: 20/20 rounds falhavam com o método antigo).
+async function syncSetlistMeta(setlist, mudancas){
+  if (!authUser || !setlist?.id) return;
+  pendingNewSetlistIds.add(setlist.id);
+  try {
+    const res = await fetch(`/api/appwrite/setlists/${encodeURIComponent(setlist.id)}/meta`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mudancas)
+    });
+    if (!res.ok) {
+      if (res.status === 404) return saveSingleSetlist(setlist);
+      throw new Error(await res.text());
+    }
+    const data = await res.json();
+    if (data?.setlist && Array.isArray(data.setlist.trackIds)) {
+      // Reconcilia trackIds também (pode ter mudado por adição concorrente)
+      setlist.trackIds = data.setlist.trackIds;
+      saveJSON('vs_setlists_v1', setlists);
+    }
+    pendingNewSetlistIds.delete(setlist.id);
+  } catch (err) {
+    console.warn('Metadados não sincronizados (endpoint atômico):', err.message);
     saveSingleSetlist(setlist).catch(() => {});
   }
 }
@@ -4343,7 +4405,8 @@ function renameSetlist(setlistId){
   if (nomeLimpo === s.name) return; // não mudou
   s.name = nomeLimpo;
   s.updatedAt = new Date().toISOString();
-  saveSetlistsState(s);
+  saveJSON('vs_setlists_v1', setlists);
+  syncSetlistMeta(s, { name: nomeLimpo });
   renderSetlists();
   updateStats();
   // Se o detalhe deste repertório está aberto, atualiza o título
@@ -4369,7 +4432,8 @@ function saveSetlistDate(clear = false){
   s.eventDate = clear ? '' : (el.editSetlistDateInput?.value || '');
   s.archived = false;
   s.updatedAt = new Date().toISOString();
-  saveSetlistsState(s);
+  saveJSON('vs_setlists_v1', setlists);
+  syncSetlistMeta(s, { eventDate: s.eventDate, archived: false });
   renderSetlists();
   updateStats();
   closeEditSetlistDateModal();
@@ -4409,7 +4473,8 @@ function toggleSetlistArchive(setlistId){
   }
   s.archived = !s.archived;
   s.updatedAt = new Date().toISOString();
-  saveSetlistsState(s);
+  saveJSON('vs_setlists_v1', setlists);
+  syncSetlistMeta(s, { archived: s.archived });
   renderSetlists();
   toast(s.archived ? 'Repertório arquivado.' : 'Repertório restaurado para ativos.');
 }
@@ -4906,8 +4971,12 @@ function renderSetlistDetailTracks(){
     // V131.12 — Confirmação antes de remover a música do repertório
     const trackName = tracks[idx]?.name || 'esta música';
     if (!confirm(`Remover "${trackName}" deste repertório?`)) return;
+    const entryRemovida = setlist.trackIds[idx];
+    const trackIdRemovido = getSetlistEntryTrackId(entryRemovida);
+    const semitonesRemovido = typeof entryRemovida === 'object' ? Number(entryRemovida.semitones || 0) : 0;
     setlist.trackIds.splice(idx, 1);
-    saveSetlistsState(setlist);
+    saveJSON('vs_setlists_v1', setlists);
+    syncRemoveTrackFromServer(setlist, trackIdRemovido, semitonesRemovido);
     renderSetlists();
     renderSetlistDetailTracks();
     updateStats();
@@ -4939,6 +5008,11 @@ function reorderSetlist(setlistId, from, to){
   if (from < 0 || to < 0 || from >= setlist.trackIds.length || to >= setlist.trackIds.length) return;
   const [moved] = setlist.trackIds.splice(from, 1);
   setlist.trackIds.splice(to, 0, moved);
+  // NOTA (v131.41): reordenar ainda regrava o array inteiro (não é atômico
+  // como adicionar/remover/metadados). Risco residual aceito: reordenar é
+  // tipicamente feito sozinho, olhando a lista, tornando concorrência real
+  // rara. Se no futuro isso se mostrar um problema, precisa de um endpoint
+  // atômico dedicado (mover por trackId+posição, não por array completo).
   saveSetlistsState(setlist);
 }
 

@@ -425,6 +425,90 @@ app.post('/api/appwrite/setlists/:setlistId/add-track', async (req, res) => {
   }
 });
 
+// V131.41 — CORREÇÃO: teste de carga revelou que renomear/mudar data/trocar
+// paleta/remover música (que regravavam o repertório INTEIRO com a cópia
+// local do cliente) podiam apagar uma música que outra pessoa tinha acabado
+// de adicionar pelo endpoint atômico, se a cópia local de quem regravava
+// ainda não sabia dessa adição. Reproduzido em teste: 20/20 rounds perdiam
+// a música. Correção: remover música também é atômico (só o ID, não o
+// array inteiro), e mudar nome/data/paleta/arquivamento NUNCA toca em
+// trackIds (não faz parte do payload desses endpoints), então não há como
+// essas operações apagarem uma música por acidente.
+
+// Remove UMA música do repertório de forma atômica (por trackId+semitones)
+app.post('/api/appwrite/setlists/:setlistId/remove-track', async (req, res) => {
+  try {
+    const setlistId = req.params.setlistId;
+    const { trackId, semitones } = req.body || {};
+    if (!trackId) return res.status(400).json({ error: 'Campo "trackId" obrigatório.' });
+    const alvoSemitones = Number(semitones || 0);
+
+    const result = await withSetlistLock(setlistId, async () => {
+      const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
+      const found = docs.find(d => d.setlist_id === setlistId);
+      if (!found) { const e = new Error('Repertório não encontrado na nuvem.'); e.status = 404; throw e; }
+
+      const value = JSON.parse(found.data || '{}');
+      value.trackIds = Array.isArray(value.trackIds) ? value.trackIds : [];
+      value.trackIds = value.trackIds.filter(e => {
+        const id = typeof e === 'string' ? e : e.trackId;
+        const st = typeof e === 'string' ? 0 : Number(e.semitones || 0);
+        return !(id === trackId && st === alvoSemitones);
+      });
+      value.updatedAt = new Date().toISOString();
+      const serialized = JSON.stringify(value);
+      await upsertState(
+        APPWRITE_SETLISTS_COLLECTION_ID,
+        d => d.setlist_id === setlistId,
+        { setlist_id: setlistId, data: serialized, updated_at: value.updatedAt }
+      );
+      return value;
+    });
+
+    res.json({ ok: true, setlist: result });
+  } catch (error) {
+    console.error(`[setlists] erro ao remover música em "${req.params.setlistId}":`, error.message);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+// Atualiza METADADOS do repertório (nome, data, paleta, arquivamento) sem
+// jamais tocar em trackIds — não importa o que o cliente mande, a lista de
+// músicas do servidor é preservada intacta.
+app.patch('/api/appwrite/setlists/:setlistId/meta', async (req, res) => {
+  try {
+    const setlistId = req.params.setlistId;
+    const permitido = ['name', 'eventDate', 'paletteId', 'paletteTitle', 'paletteImage', 'archived'];
+    const mudancas = {};
+    for (const campo of permitido) {
+      if (req.body && Object.prototype.hasOwnProperty.call(req.body, campo)) mudancas[campo] = req.body[campo];
+    }
+    if (!Object.keys(mudancas).length) return res.status(400).json({ error: 'Nenhum campo válido para atualizar.' });
+
+    const result = await withSetlistLock(setlistId, async () => {
+      const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
+      const found = docs.find(d => d.setlist_id === setlistId);
+      if (!found) { const e = new Error('Repertório não encontrado na nuvem.'); e.status = 404; throw e; }
+
+      const value = JSON.parse(found.data || '{}');
+      Object.assign(value, mudancas); // trackIds do value original é preservado (não está em `mudancas`)
+      value.updatedAt = new Date().toISOString();
+      const serialized = JSON.stringify(value);
+      await upsertState(
+        APPWRITE_SETLISTS_COLLECTION_ID,
+        d => d.setlist_id === setlistId,
+        { setlist_id: setlistId, data: serialized, updated_at: value.updatedAt }
+      );
+      return value;
+    });
+
+    res.json({ ok: true, setlist: result });
+  } catch (error) {
+    console.error(`[setlists] erro ao atualizar metadados em "${req.params.setlistId}":`, error.message);
+    res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
 // Cria ou atualiza UM repertório (upsert por setlist_id)
 app.put('/api/appwrite/setlists/:setlistId', async (req, res) => {
   try {
