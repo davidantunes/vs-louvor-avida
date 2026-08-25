@@ -1448,8 +1448,22 @@ async function loadCloudState(){
         if (s && s.id && pendingNewSetlistIds.has(s.id)) emVoo.set(s.id, s);
       }
       const daNuvem = collectionSetlists.map(s => emVoo.get(s.id) || s);
+      // V131.58 — CORREÇÃO: além de "pendente de envio" (que depende de um
+      // temporizador a partir da última chamada de rede — frágil se o
+      // usuário demorar mais que isso no fluxo de conclusão/paleta), também
+      // protege qualquer repertório criado/editado nos ÚLTIMOS 3 MINUTOS,
+      // baseado na data real do dado (updatedAt/createdAt), não num
+      // cronômetro. Isso cobre o caso de o auto-atualizador rodar bem no
+      // meio do fluxo de criar → adicionar músicas → escolher paleta, que
+      // pode levar mais tempo que qualquer janela fixa de alguns segundos.
+      const TRES_MINUTOS_MS = 3 * 60 * 1000;
+      const agora = Date.now();
+      const recemTocado = s => {
+        const quando = new Date(s.updatedAt || s.createdAt || 0).getTime();
+        return Number.isFinite(quando) && (agora - quando) < TRES_MINUTOS_MS;
+      };
       const aindaEnviando = setlists.filter(s =>
-        s && s.id && pendingNewSetlistIds.has(s.id) && !collectionIds.has(s.id)
+        s && s.id && !collectionIds.has(s.id) && (pendingNewSetlistIds.has(s.id) || recemTocado(s))
       );
       setlists = [...daNuvem, ...aindaEnviando];
       saveJSON('vs_setlists_v1', setlists);
