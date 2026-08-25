@@ -2385,6 +2385,20 @@ function saveSetlistsState(alterado){
 // A correção: nunca SOBRESCREVER, sempre MESCLAR (união) o que veio do
 // servidor com o que já existe localmente. Assim, uma resposta atrasada
 // nunca apaga uma adição mais recente que ainda não tinha chegado nela.
+// V131.57 — CORREÇÃO: "pendingNewSetlistIds" protege um repertório recém-
+// criado/editado do auto-atualizador (que roda a cada 60s ou ao voltar pro
+// app) apagá-lo da tela achando que ele "não existe ainda" na nuvem. Mas a
+// proteção era removida IMEDIATAMENTE assim que o servidor respondia 200 —
+// sem nenhuma margem para a escrita realmente se tornar visível numa
+// consulta de listagem logo em seguida. Se o auto-atualizador rodasse bem
+// nessa janela curta (ex.: usuário trocou de app no celular e voltou logo
+// depois de concluir o repertório), o repertório podia ser removido da
+// tela por engano — batendo com "apareceu na lista e depois sumiu".
+// Agora a proteção some só depois de uma margem de alguns segundos.
+function liberarProtecaoSetlist(setlistId){
+  setTimeout(() => { pendingNewSetlistIds.delete(setlistId); }, 8000);
+}
+
 function mergeSetlistTrackIds(localTrackIds, serverTrackIds){
   const vistos = new Set();
   const resultado = [];
@@ -2429,7 +2443,7 @@ async function syncAddTrackToServer(setlist, entry){
       renderSetlists();
       render();
     }
-    pendingNewSetlistIds.delete(setlist.id);
+    liberarProtecaoSetlist(setlist.id);
   } catch (err) {
     console.warn('Adição de música não sincronizada (endpoint atômico):', err.message);
     // Fallback: tenta o método antigo para não perder o dado
@@ -2465,7 +2479,7 @@ async function syncRemoveTrackFromServer(setlist, trackId, semitones){
       renderSetlists();
       render();
     }
-    pendingNewSetlistIds.delete(setlist.id);
+    liberarProtecaoSetlist(setlist.id);
   } catch (err) {
     console.warn('Remoção de música não sincronizada (endpoint atômico):', err.message);
     saveSingleSetlist(setlist).catch(() => {});
@@ -2497,7 +2511,7 @@ async function syncSetlistMeta(setlist, mudancas){
       setlist.trackIds = mergeSetlistTrackIds(setlist.trackIds, data.setlist.trackIds);
       saveJSON('vs_setlists_v1', setlists);
     }
-    pendingNewSetlistIds.delete(setlist.id);
+    liberarProtecaoSetlist(setlist.id);
   } catch (err) {
     console.warn('Metadados não sincronizados (endpoint atômico):', err.message);
     saveSingleSetlist(setlist).catch(() => {});
@@ -2522,7 +2536,7 @@ async function saveSingleSetlist(setlist){
       body: JSON.stringify({ value: setlist })
     });
     if (!res.ok) throw new Error(await res.text());
-    pendingNewSetlistIds.delete(setlist.id); // confirmado na table
+    liberarProtecaoSetlist(setlist.id); // confirmado na table (com margem de segurança)
   } catch (err) {
     console.warn('Repertório não sincronizado (por-documento):', err.message);
     // Fallback: tenta o método antigo (array inteiro) para não perder o dado
