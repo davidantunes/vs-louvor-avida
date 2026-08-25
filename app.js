@@ -2351,17 +2351,24 @@ function flushSetlistsPending(){
 function saveSetlistsState(alterado){
   saveJSON('vs_setlists_v1', setlists);
   const lista = Array.isArray(alterado) ? alterado : (alterado ? [alterado] : []);
-  let promiseDaOperacao = Promise.resolve();
+  let promiseDaOperacao = Promise.resolve(true);
   if (lista.length) {
     // Protege contra o auto-refresh apagar itens ainda em voo
     for (const s of lista) { if (s && s.id) pendingNewSetlistIds.add(s.id); }
     setlistsSavePromise = setlistsSavePromise
       .then(async () => {
+        // V131.59 — Propaga se REALMENTE deu certo (não engole mais o
+        // resultado). Se qualquer item da lista falhar ao salvar, o
+        // chamador agora sabe e pode avisar o usuário, em vez de seguir
+        // como se tudo tivesse funcionado.
+        let tudoOk = true;
         for (const s of lista) {
-          await saveSingleSetlist(s);
+          const ok = await saveSingleSetlist(s);
+          if (!ok) tudoOk = false;
         }
+        return tudoOk;
       })
-      .catch(err => console.warn('Repertórios não sincronizados:', err));
+      .catch(err => { console.warn('Repertórios não sincronizados:', err); return false; });
     promiseDaOperacao = setlistsSavePromise;
   }
   // re-pré-cache e re-render
@@ -2372,6 +2379,8 @@ function saveSetlistsState(alterado){
   // V131.50 — Retorna a promise para quem precisa GARANTIR que o repertório
   // já existe na nuvem antes de continuar (ex.: criar e já poder adicionar
   // músicas em seguida, sem cair no 404 de "repertório ainda não existe").
+  // V131.59 — Agora resolve para true/false de verdade, refletindo se a
+  // gravação realmente aconteceu no servidor.
   return promiseDaOperacao;
 }
 
@@ -2533,13 +2542,22 @@ async function syncSetlistMeta(setlist, mudancas){
 }
 
 async function saveSingleSetlist(setlist){
-  if (!setlist || !setlist.id) return;
+  // V131.59 — CORREÇÃO CRÍTICA: esta função sempre "engolia" qualquer erro
+  // (só um console.warn) e nunca informava o chamador se a gravação
+  // REALMENTE aconteceu. Isso fazia o "esperar confirmação antes de abrir a
+  // busca" (v131.50) inútil na prática — o await sempre "dava certo" mesmo
+  // quando o PUT para o servidor falhava de verdade (rede instável, sessão
+  // caindo, etc.), e o usuário via "Repertório criado" mesmo quando o
+  // repertório nunca existiu na nuvem — daí toda tentativa de adicionar
+  // música nele falhar pra sempre com "não encontrado". Agora retorna
+  // true/false de verdade, para quem chama poder avisar o usuário.
+  if (!setlist || !setlist.id) return false;
   saveJSON('vs_setlists_v1', setlists); // mantém cópia local completa
   try {
     if (typeof precacheSetlistAudios === 'function') precacheSetlistAudios();
     if (libraryLoaded && typeof render === 'function') render();
   } catch (_) {}
-  if (!authUser) return;
+  if (!authUser) return false;
   // V131.21 — Marca como pendente ANTES de enviar, para o auto-refresh não
   // apagar este repertório caso recarregue antes da confirmação do servidor.
   pendingNewSetlistIds.add(setlist.id);
@@ -2551,10 +2569,12 @@ async function saveSingleSetlist(setlist){
     });
     if (!res.ok) throw new Error(await res.text());
     liberarProtecaoSetlist(setlist.id); // confirmado na table (com margem de segurança)
+    return true;
   } catch (err) {
     console.warn('Repertório não sincronizado (por-documento):', err.message);
     // Fallback: tenta o método antigo (array inteiro) para não perder o dado
     setSharedState('setlists', setlists).catch(() => {});
+    return false;
   }
 }
 
@@ -4656,13 +4676,35 @@ async function createSetlistFromInput(){
   renderSetlistOptions();
   el.newSetlistName.value = '';
   if (el.newSetlistDate) el.newSetlistDate.value = '';  // V108
+  let sucesso = false;
   try {
-    await saveSetlistsState(s);
+    sucesso = await saveSetlistsState(s);
   } catch (err) {
     console.warn('Falha ao confirmar criação do repertório na nuvem:', err);
+    sucesso = false;
   } finally {
     if (el.createSetlistBtn) { el.createSetlistBtn.disabled = false; el.createSetlistBtn.textContent = 'Criar'; }
   }
+
+  // V131.59 — CORREÇÃO CRÍTICA: antes, mesmo quando a criação falhava de
+  // verdade no servidor (rede instável, sessão caindo, etc.), o app seguia
+  // em frente como se tivesse dado certo — mostrava "Repertório criado" e
+  // abria a busca de músicas, mas o repertório nunca existia na nuvem. Toda
+  // tentativa de adicionar música nele falhava pra sempre com "não
+  // encontrado". Agora, se a criação realmente falhar, desfazemos a criação
+  // local, avisamos claramente, e NÃO abrimos a busca de músicas — evita o
+  // usuário perder tempo adicionando música num repertório fantasma.
+  if (!sucesso) {
+    setlists = setlists.filter(x => x.id !== s.id);
+    saveJSON('vs_setlists_v1', setlists);
+    pendingNewSetlistIds.delete(s.id);
+    updateStats();
+    renderSetlists();
+    renderSetlistOptions();
+    toast('⚠ Não foi possível criar o repertório no servidor. Verifique sua internet e tente de novo.');
+    return;
+  }
+
   recordUsageEvent({ type: 'setlist_created', setlistId: s.id, setlistName: s.name, trackCount: s.trackIds.length, message: `Repertório "${s.name}" criado.` });
   activateSetlistAndOpenLibrary(s);
   toast('Repertório criado. Adicione músicas na biblioteca.');
