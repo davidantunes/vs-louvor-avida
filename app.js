@@ -2373,6 +2373,32 @@ function saveSetlistsState(alterado){
 // resultado do servidor (que pode ter músicas de outras pessoas adicionadas
 // entre o momento local e o envio). Cai no método antigo (regravar tudo) se
 // o endpoint novo não existir ainda (ex.: deploy mais antigo do servidor).
+// V131.56 — CORREÇÃO DE CONDIÇÃO DE CORRIDA: quando duas músicas são
+// adicionadas rapidamente uma após a outra (ex.: tocar "+" em duas músicas
+// seguidas na busca rápida), os dois pedidos ao servidor podem responder
+// FORA DE ORDEM (a resposta do segundo chega antes da do primeiro). Se cada
+// resposta SOBRESCREVESSE o trackIds local, a resposta mais antiga (que
+// ainda não sabia da segunda música) podia chegar por último e APAGAR a
+// segunda música da tela — mesmo ela já estando salva no servidor.
+// Reproduzido e comprovado em teste isolado antes desta correção.
+//
+// A correção: nunca SOBRESCREVER, sempre MESCLAR (união) o que veio do
+// servidor com o que já existe localmente. Assim, uma resposta atrasada
+// nunca apaga uma adição mais recente que ainda não tinha chegado nela.
+function mergeSetlistTrackIds(localTrackIds, serverTrackIds){
+  const vistos = new Set();
+  const resultado = [];
+  for (const entry of [...(serverTrackIds || []), ...(localTrackIds || [])]) {
+    const id = typeof entry === 'string' ? entry : entry?.trackId;
+    const st = typeof entry === 'string' ? 0 : Number(entry?.semitones || 0);
+    const chave = `${id}::${st}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    resultado.push(entry);
+  }
+  return resultado;
+}
+
 async function syncAddTrackToServer(setlist, entry){
   if (!authUser || !setlist?.id) return;
   pendingNewSetlistIds.add(setlist.id);
@@ -2391,9 +2417,10 @@ async function syncAddTrackToServer(setlist, entry){
     }
     const data = await res.json();
     if (data?.setlist && Array.isArray(data.setlist.trackIds)) {
-      // Reconcilia com o estado real do servidor (pode incluir músicas que
-      // outras pessoas somaram entre o momento local e este envio)
-      setlist.trackIds = data.setlist.trackIds;
+      // V131.56 — MESCLA (nunca sobrescreve) com o que já existe localmente.
+      // Uma resposta atrasada de OUTRA adição concorrente não apaga mais a
+      // música que acabou de ser somada por uma chamada mais recente.
+      setlist.trackIds = mergeSetlistTrackIds(setlist.trackIds, data.setlist.trackIds);
       saveJSON('vs_setlists_v1', setlists);
       if (el.quickAddSongsModal && !el.quickAddSongsModal.classList.contains('hidden')) {
         renderQuickAddResults();
@@ -2429,7 +2456,11 @@ async function syncRemoveTrackFromServer(setlist, trackId, semitones){
     }
     const data = await res.json();
     if (data?.setlist && Array.isArray(data.setlist.trackIds)) {
-      setlist.trackIds = data.setlist.trackIds;
+      // V131.56 — Mesma correção: mescla em vez de sobrescrever. Como a
+      // música removida já foi tirada do array local ANTES desta chamada
+      // (e também não está mais na resposta do servidor), ela continua
+      // fora — só protege as demais músicas de uma sobrescrita indevida.
+      setlist.trackIds = mergeSetlistTrackIds(setlist.trackIds, data.setlist.trackIds);
       saveJSON('vs_setlists_v1', setlists);
       renderSetlists();
       render();
@@ -2460,8 +2491,10 @@ async function syncSetlistMeta(setlist, mudancas){
     }
     const data = await res.json();
     if (data?.setlist && Array.isArray(data.setlist.trackIds)) {
-      // Reconcilia trackIds também (pode ter mudado por adição concorrente)
-      setlist.trackIds = data.setlist.trackIds;
+      // V131.56 — Reconcilia trackIds MESCLANDO (não sobrescrevendo), pela
+      // mesma razão: uma troca de nome/data/paleta não pode apagar uma
+      // música que foi adicionada em paralelo e ainda não confirmou.
+      setlist.trackIds = mergeSetlistTrackIds(setlist.trackIds, data.setlist.trackIds);
       saveJSON('vs_setlists_v1', setlists);
     }
     pendingNewSetlistIds.delete(setlist.id);
