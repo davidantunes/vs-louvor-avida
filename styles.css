@@ -7723,6 +7723,7 @@ details[open] .archived-setlists-toggle::before{
 .quick-add-row-actions .tone-btn-open,
 .quick-add-row-actions .quick-add-btn{
   width:38px;height:38px;border-radius:11px;font-size:15px;padding:0;
+  touch-action:manipulation;
 }
 .quick-add-btn.is-added{background:linear-gradient(135deg,var(--teal),var(--teal-2));color:#001110;border:0;}
 .quick-add-footer{
@@ -7733,10 +7734,21 @@ details[open] .archived-setlists-toggle::before{
 @media (max-width:640px){
   .quick-add-modal{max-height:92vh;padding:18px !important;}
   .quick-add-results{max-height:calc(92vh - 260px);}
-  .quick-add-row{padding:8px 10px;}
+  .quick-add-row{padding:8px 10px;gap:8px;}
   .quick-add-row-info strong{font-size:13px;}
   .quick-add-footer{flex-direction:column;align-items:stretch;}
   .quick-add-footer .btn{width:100%;}
+  /* V131.54 — No celular, os 3 botões de ação (tocar/tom/adicionar) eram
+     pequenos (38x38px, abaixo do mínimo recomendado de toque) e ficavam
+     colados um no outro — fácil de errar o dedo e "clicar mas não
+     adicionar" (na verdade acertava o botão vizinho). Agora maiores e com
+     mais espaço entre eles. */
+  .quick-add-row-actions{gap:10px;}
+  .quick-add-row-actions .play-btn,
+  .quick-add-row-actions .tone-btn-open,
+  .quick-add-row-actions .quick-add-btn{
+    width:44px;height:44px;font-size:17px;
+  }
 }
 
 /* V131.32 — O modal de busca rápida (novo repertório) fica ABERTO enquanto

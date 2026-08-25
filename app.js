@@ -1893,7 +1893,10 @@ function handlePaletteUse(palette){
 function openPaletteChooseSetlistModal(palette, mode = 'apply'){
   if (!el.paletteChooseSetlistModal) return;
   pendingPaletteChoice = palette;
-  const editable = setlists.filter(s => canEditSetlist(s));
+  // V131.53 — Antes trazia TODOS os repertórios editáveis, inclusive
+  // arquivados. Agora só mostra os ativos (mesmo critério usado no resto
+  // do app: nem arquivado manualmente, nem com data de culto já passada).
+  const editable = setlists.filter(s => canEditSetlist(s) && !isSetlistAutoArchived(s));
   el.paletteChooseTitle.textContent = mode === 'share' ? 'Escolha uma paleta antes de compartilhar' : `Usar ${palette.title || 'paleta'} no repertório`;
   el.paletteChooseDescription.textContent = editable.length
     ? 'Selecione o repertório que receberá esta paleta. Cada repertório pode ter somente uma paleta ativa.'
@@ -2132,7 +2135,11 @@ function renderQuickAddResults(){
     btn.addEventListener('click', () => {
       const track = findTrack(btn.dataset.id);
       const activeNow = getActiveEditableSetlist();
-      if (!activeNow || !track) return;
+      // V131.54 — Antes, se algo desse errado aqui (repertório ativo não
+      // encontrado, música não encontrada), o clique simplesmente não fazia
+      // nada — sem nenhum aviso. Parecia "clico e não acontece nada".
+      if (!activeNow) { toast('Não foi possível identificar o repertório ativo. Feche e abra a busca de novo.'); return; }
+      if (!track) { toast('Não foi possível identificar essa música.'); return; }
       if (isTrackPresentInSetlist(activeNow, track.id)) {
         toast('Essa música já está no repertório.');
         return;

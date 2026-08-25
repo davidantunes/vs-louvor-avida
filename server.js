@@ -820,9 +820,25 @@ async function buildLibrary(rootFolderId) {
   // de decidir qual arquivo vence em caso de nome duplicado. Assim, o mesmo
   // arquivo físico sempre vence, toda vez — o resultado é sempre igual.
   const candidatos = [];
+  const pastasComErro = []; // V131.52 — pastas que falharam na varredura, para diagnóstico
 
   async function walk(folderId, singerName, inheritedCover, folderPath) {
-    const files = await listFolder(folderId);
+    // V131.52 — CORREÇÃO: antes, se UMA pasta falhasse (erro de rede,
+    // bloqueio temporário do Google, etc.), o erro subia e derrubava a
+    // reconstrução INTEIRA da biblioteca — mesmo as pastas que já tinham
+    // sido lidas com sucesso eram descartadas, e a música delas sumia até a
+    // próxima tentativa dar certo (o que pode nunca acontecer, se a mesma
+    // pasta falhar toda vez). Agora, uma pasta com erro é pulada e registrada,
+    // e as outras continuam normalmente — a biblioteca fica só sem aquela
+    // pasta específica, em vez de sumir inteira.
+    let files;
+    try {
+      files = await listFolder(folderId);
+    } catch (err) {
+      console.warn(`[library] Pasta "${folderPath || folderId}" falhou na varredura, pulando:`, err.message);
+      pastasComErro.push({ folderPath: folderPath || '', folderId, erro: err.message });
+      return;
+    }
     const audioFiles = files.filter(f =>
       f.mimeType !== 'application/vnd.google-apps.folder' &&
       AUDIO_EXT.includes(getExt(f.name))
@@ -894,6 +910,10 @@ async function buildLibrary(rootFolderId) {
     });
   }
   if (dupedByName > 0) console.log(`[library] ${dupedByName} duplicata(s) por nome removida(s) (escolha agora estável).`);
+  if (pastasComErro.length > 0) {
+    console.warn(`[library] ⚠ ${pastasComErro.length} pasta(s) falharam na varredura e foram PULADAS (músicas dessas pastas não aparecem até a próxima reconstrução dar certo nelas):`);
+    pastasComErro.forEach(p => console.warn(`  - "${p.folderPath}": ${p.erro}`));
+  }
   tracks.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
   return tracks;
 }
@@ -1023,6 +1043,78 @@ app.get('/api/diagnostics/audio/:id', async (req, res) => {
 // individuais dentro de uma pasta conhecida. Agora navegamos a árvore de
 // pastas a partir da raiz configurada (mesmo método comprovado que já
 // funciona para montar a biblioteca), procurando o nome em cada arquivo.
+// V131.52 — Diagnóstico para investigar queda no total de músicas: mostra o
+// total BRUTO de arquivos de áudio encontrados no Drive (antes de qualquer
+// deduplicação), quantos foram removidos por serem "nome duplicado", e o
+// total FINAL. Isso revela se a perda é na varredura (arquivo não encontrado
+// no Drive) ou na deduplicação (removido por engano, achando ser duplicata).
+// Use /api/diagnostics/library-scan
+app.get('/api/diagnostics/library-scan', async (req, res) => {
+  try {
+    if (!requireApiKey(res)) return;
+    const rootId = req.query.rootId || process.env.ROOT_FOLDER_ID || '1Tcua5y0O9Bv5LRNmtIYnDCderiaN8xB8';
+
+    const candidatos = [];
+    let pastasVisitadas = 0;
+    const pastasComErro = [];
+    async function walk(folderId, folderPath) {
+      pastasVisitadas++;
+      let files;
+      try {
+        files = await listFolder(folderId);
+      } catch (err) {
+        // V131.52 — Diferente do buildLibrary real (que aborta TUDO se uma
+        // pasta falhar), aqui continuamos nas outras pastas e registramos
+        // qual falhou — assim revelamos uma pasta "quebrada" específica em
+        // vez de só saber que "algo" deu errado em algum lugar.
+        pastasComErro.push({ folderPath, erro: err.message });
+        return;
+      }
+      const audioFiles = files.filter(f =>
+        f.mimeType !== 'application/vnd.google-apps.folder' && AUDIO_EXT.includes(getExt(f.name))
+      );
+      const subfolders = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+      for (const f of audioFiles) candidatos.push({ id: f.id, name: f.name, folderPath });
+      for (const folder of subfolders) {
+        await walk(folder.id, `${folderPath}/${folder.name}`);
+      }
+    }
+    await walk(rootId, '');
+
+    // Reproduz a MESMA lógica de dedup do buildLibrary, mas registrando o que foi descartado
+    candidatos.sort((a, b) => {
+      const p = a.folderPath.localeCompare(b.folderPath, 'pt-BR');
+      return p !== 0 ? p : a.name.localeCompare(b.name, 'pt-BR');
+    });
+    const seen = new Set();
+    const seenNames = new Set();
+    const descartadosPorNome = [];
+    let finais = 0;
+    for (const c of candidatos) {
+      if (seen.has(c.id)) continue;
+      const normalizedName = String(c.name).toLowerCase().replace(/\.[a-z0-9]+$/, '').replace(/[\s_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+      if (normalizedName && seenNames.has(normalizedName)) {
+        descartadosPorNome.push({ nome: c.name, pasta: c.folderPath });
+        continue;
+      }
+      seen.add(c.id);
+      if (normalizedName) seenNames.add(normalizedName);
+      finais++;
+    }
+
+    res.json({
+      pastasVisitadas,
+      pastasComErro,
+      totalBrutoEncontradoNoDrive: candidatos.length,
+      totalDescartadoPorNomeDuplicado: descartadosPorNome.length,
+      totalFinal: finais,
+      exemplosDescartados: descartadosPorNome.slice(0, 30)
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message, stack: error.stack });
+  }
+});
+
 app.get('/api/diagnostics/find-duplicates', async (req, res) => {
   try {
     if (!requireApiKey(res)) return;
