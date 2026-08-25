@@ -3851,13 +3851,20 @@ async function precacheSetlistAudios(){
     const urls = [];
     for (const t of allTracks) {
       if (ids.has(t.id)) urls.push(driveUrl(t.id));
-      if (urls.length >= 60) break; // segurança: no máx 60 por sessão
+      // V131.55 — Reduzido de 60 para 20 por lote: menos requisições em
+      // sequência ao Google Drive de uma vez, reduzindo o risco de disparar
+      // o bloqueio de "tráfego automatizado" quando várias músicas são
+      // adicionadas rapidamente uma atrás da outra (cada adição chama esta
+      // função). O que não entrar neste lote é pego numa próxima chamada.
+      if (urls.length >= 20) break;
     }
     if (urls.length) sw.postMessage({ type: 'PRECACHE_AUDIOS', urls });
   } catch (_) {
     // silencioso
   } finally {
-    setTimeout(() => { precachingInFlight = false; }, 30000);
+    // V131.55 — Intervalo maior entre lotes (era 30s) para dar mais espaço
+    // ao Google entre uma leva de pré-cache e outra.
+    setTimeout(() => { precachingInFlight = false; }, 90000);
   }
 }
 

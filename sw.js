@@ -3,7 +3,7 @@
    Código-fonte (app.js/css/html/config) network-first: correções chegam na hora.
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v131.54.0';
+const SW_VERSION = 'v131.55.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
@@ -179,8 +179,21 @@ async function precacheAudios(urls) {
       if (resp && resp.ok && resp.status === 200) {
         await cache.put(u, resp.clone()).catch(() => {});
         added++;
+      } else if (resp && resp.status === 403) {
+        // V131.55 — CORREÇÃO: o pré-cache disparava até 60 áudios em
+        // sequência rápida a cada música adicionada/repertório salvo, sem
+        // nenhum espaçamento — exatamente o padrão que faz o Google
+        // bloquear o servidor por "tráfego automatizado" (a mesma tela
+        // "Sorry..." de outras vezes). Se detectarmos esse bloqueio no meio
+        // do lote, paramos IMEDIATAMENTE em vez de continuar batendo no
+        // Google já bloqueado — isso só pioraria e prolongaria o bloqueio.
+        console.warn('[precache] Bloqueio detectado (403), parando o lote para não piorar.');
+        break;
       }
     } catch (_) {}
+    // Pequena pausa entre cada áudio — evita rajada de requisições que
+    // dispara o bloqueio do Google.
+    await new Promise(r => setTimeout(r, 250));
   }
   await trimCache(AUDIO_CACHE, AUDIO_CACHE_MAX_ENTRIES).catch(() => {});
   return added;
