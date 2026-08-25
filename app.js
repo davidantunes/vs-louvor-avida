@@ -2330,6 +2330,7 @@ function flushSetlistsPending(){
 function saveSetlistsState(alterado){
   saveJSON('vs_setlists_v1', setlists);
   const lista = Array.isArray(alterado) ? alterado : (alterado ? [alterado] : []);
+  let promiseDaOperacao = Promise.resolve();
   if (lista.length) {
     // Protege contra o auto-refresh apagar itens ainda em voo
     for (const s of lista) { if (s && s.id) pendingNewSetlistIds.add(s.id); }
@@ -2340,12 +2341,17 @@ function saveSetlistsState(alterado){
         }
       })
       .catch(err => console.warn('Repertórios não sincronizados:', err));
+    promiseDaOperacao = setlistsSavePromise;
   }
   // re-pré-cache e re-render
   try {
     if (typeof precacheSetlistAudios === 'function') precacheSetlistAudios();
     if (libraryLoaded && typeof render === 'function') render();
   } catch (_) {}
+  // V131.50 — Retorna a promise para quem precisa GARANTIR que o repertório
+  // já existe na nuvem antes de continuar (ex.: criar e já poder adicionar
+  // músicas em seguida, sem cair no 404 de "repertório ainda não existe").
+  return promiseDaOperacao;
 }
 
 // ============================================================================
@@ -4534,7 +4540,7 @@ function toggleSetlistArchive(setlistId){
   toast(s.archived ? 'Repertório arquivado.' : 'Repertório restaurado para ativos.');
 }
 
-function createSetlistFromInput(){
+async function createSetlistFromInput(){
   if (!canCreateSetlists()) {
     toast('Faça login para criar repertórios.');
     return;
@@ -4564,12 +4570,24 @@ function createSetlistFromInput(){
     archived: false
   };
   setlists.push(s);
-  saveSetlistsState(s);
+  // V131.50 — CORREÇÃO: antes, o app abria a busca de músicas imediatamente
+  // após disparar a criação, sem esperar ela terminar. Se o usuário
+  // adicionasse uma música rápido, o pedido de "adicionar música" chegava
+  // ao servidor ANTES do repertório existir de fato na nuvem, dando 404
+  // ("Repertório não encontrado"). Agora esperamos a confirmação primeiro.
+  if (el.createSetlistBtn) { el.createSetlistBtn.disabled = true; el.createSetlistBtn.textContent = 'Criando...'; }
   updateStats();
   renderSetlists();
   renderSetlistOptions();
   el.newSetlistName.value = '';
   if (el.newSetlistDate) el.newSetlistDate.value = '';  // V108
+  try {
+    await saveSetlistsState(s);
+  } catch (err) {
+    console.warn('Falha ao confirmar criação do repertório na nuvem:', err);
+  } finally {
+    if (el.createSetlistBtn) { el.createSetlistBtn.disabled = false; el.createSetlistBtn.textContent = 'Criar'; }
+  }
   recordUsageEvent({ type: 'setlist_created', setlistId: s.id, setlistName: s.name, trackCount: s.trackIds.length, message: `Repertório "${s.name}" criado.` });
   activateSetlistAndOpenLibrary(s);
   toast('Repertório criado. Adicione músicas na biblioteca.');
@@ -4765,7 +4783,17 @@ function countValidSetlistTracks(setlist){
 // de todos os repertórios. Roda após a biblioteca carregar. Corrige o caso
 // onde uma música foi re-adicionada e a antiga ficou duplicada na contagem.
 function cleanOrphanSetlistTracks(){
-  if (!allTracks.length) return; // só limpa com biblioteca carregada
+  // V131.50 — Reforço de segurança: além de "biblioteca vazia" (já existia),
+  // agora também exige um TAMANHO MÍNIMO plausível. Essa limpeza é
+  // destrutiva (remove música do repertório de verdade); se por algum
+  // motivo futuro a biblioteca fosse marcada como "carregada" com só uma
+  // fração das músicas (ex.: uma falha de rede no meio do carregamento),
+  // essa proteção evita apagar músicas válidas em massa por engano.
+  const TAMANHO_MINIMO_PLAUSIVEL = 50;
+  if (allTracks.length < TAMANHO_MINIMO_PLAUSIVEL) {
+    if (allTracks.length) console.warn(`[setlist] Limpeza de órfãos pulada: biblioteca com só ${allTracks.length} música(s), abaixo do mínimo plausível (provável carregamento parcial).`);
+    return;
+  }
   const alterados = []; // V131.29 — salva apenas os repertórios que mudaram
   for (const setlist of setlists) {
     const original = setlist.trackIds || [];
@@ -4816,55 +4844,16 @@ function formatSetlistDate(value){
   if (Number.isNaN(date.getTime())) return 'Data não informada';
   return date.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' });
 }
-function renderSharedSetlistHero(setlist){
+// V131.49 — O card do topo (hero) ao abrir um repertório por link
+// compartilhado duplicava informações já mostradas no resto do modal:
+// contagem de músicas e criador (já na introdução do modal) e os botões
+// "Ver paleta do culto"/"Copiar link" (já são os botões "🎨 Paleta" e
+// "🔗 Copiar link" da barra de ações logo abaixo). Removido para não repetir
+// a mesma informação duas vezes na tela.
+function renderSharedSetlistHero(){
   if (!el.setlistSharedHero) return;
-  const isSharedView = String(sharedSetlistContextId || '') === String(setlist?.id || '');
-  if (!isSharedView || !setlist) {
-    el.setlistSharedHero.classList.add('hidden');
-    el.setlistSharedHero.innerHTML = '';
-    return;
-  }
-  const trackCount = countValidSetlistTracks(setlist);
-  const creatorName = getSetlistCreatorName(setlist);
-  const paletteTitle = setlist.paletteTitle || 'Paleta ainda não definida';
-  const createdAt = formatSetlistDate(setlist.createdAt);
-  el.setlistSharedHero.classList.remove('hidden');
-  el.setlistSharedHero.innerHTML = `
-    <div class="setlist-shared-hero-card glass-lite">
-      <div class="setlist-shared-brand">
-        <img src="assets/logo-avida.jpg" alt="Igreja Amor e Vida">
-        <div>
-          <span class="setlist-shared-label">Igreja Amor e Vida</span>
-          <strong>Repertório compartilhado</strong>
-          <small>Confira as músicas e a paleta definida para este culto.</small>
-        </div>
-      </div>
-      <div class="setlist-shared-main">
-        <div class="setlist-shared-copy">
-          <h4>${esc(setlist.name || 'Repertório')}</h4>
-          <div class="setlist-shared-meta">
-            <span class="shared-meta-pill">${trackCount} música(s)</span>
-            <span class="shared-meta-pill">Criado por ${esc(creatorName)}</span>
-            <span class="shared-meta-pill">${esc(createdAt)}</span>
-          </div>
-          <div class="setlist-shared-palette-line">
-            <span class="shared-palette-chip">${esc(paletteTitle)}</span>
-            <small>Use esta paleta como referência de uniforme para o culto.</small>
-          </div>
-        </div>
-        <div class="setlist-shared-actions">
-          <button type="button" class="btn btn-primary hero-open-palette">Ver paleta do culto</button>
-          <button type="button" class="btn btn-secondary hero-copy-link">Copiar link</button>
-        </div>
-      </div>
-    </div>`;
-  const openPaletteBtn = el.setlistSharedHero.querySelector('.hero-open-palette');
-  if (openPaletteBtn) openPaletteBtn.addEventListener('click', () => {
-    if (setlist.paletteImage) openPaletteModal(setlist.paletteTitle || 'Paleta do culto', setlist.paletteImage, setlist.paletteId || '');
-    else toast('Este repertório ainda não possui paleta definida.');
-  });
-  const copyLinkBtn = el.setlistSharedHero.querySelector('.hero-copy-link');
-  if (copyLinkBtn) copyLinkBtn.addEventListener('click', () => copyText(buildSetlistShareUrl(setlist.id), 'Link do repertório copiado.'));
+  el.setlistSharedHero.classList.add('hidden');
+  el.setlistSharedHero.innerHTML = '';
 }
 
 function openSetlistDetail(id){

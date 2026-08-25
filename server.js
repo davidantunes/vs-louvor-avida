@@ -175,8 +175,30 @@ async function appwriteRequest(method, path, body) {
   return data;
 }
 async function listDocuments(collectionId) {
-  const data = await appwriteRequest('GET', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents?limit=500`);
-  return data.documents || [];
+  // V131.51 — CORREÇÃO: antes buscava só os primeiros 500 documentos
+  // (?limit=500) e parava por ali. Depois de meses de uso e muitos testes,
+  // é bem plausível que a collection tenha passado de 500 documentos —
+  // e qualquer documento além desse limite ficava INVISÍVEL para o
+  // servidor. Isso fazia repertórios recentes (criados depois do limite)
+  // parecerem "não encontrados" ao tentar adicionar música, renomear, etc,
+  // mesmo minutos depois de criados — batendo com o log que mostrava o
+  // mesmo erro se repetindo por quase 30 segundos sem nunca se resolver.
+  // Agora busca TODAS as páginas até esgotar, não só a primeira.
+  const PAGE_SIZE = 500;
+  let all = [];
+  let offset = 0;
+  while (true) {
+    const data = await appwriteRequest('GET', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents?limit=${PAGE_SIZE}&offset=${offset}`);
+    const docs = data.documents || [];
+    all = all.concat(docs);
+    if (docs.length < PAGE_SIZE) break; // última página (veio menos que o pedido)
+    offset += PAGE_SIZE;
+    if (offset > 20000) { // segurança contra loop infinito em caso patológico
+      console.warn(`[listDocuments] Parou em ${offset} documentos (limite de segurança) na collection "${collectionId}".`);
+      break;
+    }
+  }
+  return all;
 }
 async function upsertState(collectionId, matcher, data) {
   const docs = await listDocuments(collectionId);

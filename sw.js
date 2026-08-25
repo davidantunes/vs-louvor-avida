@@ -3,7 +3,7 @@
    Código-fonte (app.js/css/html/config) network-first: correções chegam na hora.
    O banner de atualização avisa quando há nova versão disponível. */
 
-const SW_VERSION = 'v131.48.0';
+const SW_VERSION = 'v131.51.0';
 const SHELL_CACHE = `vsl-shell-${SW_VERSION}`;
 const ASSET_CACHE = `vsl-assets-${SW_VERSION}`;
 const AUDIO_CACHE = `vsl-audios-${SW_VERSION}`;
