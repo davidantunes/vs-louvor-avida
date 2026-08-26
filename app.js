@@ -1202,24 +1202,29 @@ function setupAutoRefresh(){
   if (autoRefreshBound) return;
   autoRefreshBound = true;
 
+  // V131.60 — CORREÇÃO: removida a checagem da flag antiga
+  // "vs_setlists_pending_v1", resíduo do sistema anterior (antes do modelo
+  // por-documento). Ela nunca é definida como true no código atual, mas se
+  // o navegador de alguém tivesse essa flag presa em "true" de uma versão
+  // BEM anterior do app, o auto-atualizador parava de funcionar PARA
+  // SEMPRE naquele aparelho — explicando "só quem cria vê o repertório"
+  // (o criador vê pelo estado local otimista; os outros nunca recebiam a
+  // atualização, porque o auto-atualizador nunca rodava para eles). A
+  // proteção de verdade contra sobrescrever uma edição em andamento já é
+  // feita dentro do loadCloudState via "pendingNewSetlistIds" — mais
+  // moderna e por-item, não uma trava global que pode ficar presa.
+
   // Quando a aba/app volta a ficar visível, recarrega o estado da nuvem
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && authUser) {
-      // Não recarrega se há alterações locais pendentes (evita sobrescrever)
-      const pending = loadJSON('vs_setlists_pending_v1', false);
-      if (!pending) {
-        loadCloudState().catch(err => console.warn('Auto-refresh falhou:', err));
-      }
+      loadCloudState().catch(err => console.warn('Auto-refresh falhou:', err));
     }
   });
 
   // Também recarrega periodicamente a cada 60s enquanto o app está visível
   setInterval(() => {
     if (document.visibilityState === 'visible' && authUser) {
-      const pending = loadJSON('vs_setlists_pending_v1', false);
-      if (!pending) {
-        loadCloudState().catch(() => {});
-      }
+      loadCloudState().catch(() => {});
     }
   }, 60000);
 }
