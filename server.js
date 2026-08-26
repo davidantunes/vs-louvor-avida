@@ -566,13 +566,42 @@ app.put('/api/appwrite/setlists/:setlistId', async (req, res) => {
     // V131.37 — Mesma fila do endpoint de adicionar música: garante que uma
     // regravação completa (renomear, trocar paleta, reordenar) nunca se
     // sobrepõe com uma adição de música concorrente no mesmo repertório.
+    //
+    // V131.62 — CORREÇÃO: casos recentes mostraram a escrita retornando
+    // sucesso (200) do Appwrite, mas o documento não aparecia em consultas
+    // logo em seguida — fazendo o repertório "sumir" (nunca existiu de
+    // verdade, apesar do "sucesso" reportado). Agora, depois de escrever,
+    // CONFIRMAMOS com uma leitura de verdade que o documento está
+    // realmente lá antes de responder "ok" ao app. Se não confirmar,
+    // tentamos de novo (até 3x, com pequena espera) antes de desistir —
+    // e só reportamos sucesso ao app quando temos certeza real.
     const updatedAt = await withSetlistLock(setlistId, async () => {
       const ts = new Date().toISOString();
-      await upsertState(
-        APPWRITE_SETLISTS_COLLECTION_ID,
-        d => d.setlist_id === setlistId,
-        { setlist_id: setlistId, data: serialized, updated_at: ts }
-      );
+      let confirmado = false;
+      let ultimoErro = null;
+      for (let tentativa = 1; tentativa <= 3 && !confirmado; tentativa++) {
+        try {
+          await upsertState(
+            APPWRITE_SETLISTS_COLLECTION_ID,
+            d => d.setlist_id === setlistId,
+            { setlist_id: setlistId, data: serialized, updated_at: ts }
+          );
+          // Confirma de verdade: relê a collection e procura o documento
+          const docsConfirmacao = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
+          confirmado = docsConfirmacao.some(d => d.setlist_id === setlistId);
+          if (!confirmado) {
+            console.warn(`[setlists] Tentativa ${tentativa}/3: escrita de "${setlistId}" retornou sucesso mas NÃO foi confirmada numa releitura. ${tentativa < 3 ? 'Tentando de novo...' : 'Desistindo.'}`);
+            if (tentativa < 3) await new Promise(r => setTimeout(r, 400 * tentativa));
+          }
+        } catch (err) {
+          ultimoErro = err;
+          console.warn(`[setlists] Tentativa ${tentativa}/3 de salvar "${setlistId}" falhou:`, err.message);
+          if (tentativa < 3) await new Promise(r => setTimeout(r, 400 * tentativa));
+        }
+      }
+      if (!confirmado) {
+        throw ultimoErro || new Error('Não foi possível confirmar a gravação do repertório após 3 tentativas.');
+      }
       return ts;
     });
     res.json({ ok: true, setlistId, updatedAt });
