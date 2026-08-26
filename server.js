@@ -203,10 +203,24 @@ async function listDocuments(collectionId) {
 async function upsertState(collectionId, matcher, data) {
   const docs = await listDocuments(collectionId);
   const found = docs.find(matcher);
+  // V131.61 — Log detalhado para diagnóstico definitivo: registra se foi
+  // CRIAÇÃO ou ATUALIZAÇÃO, quantos documentos existiam na collection no
+  // momento, e o resultado exato que o Appwrite devolveu (o $id e o campo
+  // que identifica o documento). Isso substitui suposições por evidência
+  // concreta na próxima vez que "repertório não encontrado" acontecer logo
+  // após uma criação bem-sucedida.
   if (found) {
-    return appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(found.$id)}`, { data });
+    const resultado = await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents/${encodeURIComponent(found.$id)}`, { data });
+    if (collectionId === APPWRITE_SETLISTS_COLLECTION_ID) {
+      console.log(`[upsert] ATUALIZOU doc existente "${found.$id}" (setlist_id="${data.setlist_id}") — collection tinha ${docs.length} docs antes.`);
+    }
+    return resultado;
   }
-  return appwriteRequest('POST', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents`, { documentId: 'unique()', data });
+  const resultado = await appwriteRequest('POST', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents`, { documentId: 'unique()', data });
+  if (collectionId === APPWRITE_SETLISTS_COLLECTION_ID) {
+    console.log(`[upsert] CRIOU doc novo "${resultado?.$id}" com setlist_id="${resultado?.setlist_id}" (pedido: "${data.setlist_id}") — collection tinha ${docs.length} docs antes. Bateu? ${resultado?.setlist_id === data.setlist_id ? 'SIM' : '⚠ NÃO — CAMPOS DIFERENTES!'}`);
+  }
+  return resultado;
 }
 app.get('/api/appwrite/config', (req, res) => {
   res.json({ endpoint: APPWRITE_ENDPOINT, projectId: APPWRITE_PROJECT_ID, databaseId: APPWRITE_DATABASE_ID, ready: appwriteReady(), adminEmails: APPWRITE_ADMIN_EMAILS, adminConfigured: true, driveApiKey: API_KEY });
@@ -414,7 +428,16 @@ app.post('/api/appwrite/setlists/:setlistId/add-track', async (req, res) => {
     const result = await withSetlistLock(setlistId, async () => {
       const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
       const found = docs.find(d => d.setlist_id === setlistId);
-      if (!found) { const e = new Error('Repertório não encontrado na nuvem.'); e.status = 404; throw e; }
+      if (!found) {
+        // V131.61 — Log detalhado: quantos documentos existem de verdade
+        // nesse momento, e se algum ID parecido (mesmo timestamp, prefixo
+        // igual) aparece — ajuda a distinguir "nunca foi criado" de
+        // "foi criado com um ID ligeiramente diferente" ou "existe mas a
+        // busca não bateu por algum motivo".
+        const parecidos = docs.filter(d => String(d.setlist_id || '').startsWith(setlistId.split('_').slice(0, 2).join('_'))).map(d => d.setlist_id);
+        console.error(`[add-track] "${setlistId}" NÃO encontrado. Collection tem ${docs.length} documento(s) no total. IDs parecidos encontrados: ${parecidos.length ? parecidos.join(', ') : '(nenhum)'}`);
+        const e = new Error('Repertório não encontrado na nuvem.'); e.status = 404; throw e;
+      }
 
       const value = JSON.parse(found.data || '{}');
       value.trackIds = Array.isArray(value.trackIds) ? value.trackIds : [];
