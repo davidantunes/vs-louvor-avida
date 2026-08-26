@@ -155,9 +155,14 @@ async function appwriteRequest(method, path, body) {
   try {
     response = await fetch(`${APPWRITE_ENDPOINT}${path}`, {
       method,
-      headers: appwriteHeaders(),
+      // V131.65 — Reforço extra contra cache: cabeçalhos explícitos pedindo
+      // para nunca usar nem guardar cache, e `cache: 'no-store'` (o fetch
+      // do Node também respeita essa opção quando há algum proxy/CDN no
+      // caminho até o Appwrite).
+      headers: { ...appwriteHeaders(), 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
       body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal
+      signal: controller.signal,
+      cache: 'no-store'
     });
   } catch (err) {
     if (err.name === 'AbortError') throw new Error('Appwrite não respondeu em 15s (timeout).');
@@ -184,11 +189,21 @@ async function listDocuments(collectionId) {
   // mesmo minutos depois de criados — batendo com o log que mostrava o
   // mesmo erro se repetindo por quase 30 segundos sem nunca se resolver.
   // Agora busca TODAS as páginas até esgotar, não só a primeira.
+  //
+  // V131.65 — CORREÇÃO: descoberto que a listagem reportava "25 documentos"
+  // consistentemente, enquanto o painel do Appwrite mostrava mais de 130
+  // documentos reais na collection — uma diferença grande demais para ser
+  // só atraso de propagação. Suspeita forte: algo no caminho entre o
+  // servidor e o Appwrite (CDN, proxy) estava CACHEANDO a resposta dessa
+  // consulta, porque a URL é sempre idêntica (?limit=500&offset=0) a cada
+  // chamada. Adicionado um parâmetro único (timestamp) a cada consulta,
+  // que muda a URL toda vez e impede esse tipo de cache baseado em URL.
   const PAGE_SIZE = 500;
   let all = [];
   let offset = 0;
+  const antiCache = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   while (true) {
-    const data = await appwriteRequest('GET', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents?limit=${PAGE_SIZE}&offset=${offset}`);
+    const data = await appwriteRequest('GET', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(collectionId)}/documents?limit=${PAGE_SIZE}&offset=${offset}&_=${antiCache}_${offset}`);
     const docs = data.documents || [];
     all = all.concat(docs);
     if (docs.length < PAGE_SIZE) break; // última página (veio menos que o pedido)
