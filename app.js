@@ -1421,13 +1421,22 @@ async function logoutSession(){
 async function loadCloudState(){
   if (!authUser) return;
   try {
+    // V131.67 — CORREÇÃO: antes, se UMA dessas chamadas falhasse por
+    // instabilidade de rede passageira (ex.: "Failed to fetch"), o
+    // Promise.all inteiro rejeitava — e NENHUMA das outras era processada,
+    // inclusive a reconciliação de repertórios (que não tem nada a ver com
+    // a falha). Isso explicava "excluí no celular, mas continua aparecendo
+    // no computador": a reconciliação simplesmente não rodava naquela
+    // tentativa, e o item excluído nunca era removido da tela. Agora cada
+    // chamada tem seu próprio "amortecedor" — uma falha isolada não impede
+    // mais as outras de completarem normalmente.
     const [shared, userState, cloudMembers, cloudSchedule, cloudHistory, collectionSetlists] = await Promise.all([
-      getSharedState('setlists'),
-      getUserState('favorites'),
-      getSharedState('members'),
-      getSharedState('monthlySchedule'),
-      getSharedState('usageHistory'),
-      loadSetlistsFromCollection()   // V131.18 — modelo novo (por-documento)
+      getSharedState('setlists').catch(err => { console.warn('Estado antigo de setlists não carregado:', err.message); return null; }),
+      getUserState('favorites').catch(err => { console.warn('Favoritas não carregadas:', err.message); return null; }),
+      getSharedState('members').catch(err => { console.warn('Membros não carregados:', err.message); return null; }),
+      getSharedState('monthlySchedule').catch(err => { console.warn('Escala não carregada:', err.message); return null; }),
+      getSharedState('usageHistory').catch(err => { console.warn('Histórico não carregado:', err.message); return null; }),
+      loadSetlistsFromCollection().catch(err => { console.warn('Repertórios (índice novo) não carregados:', err.message); return null; })   // V131.18 — modelo novo (por-documento)
     ]);
 
     // V131.18 — Prioriza a collection nova (documentos individuais).
