@@ -237,6 +237,83 @@ async function listDocuments(collectionId) {
 // o método antigo (listar+filtrar) como reserva, mantendo compatibilidade
 // com repertórios já existentes sem precisar de migração manual.
 // ============================================================================
+// ============================================================================
+// V131.66 — ÍNDICE PRÓPRIO DE REPERTÓRIOS: a listagem de documentos do
+// Appwrite provou estar presa numa contagem antiga (25) mesmo depois de
+// dezenas de escritas confirmadas e de tentativas de furar qualquer cache
+// por URL — indicando um problema na própria infraestrutura de listagem do
+// Appwrite para este projeto, fora do nosso controle.
+//
+// Solução: o app passa a manter seu PRÓPRIO índice — um único documento,
+// com ID FIXO, guardando a lista de todos os setlist_id que existem. Esse
+// documento é sempre lido e escrito por BUSCA DIRETA POR ID (nunca por
+// listagem), o mesmo método que provamos confiável na v131.63. A tela de
+// "todos os meus repertórios" passa a: 1) ler esse índice (rápido, direto),
+// 2) buscar cada repertório da lista também por ID direto (em paralelo) —
+// sem nunca precisar listar a collection inteira.
+// ============================================================================
+const SETLISTS_INDEX_DOC_ID = 'setlists_index_v1';
+
+async function getSetlistsIndexDoc() {
+  try {
+    return await appwriteRequest('GET', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_APP_STATE_COLLECTION_ID)}/documents/${encodeURIComponent(SETLISTS_INDEX_DOC_ID)}`);
+  } catch (err) {
+    if (/Appwrite 404/.test(err.message)) return null;
+    throw err;
+  }
+}
+
+async function getSetlistsIndexIds() {
+  const doc = await getSetlistsIndexDoc();
+  if (!doc) return [];
+  try {
+    const lista = JSON.parse(doc.value || '[]');
+    return Array.isArray(lista) ? lista : [];
+  } catch { return []; }
+}
+
+// Fila simples para nunca duas escritas do índice se sobreporem e uma
+// apagar a adição da outra (mesmo princípio da fila por repertório).
+let indexWriteQueue = Promise.resolve();
+function withIndexLock(task) {
+  const next = indexWriteQueue.then(task, task);
+  indexWriteQueue = next.catch(() => {});
+  return next;
+}
+
+// Adiciona um setlist_id ao índice (se ainda não estiver lá).
+async function addToSetlistsIndex(setlistId) {
+  return withIndexLock(async () => {
+    const doc = await getSetlistsIndexDoc();
+    let lista = [];
+    try { lista = doc ? (JSON.parse(doc.value || '[]') || []) : []; } catch { lista = []; }
+    if (!lista.includes(setlistId)) {
+      lista.push(setlistId);
+      const dataFields = { key: SETLISTS_INDEX_DOC_ID, value: JSON.stringify(lista), updated_at: new Date().toISOString() };
+      if (doc) {
+        await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_APP_STATE_COLLECTION_ID)}/documents/${encodeURIComponent(SETLISTS_INDEX_DOC_ID)}`, { data: dataFields });
+      } else {
+        await appwriteRequest('POST', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_APP_STATE_COLLECTION_ID)}/documents`, { documentId: SETLISTS_INDEX_DOC_ID, data: dataFields });
+      }
+    }
+  });
+}
+
+// Remove um setlist_id do índice (ao excluir o repertório).
+async function removeFromSetlistsIndex(setlistId) {
+  return withIndexLock(async () => {
+    const doc = await getSetlistsIndexDoc();
+    if (!doc) return;
+    let lista = [];
+    try { lista = JSON.parse(doc.value || '[]') || []; } catch { lista = []; }
+    if (lista.includes(setlistId)) {
+      lista = lista.filter(id => id !== setlistId);
+      const dataFields = { key: SETLISTS_INDEX_DOC_ID, value: JSON.stringify(lista), updated_at: new Date().toISOString() };
+      await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_APP_STATE_COLLECTION_ID)}/documents/${encodeURIComponent(SETLISTS_INDEX_DOC_ID)}`, { data: dataFields });
+    }
+  });
+}
+
 async function getSetlistDocument(setlistId) {
   try {
     return await appwriteRequest('GET', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(setlistId)}`);
@@ -435,13 +512,40 @@ const APPWRITE_SETLISTS_COLLECTION_ID = process.env.APPWRITE_SETLISTS_COLLECTION
 // Lista todos os repertórios (cada documento tem: setlist_id, data JSON, updated_at)
 app.get('/api/appwrite/setlists', async (req, res) => {
   try {
-    const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
-    const setlists = docs.map(d => {
+    // V131.66 — Usa o ÍNDICE PRÓPRIO (confiável, busca direta por ID) como
+    // fonte principal. Ainda mescla com a listagem tradicional do Appwrite
+    // (mesmo sabendo que pode estar desatualizada) só para não perder
+    // visibilidade de repertórios antigos que ainda não foram "tocados"
+    // desde que o índice passou a existir — o índice se autocura sozinho
+    // com o tempo, conforme cada repertório é aberto/editado.
+    const [idsDoIndice, docsDaListagem] = await Promise.all([
+      getSetlistsIndexIds(),
+      listDocuments(APPWRITE_SETLISTS_COLLECTION_ID).catch(() => [])
+    ]);
+
+    const porId = new Map(); // setlist_id -> documento
+
+    // Busca cada ID do índice diretamente (rápido e confiável — em paralelo)
+    await Promise.all(idsDoIndice.map(async (setlistId) => {
+      try {
+        const doc = await getSetlistDocument(setlistId);
+        if (doc) porId.set(setlistId, doc);
+      } catch (_) { /* ignora individualmente, não derruba a lista toda */ }
+    }));
+
+    // Complementa com o que a listagem tradicional trouxer, sem sobrescrever
+    // o que já veio do índice (o índice é a fonte mais confiável)
+    for (const d of docsDaListagem) {
+      if (d.setlist_id && !porId.has(d.setlist_id)) porId.set(d.setlist_id, d);
+    }
+
+    const setlists = [...porId.entries()].map(([setlistId, d]) => {
       try {
         const parsed = JSON.parse(d.data || '{}');
-        return { ...parsed, id: d.setlist_id, _docId: d.$id, updatedAt: d.updated_at || parsed.updatedAt };
+        return { ...parsed, id: setlistId, _docId: d.$id, updatedAt: d.updated_at || parsed.updatedAt };
       } catch { return null; }
     }).filter(Boolean);
+
     res.json({ setlists });
   } catch (error) {
     console.error('[setlists] erro ao listar:', error.message);
@@ -512,6 +616,8 @@ app.post('/api/appwrite/setlists/:setlistId/add-track', async (req, res) => {
       return { value, alreadyPresent: jaExiste };
     });
 
+    // V131.66 — Autocura: garante que este repertório está no índice.
+    addToSetlistsIndex(setlistId).catch(() => {});
     res.json({ ok: true, setlist: result.value, alreadyPresent: result.alreadyPresent });
   } catch (error) {
     console.error(`[setlists] erro ao adicionar música em "${req.params.setlistId}":`, error.message);
@@ -615,6 +721,9 @@ app.put('/api/appwrite/setlists/:setlistId', async (req, res) => {
       const existenteDireto = await getSetlistDocument(setlistId);
       if (existenteDireto) {
         await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(setlistId)}`, { data: dataFields });
+        // V131.66 — Autocura: garante que está no índice mesmo que tenha
+        // ficado de fora antes (ex.: criado numa versão anterior a esta).
+        addToSetlistsIndex(setlistId).catch(() => {});
         return dataFields.updated_at;
       }
 
@@ -625,6 +734,7 @@ app.put('/api/appwrite/setlists/:setlistId', async (req, res) => {
       const antigo = docs.find(d => d.setlist_id === setlistId);
       if (antigo) {
         await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(antigo.$id)}`, { data: dataFields });
+        addToSetlistsIndex(setlistId).catch(() => {});
         return dataFields.updated_at;
       }
 
@@ -635,6 +745,11 @@ app.put('/api/appwrite/setlists/:setlistId', async (req, res) => {
         data: dataFields
       });
       console.log(`[setlists] CRIOU "${setlistId}" com ID customizado (collection tinha ${docs.length} docs antes).`);
+
+      // V131.66 — Registra no ÍNDICE PRÓPRIO (não depende da listagem
+      // problemática do Appwrite). É o que garante que este repertório
+      // apareça na tela de "todos os repertórios" de forma confiável.
+      addToSetlistsIndex(setlistId).catch(err => console.warn(`[setlists-index] Falha ao registrar "${setlistId}" no índice:`, err.message));
 
       // V131.63 — Confirma pelo caminho RÁPIDO (GET direto por ID), que se
       // provou mais consistente que a listagem. Tenta até 3x com pequena
@@ -663,6 +778,10 @@ app.delete('/api/appwrite/setlists/:setlistId', async (req, res) => {
     if (found) {
       await appwriteRequest('DELETE', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(docId)}`);
     }
+    // V131.66 — Remove do índice próprio também, independente de ter
+    // achado o documento ou não (idempotente: se não estava no índice, não
+    // faz nada).
+    removeFromSetlistsIndex(setlistId).catch(() => {});
     res.json({ ok: true, setlistId, removed: !!found });
   } catch (error) {
     console.error(`[setlists] erro ao remover "${req.params.setlistId}":`, error.message);
@@ -1221,6 +1340,39 @@ app.get('/api/diagnostics/library-scan', async (req, res) => {
 // Por padrão SÓ MOSTRA o que seria removido (nunca apaga sem confirmação
 // explícita). Use /api/diagnostics/cleanup-duplicate-setlists?confirmar=1
 // para de fato apagar os duplicados antigos.
+// V131.66 — Recuperação manual: registra um setlist_id específico no
+// índice próprio. Útil para "resgatar" repertórios que existem de verdade
+// no Appwrite (visíveis no painel) mas que a listagem tradicional não
+// mostra e que, por terem sido criados antes do índice existir, ainda não
+// foram auto-registrados. Use:
+// /api/diagnostics/register-setlist?id=sl_xxxxx
+app.get('/api/diagnostics/register-setlist', async (req, res) => {
+  try {
+    if (!requireApiKey(res)) return;
+    const setlistId = req.query.id;
+    if (!setlistId) return res.status(400).json({ error: 'Parâmetro ?id= obrigatório (o setlist_id a registrar).' });
+    const doc = await getSetlistDocument(setlistId);
+    if (!doc) {
+      return res.status(404).json({ error: `Nenhum documento encontrado com ID direto "${setlistId}". Se ele existe com um ID diferente do Appwrite (repertório antigo), use o painel do Appwrite para confirmar o setlist_id exato.` });
+    }
+    await addToSetlistsIndex(setlistId);
+    res.json({ ok: true, registrado: setlistId, indiceAtual: await getSetlistsIndexIds() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mostra o conteúdo atual do índice (para conferência)
+app.get('/api/diagnostics/setlists-index', async (req, res) => {
+  try {
+    if (!requireApiKey(res)) return;
+    const ids = await getSetlistsIndexIds();
+    res.json({ totalNoIndice: ids.length, ids });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/diagnostics/cleanup-duplicate-setlists', async (req, res) => {
   try {
     if (!requireApiKey(res)) return;
