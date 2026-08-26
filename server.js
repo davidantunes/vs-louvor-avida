@@ -200,6 +200,50 @@ async function listDocuments(collectionId) {
   }
   return all;
 }
+
+// ============================================================================
+// V131.63 — CORREÇÃO DE CAUSA RAIZ: log real comprovou que a LISTAGEM de
+// documentos do Appwrite não reflete escritas recentes de forma confiável —
+// em 3 tentativas seguidas de criar o mesmo repertório, cada uma criando um
+// documento novo e confirmado pelo próprio Appwrite, a listagem reportou
+// "25 documentos" as TRÊS vezes, nunca refletindo os documentos recém-
+// criados. Isso explica meses de "repertório não encontrado" mesmo com
+// todas as proteções de tempo/concorrência já implementadas.
+//
+// A correção: parar de "listar tudo e filtrar" para achar UM repertório
+// específico. Em vez disso, usar o PRÓPRIO ID do repertório (que o app já
+// gera, ex. "sl_1787703720574_c94vuxj") como o ID do documento no Appwrite
+// também — permitindo uma busca DIRETA por ID (GET .../documents/{id}),
+// que é uma operação diferente da listagem e não demonstrou o mesmo atraso.
+//
+// Repertórios criados ANTES desta correção têm um ID aleatório do Appwrite
+// (gerado por 'unique()'), diferente do setlist_id do app — por isso toda
+// função abaixo tenta o caminho rápido (direto por ID) primeiro, e só usa
+// o método antigo (listar+filtrar) como reserva, mantendo compatibilidade
+// com repertórios já existentes sem precisar de migração manual.
+// ============================================================================
+async function getSetlistDocument(setlistId) {
+  try {
+    return await appwriteRequest('GET', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(setlistId)}`);
+  } catch (err) {
+    if (/Appwrite 404/.test(err.message)) return null;
+    throw err;
+  }
+}
+
+// Acha um repertório pelo caminho rápido (ID direto) e, se não achar, cai no
+// método antigo (listar tudo e filtrar) — para repertórios pré-v131.63.
+// Retorna { doc, docId } onde docId é o ID real do documento no Appwrite
+// (igual ao setlistId no caminho rápido; um ID aleatório no caminho antigo).
+async function findSetlistFlexible(setlistId) {
+  const direto = await getSetlistDocument(setlistId);
+  if (direto) return { doc: direto, docId: setlistId };
+  const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
+  const achado = docs.find(d => d.setlist_id === setlistId);
+  if (achado) return { doc: achado, docId: achado.$id, totalNaListagem: docs.length };
+  return { doc: null, docId: null, totalNaListagem: docs.length };
+}
+
 async function upsertState(collectionId, matcher, data) {
   const docs = await listDocuments(collectionId);
   const found = docs.find(matcher);
@@ -426,16 +470,9 @@ app.post('/api/appwrite/setlists/:setlistId/add-track', async (req, res) => {
     if (!entry) return res.status(400).json({ error: 'Campo "entry" obrigatório.' });
 
     const result = await withSetlistLock(setlistId, async () => {
-      const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
-      const found = docs.find(d => d.setlist_id === setlistId);
+      const { doc: found, docId, totalNaListagem } = await findSetlistFlexible(setlistId);
       if (!found) {
-        // V131.61 — Log detalhado: quantos documentos existem de verdade
-        // nesse momento, e se algum ID parecido (mesmo timestamp, prefixo
-        // igual) aparece — ajuda a distinguir "nunca foi criado" de
-        // "foi criado com um ID ligeiramente diferente" ou "existe mas a
-        // busca não bateu por algum motivo".
-        const parecidos = docs.filter(d => String(d.setlist_id || '').startsWith(setlistId.split('_').slice(0, 2).join('_'))).map(d => d.setlist_id);
-        console.error(`[add-track] "${setlistId}" NÃO encontrado. Collection tem ${docs.length} documento(s) no total. IDs parecidos encontrados: ${parecidos.length ? parecidos.join(', ') : '(nenhum)'}`);
+        console.error(`[add-track] "${setlistId}" não encontrado nem por ID direto, nem na listagem de ${totalNaListagem ?? '?'} documento(s).`);
         const e = new Error('Repertório não encontrado na nuvem.'); e.status = 404; throw e;
       }
 
@@ -454,11 +491,8 @@ app.post('/api/appwrite/setlists/:setlistId/add-track', async (req, res) => {
         value.trackIds.push(entry);
         value.updatedAt = new Date().toISOString();
         const serialized = JSON.stringify(value);
-        await upsertState(
-          APPWRITE_SETLISTS_COLLECTION_ID,
-          d => d.setlist_id === setlistId,
-          { setlist_id: setlistId, data: serialized, updated_at: value.updatedAt }
-        );
+        await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(docId)}`,
+          { data: { setlist_id: setlistId, data: serialized, updated_at: value.updatedAt } });
       }
       return { value, alreadyPresent: jaExiste };
     });
@@ -489,8 +523,7 @@ app.post('/api/appwrite/setlists/:setlistId/remove-track', async (req, res) => {
     const alvoSemitones = Number(semitones || 0);
 
     const result = await withSetlistLock(setlistId, async () => {
-      const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
-      const found = docs.find(d => d.setlist_id === setlistId);
+      const { doc: found, docId } = await findSetlistFlexible(setlistId);
       if (!found) { const e = new Error('Repertório não encontrado na nuvem.'); e.status = 404; throw e; }
 
       const value = JSON.parse(found.data || '{}');
@@ -502,11 +535,8 @@ app.post('/api/appwrite/setlists/:setlistId/remove-track', async (req, res) => {
       });
       value.updatedAt = new Date().toISOString();
       const serialized = JSON.stringify(value);
-      await upsertState(
-        APPWRITE_SETLISTS_COLLECTION_ID,
-        d => d.setlist_id === setlistId,
-        { setlist_id: setlistId, data: serialized, updated_at: value.updatedAt }
-      );
+      await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(docId)}`,
+        { data: { setlist_id: setlistId, data: serialized, updated_at: value.updatedAt } });
       return value;
     });
 
@@ -531,19 +561,15 @@ app.patch('/api/appwrite/setlists/:setlistId/meta', async (req, res) => {
     if (!Object.keys(mudancas).length) return res.status(400).json({ error: 'Nenhum campo válido para atualizar.' });
 
     const result = await withSetlistLock(setlistId, async () => {
-      const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
-      const found = docs.find(d => d.setlist_id === setlistId);
+      const { doc: found, docId } = await findSetlistFlexible(setlistId);
       if (!found) { const e = new Error('Repertório não encontrado na nuvem.'); e.status = 404; throw e; }
 
       const value = JSON.parse(found.data || '{}');
       Object.assign(value, mudancas); // trackIds do value original é preservado (não está em `mudancas`)
       value.updatedAt = new Date().toISOString();
       const serialized = JSON.stringify(value);
-      await upsertState(
-        APPWRITE_SETLISTS_COLLECTION_ID,
-        d => d.setlist_id === setlistId,
-        { setlist_id: setlistId, data: serialized, updated_at: value.updatedAt }
-      );
+      await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(docId)}`,
+        { data: { setlist_id: setlistId, data: serialized, updated_at: value.updatedAt } });
       return value;
     });
 
@@ -563,46 +589,49 @@ app.put('/api/appwrite/setlists/:setlistId', async (req, res) => {
     if (serialized.length > 49000) {
       console.warn(`[setlists] "${setlistId}" = ${serialized.length} chars (grande)`);
     }
-    // V131.37 — Mesma fila do endpoint de adicionar música: garante que uma
-    // regravação completa (renomear, trocar paleta, reordenar) nunca se
-    // sobrepõe com uma adição de música concorrente no mesmo repertório.
-    //
-    // V131.62 — CORREÇÃO: casos recentes mostraram a escrita retornando
-    // sucesso (200) do Appwrite, mas o documento não aparecia em consultas
-    // logo em seguida — fazendo o repertório "sumir" (nunca existiu de
-    // verdade, apesar do "sucesso" reportado). Agora, depois de escrever,
-    // CONFIRMAMOS com uma leitura de verdade que o documento está
-    // realmente lá antes de responder "ok" ao app. Se não confirmar,
-    // tentamos de novo (até 3x, com pequena espera) antes de desistir —
-    // e só reportamos sucesso ao app quando temos certeza real.
+    const dataFields = { setlist_id: setlistId, data: serialized, updated_at: new Date().toISOString() };
+
     const updatedAt = await withSetlistLock(setlistId, async () => {
-      const ts = new Date().toISOString();
-      let confirmado = false;
-      let ultimoErro = null;
-      for (let tentativa = 1; tentativa <= 3 && !confirmado; tentativa++) {
-        try {
-          await upsertState(
-            APPWRITE_SETLISTS_COLLECTION_ID,
-            d => d.setlist_id === setlistId,
-            { setlist_id: setlistId, data: serialized, updated_at: ts }
-          );
-          // Confirma de verdade: relê a collection e procura o documento
-          const docsConfirmacao = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
-          confirmado = docsConfirmacao.some(d => d.setlist_id === setlistId);
-          if (!confirmado) {
-            console.warn(`[setlists] Tentativa ${tentativa}/3: escrita de "${setlistId}" retornou sucesso mas NÃO foi confirmada numa releitura. ${tentativa < 3 ? 'Tentando de novo...' : 'Desistindo.'}`);
-            if (tentativa < 3) await new Promise(r => setTimeout(r, 400 * tentativa));
-          }
-        } catch (err) {
-          ultimoErro = err;
-          console.warn(`[setlists] Tentativa ${tentativa}/3 de salvar "${setlistId}" falhou:`, err.message);
-          if (tentativa < 3) await new Promise(r => setTimeout(r, 400 * tentativa));
-        }
+      dataFields.updated_at = new Date().toISOString();
+
+      // V131.63 — Tenta o caminho RÁPIDO primeiro: documento cujo próprio ID
+      // no Appwrite é o setlistId (usado desde esta versão). Se existir,
+      // atualiza direto — sem precisar listar nada.
+      const existenteDireto = await getSetlistDocument(setlistId);
+      if (existenteDireto) {
+        await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(setlistId)}`, { data: dataFields });
+        return dataFields.updated_at;
       }
-      if (!confirmado) {
-        throw ultimoErro || new Error('Não foi possível confirmar a gravação do repertório após 3 tentativas.');
+
+      // Não achou pelo caminho rápido. Pode ser um repertório ANTIGO
+      // (criado antes da v131.63, com ID aleatório do Appwrite) — checa
+      // pelo método antigo antes de decidir que é realmente novo.
+      const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
+      const antigo = docs.find(d => d.setlist_id === setlistId);
+      if (antigo) {
+        await appwriteRequest('PATCH', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(antigo.$id)}`, { data: dataFields });
+        return dataFields.updated_at;
       }
-      return ts;
+
+      // Genuinamente novo: cria com o ID customizado igual ao setlistId —
+      // isso é o que permite buscas diretas e rápidas por ele depois.
+      await appwriteRequest('POST', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents`, {
+        documentId: setlistId,
+        data: dataFields
+      });
+      console.log(`[setlists] CRIOU "${setlistId}" com ID customizado (collection tinha ${docs.length} docs antes).`);
+
+      // V131.63 — Confirma pelo caminho RÁPIDO (GET direto por ID), que se
+      // provou mais consistente que a listagem. Tenta até 3x com pequena
+      // espera antes de aceitar que pode estar OK mesmo sem confirmar
+      // (o Appwrite já retornou sucesso na criação em si).
+      let confirmado = await getSetlistDocument(setlistId);
+      for (let tentativa = 2; tentativa <= 3 && !confirmado; tentativa++) {
+        await new Promise(r => setTimeout(r, 300 * tentativa));
+        confirmado = await getSetlistDocument(setlistId);
+      }
+      console.log(`[setlists] "${setlistId}" confirmado por GET direto? ${confirmado ? 'SIM' : 'não — mas o Appwrite já disse que criou; seguindo em frente.'}`);
+      return dataFields.updated_at;
     });
     res.json({ ok: true, setlistId, updatedAt });
   } catch (error) {
@@ -615,10 +644,9 @@ app.put('/api/appwrite/setlists/:setlistId', async (req, res) => {
 app.delete('/api/appwrite/setlists/:setlistId', async (req, res) => {
   try {
     const setlistId = req.params.setlistId;
-    const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
-    const found = docs.find(d => d.setlist_id === setlistId);
+    const { doc: found, docId } = await findSetlistFlexible(setlistId);
     if (found) {
-      await appwriteRequest('DELETE', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(found.$id)}`);
+      await appwriteRequest('DELETE', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(docId)}`);
     }
     res.json({ ok: true, setlistId, removed: !!found });
   } catch (error) {
