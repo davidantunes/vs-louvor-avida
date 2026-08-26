@@ -1195,6 +1195,83 @@ app.get('/api/diagnostics/library-scan', async (req, res) => {
   }
 });
 
+// V131.64 — Ferramenta de limpeza: a saga de "repertório não encontrado"
+// (resolvida na v131.63) deixou documentos DUPLICADOS na collection de
+// repertórios — cada tentativa que "parecia" ter falhado na verdade
+// escreveu com sucesso no Appwrite, só não confirmou a tempo. Esta rota
+// agrupa os documentos por setlist_id e, para grupos com mais de um
+// documento, mantém apenas o mais recente (por $updatedAt) e reporta os
+// demais como candidatos à remoção.
+//
+// Por padrão SÓ MOSTRA o que seria removido (nunca apaga sem confirmação
+// explícita). Use /api/diagnostics/cleanup-duplicate-setlists?confirmar=1
+// para de fato apagar os duplicados antigos.
+app.get('/api/diagnostics/cleanup-duplicate-setlists', async (req, res) => {
+  try {
+    if (!requireApiKey(res)) return;
+    const confirmar = req.query.confirmar === '1';
+
+    const docs = await listDocuments(APPWRITE_SETLISTS_COLLECTION_ID);
+    const porSetlistId = new Map();
+    for (const d of docs) {
+      const chave = d.setlist_id || '(sem setlist_id)';
+      if (!porSetlistId.has(chave)) porSetlistId.set(chave, []);
+      porSetlistId.get(chave).push(d);
+    }
+
+    const grupos = [];
+    let totalParaRemover = 0;
+    for (const [setlistId, lista] of porSetlistId) {
+      if (lista.length <= 1) continue;
+      // Mantém o mais recente (por $updatedAt), remove os demais
+      lista.sort((a, b) => new Date(b.$updatedAt || 0) - new Date(a.$updatedAt || 0));
+      const manter = lista[0];
+      const remover = lista.slice(1);
+      totalParaRemover += remover.length;
+      grupos.push({
+        setlistId,
+        totalDocumentos: lista.length,
+        mantido: { docId: manter.$id, atualizadoEm: manter.$updatedAt },
+        removidos: remover.map(d => ({ docId: d.$id, atualizadoEm: d.$updatedAt }))
+      });
+    }
+
+    if (!confirmar) {
+      return res.json({
+        modo: 'apenas visualização (nada foi apagado)',
+        totalDocumentosNaCollection: docs.length,
+        gruposComDuplicata: grupos.length,
+        totalDocumentosParaRemover: totalParaRemover,
+        detalhes: grupos,
+        comoConfirmar: 'Adicione ?confirmar=1 na URL para apagar de verdade os duplicados listados acima.'
+      });
+    }
+
+    // Confirmado: apaga de verdade os duplicados mais antigos de cada grupo
+    let removidosComSucesso = 0;
+    const falhas = [];
+    for (const grupo of grupos) {
+      for (const r of grupo.removidos) {
+        try {
+          await appwriteRequest('DELETE', `/databases/${encodeURIComponent(APPWRITE_DATABASE_ID)}/collections/${encodeURIComponent(APPWRITE_SETLISTS_COLLECTION_ID)}/documents/${encodeURIComponent(r.docId)}`);
+          removidosComSucesso++;
+        } catch (err) {
+          falhas.push({ docId: r.docId, erro: err.message });
+        }
+      }
+    }
+
+    res.json({
+      modo: 'limpeza executada',
+      gruposComDuplicata: grupos.length,
+      removidosComSucesso,
+      falhas
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/diagnostics/find-duplicates', async (req, res) => {
   try {
     if (!requireApiKey(res)) return;
