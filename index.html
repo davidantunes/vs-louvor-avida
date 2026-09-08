@@ -35,7 +35,27 @@
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+          // V131.70 — CORREÇÃO: o app dependia inteiramente do navegador
+          // decidir sozinho quando checar por uma versão nova do Service
+          // Worker. Isso é conhecido por ser pouco confiável em PWA
+          // instalado na tela inicial do celular (especialmente iOS) —
+          // podendo deixar o app "preso" numa versão antiga por muito
+          // tempo, mesmo com correções novas já publicadas no servidor
+          // (explicava um problema já corrigido continuar acontecendo só
+          // no celular). Agora força a verificação explicitamente: assim
+          // que registra, e de novo toda vez que o app volta a ficar
+          // visível (ex.: usuário reabre o app depois de um tempo fora).
+          if (!reg) return;
+          reg.update().catch(() => {});
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update().catch(() => {});
+          });
+          // Reforço extra: checa a cada 15 minutos mesmo sem trocar de
+          // aba/app — cobre sessões longas onde o app fica aberto o tempo
+          // todo (comum durante um culto), sem depender só da troca de foco.
+          setInterval(() => reg.update().catch(() => {}), 15 * 60 * 1000);
+        }).catch(() => {});
         // V126.1 — Detecta quando o SW foi atualizado e avisa o usuário
         navigator.serviceWorker.addEventListener('message', (event) => {
           if (event.data && event.data.type === 'SW_UPDATED') {
