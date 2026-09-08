@@ -3,6 +3,8 @@ const compression = require('compression');
 const fetch = require('node-fetch');
 const { spawn } = require('child_process');
 const ffmpeg = require('ffmpeg-static');
+const fs = require('fs');
+const os = require('os');
 
 // V131.38 — Tags temáticas das músicas (adoração, ceia, celebração, etc.),
 // aplicadas por nome normalizado (funciona com qualquer tom/versão do
@@ -1811,23 +1813,42 @@ app.get('/api/audio/:id', async (req, res) => {
   }
 });
 
-app.get('/api/transpose/:id', async (req, res) => {
-  if (!requireApiKey(res)) return;
-  const id = req.params.id;
-  const semitones = Math.max(-12, Math.min(12, Number(req.query.semitones || 0)));
-  const factor = Math.pow(2, semitones / 12);
-  const tempo = 1 / factor;
+// ============================================================================
+// V131.69 — CORREÇÃO: a transposição transmitia o áudio processado AO VIVO,
+// sem nunca informar o tamanho total (Content-Length) nem suportar "pular
+// para um ponto" (Range) — o navegador não tinha como saber a duração nem
+// avançar o áudio, e ficava mostrando "0:00" e travado, mesmo funcionando.
+// É o mesmo tipo de causa raiz já resolvida para o áudio normal há muito
+// tempo (proxy do Appwrite com suporte a Range), mas nunca tinha sido
+// aplicada à transposição.
+//
+// Correção: processa o áudio transposto POR COMPLETO primeiro (escreve num
+// arquivo temporário), e SÓ DEPOIS serve — com Content-Length e Range
+// corretos, exatamente como qualquer áudio comum. Como bônus, o resultado
+// fica em cache em disco: tocar a mesma música no mesmo tom de novo não
+// precisa reprocessar nada, é instantâneo.
+// ============================================================================
+const TRANSPOSE_CACHE_DIR = path.join(os.tmpdir(), 'vs-transpose-cache');
+try { fs.mkdirSync(TRANSPOSE_CACHE_DIR, { recursive: true }); } catch (_) {}
+const transposeGenerating = new Map(); // chave -> Promise (evita reprocessar em paralelo o mesmo pedido)
 
-  try {
-    // V131.68 — CORREÇÃO: a transposição sempre buscava o arquivo ORIGINAL
-    // do Google Drive, mesmo quando já existe uma versão convertida e bem
-    // menor (MP3) no Appwrite Storage. Para arquivos grandes (ex.: um WAV
-    // não comprimido), transcodificar em tempo real consumia memória/CPU
-    // demais no servidor e podia CORTAR o áudio no meio (relatado: música
-    // "cortando" sempre no mesmo ponto). Agora, se o app informar o ID da
-    // versão já convertida (?appwriteId=...), usamos ela como fonte — bem
-    // mais leve para o servidor processar.
-    const appwriteId = req.query.appwriteId;
+function transposeCacheKey(id, semitones, appwriteId) {
+  const fonte = appwriteId ? `aw_${appwriteId}` : `dr_${id}`;
+  return `${fonte}_st${semitones}`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+}
+
+async function generateTransposedFile(id, semitones, appwriteId) {
+  const key = transposeCacheKey(id, semitones, appwriteId);
+  const finalPath = path.join(TRANSPOSE_CACHE_DIR, `${key}.mp3`);
+  if (fs.existsSync(finalPath)) return finalPath;
+
+  // Se já tem uma geração em andamento para essa mesma combinação, espera
+  // ela terminar em vez de rodar o ffmpeg duas vezes ao mesmo tempo.
+  if (transposeGenerating.has(key)) return transposeGenerating.get(key);
+
+  const promise = (async () => {
+    const factor = Math.pow(2, semitones / 12);
+    const tempo = 1 / factor;
     const awEndpoint = APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1';
     const awProject = APPWRITE_PROJECT_ID || '69f4cb460024e484358b';
     const sourceUrl = appwriteId
@@ -1835,49 +1856,82 @@ app.get('/api/transpose/:id', async (req, res) => {
       : googleMediaUrl(id);
 
     const response = await fetch(sourceUrl);
-    if (!response.ok) return res.status(response.status).send(await response.text());
+    if (!response.ok) {
+      const e = new Error(`Falha ao baixar áudio de origem (status ${response.status})`);
+      e.status = response.status;
+      throw e;
+    }
+
+    const tempPath = path.join(TRANSPOSE_CACHE_DIR, `${key}.tmp_${Date.now()}.mp3`);
+    const filter = `asetrate=44100*${factor},aresample=44100,atempo=${tempo}`;
+    const args = ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-filter:a', filter, '-f', 'mp3', '-b:a', '192k', tempPath];
+
+    await new Promise((resolve, reject) => {
+      const proc = spawn(ffmpeg, args);
+      response.body.pipe(proc.stdin);
+      let stderrBuf = '';
+      proc.stderr.on('data', d => { stderrBuf += String(d); });
+      response.body.on('error', err => reject(err));
+      proc.on('error', err => reject(err));
+      proc.on('close', (code, signal) => {
+        if (code === 0 && !signal) resolve();
+        else reject(new Error(`FFmpeg falhou (código=${code}, sinal=${signal || 'nenhum'}). ${stderrBuf.slice(0, 300)}`));
+      });
+    });
+
+    fs.renameSync(tempPath, finalPath); // atômico: só "aparece" pronto de uma vez
+    return finalPath;
+  })();
+
+  transposeGenerating.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    transposeGenerating.delete(key);
+  }
+}
+
+app.get('/api/transpose/:id', async (req, res) => {
+  if (!requireApiKey(res)) return;
+  const id = req.params.id;
+  const semitones = Math.max(-12, Math.min(12, Number(req.query.semitones || 0)));
+  const appwriteId = req.query.appwriteId || '';
+
+  try {
+    const filePath = await generateTransposedFile(id, semitones, appwriteId);
+    const stat = fs.statSync(filePath);
+    const totalSize = stat.size;
 
     res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
     if (req.query.download) {
       const filename = req.query.filename || `audio_tom_${semitones}.mp3`;
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     }
 
-    // Transposição simples com FFmpeg.
-    // Mantém aproximadamente o andamento usando atempo, e altera pitch via asetrate.
-    const filter = `asetrate=44100*${factor},aresample=44100,atempo=${tempo}`;
-    const args = [
-      '-hide_banner',
-      '-loglevel', 'error',
-      '-i', 'pipe:0',
-      '-vn',
-      '-filter:a', filter,
-      '-f', 'mp3',
-      '-b:a', '192k',
-      'pipe:1'
-    ];
+    // Suporte completo a Range — arquivo local, então é direto (sem precisar
+    // recortar bytes manualmente como no proxy do Appwrite).
+    const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if (m && (m[1] !== '' || m[2] !== '')) {
+      let start = m[1] === '' ? null : parseInt(m[1], 10);
+      let end = m[2] === '' ? null : parseInt(m[2], 10);
+      if (start === null && end !== null) { start = Math.max(0, totalSize - end); end = totalSize - 1; }
+      if (end === null) end = totalSize - 1;
+      start = Math.max(0, Math.min(start, totalSize - 1));
+      end = Math.min(end, totalSize - 1);
 
-    const proc = spawn(ffmpeg, args);
-    response.body.pipe(proc.stdin);
-    proc.stdout.pipe(res);
-
-    // V131.68 — Log detalhado: se o áudio cortar de novo, isso mostra
-    // exatamente por quê (processo morto por sinal = provável falta de
-    // memória; código de saída != 0 = erro do próprio ffmpeg; fonte
-    // interrompida = problema ao baixar do Drive/Appwrite).
-    let origemFechada = false;
-    response.body.on('close', () => { origemFechada = true; });
-    response.body.on('error', err => console.error(`[transpose] Fonte (${appwriteId ? 'Appwrite' : 'Drive'}) do áudio "${id}" falhou:`, err.message));
-    proc.stdin.on('error', err => console.error(`[transpose] Erro ao alimentar o ffmpeg para "${id}":`, err.message));
-    proc.stderr.on('data', data => console.error(String(data)));
-    proc.on('close', (code, signal) => {
-      if (code !== 0 || signal) {
-        console.error(`[transpose] "${id}" (semitons=${semitones}) FFmpeg encerrou de forma anormal — código=${code}, sinal=${signal || 'nenhum'}, fonte já tinha fechado antes? ${origemFechada}. ${signal === 'SIGKILL' ? '⚠ Provável falta de memória no servidor.' : ''}`);
-      }
-    });
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${totalSize}`);
+      res.setHeader('Content-Length', String(end - start + 1));
+      fs.createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+      res.setHeader('Content-Length', String(totalSize));
+      fs.createReadStream(filePath).pipe(res);
+    }
   } catch (error) {
-    console.error(error);
-    res.status(500).send('Erro ao transpor áudio.');
+    console.error(`[transpose] "${id}" (semitons=${semitones}) falhou:`, error.message);
+    res.status(error.status || 500).send('Erro ao transpor áudio.');
   }
 });
 
