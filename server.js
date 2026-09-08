@@ -1819,7 +1819,22 @@ app.get('/api/transpose/:id', async (req, res) => {
   const tempo = 1 / factor;
 
   try {
-    const response = await fetch(googleMediaUrl(id));
+    // V131.68 — CORREÇÃO: a transposição sempre buscava o arquivo ORIGINAL
+    // do Google Drive, mesmo quando já existe uma versão convertida e bem
+    // menor (MP3) no Appwrite Storage. Para arquivos grandes (ex.: um WAV
+    // não comprimido), transcodificar em tempo real consumia memória/CPU
+    // demais no servidor e podia CORTAR o áudio no meio (relatado: música
+    // "cortando" sempre no mesmo ponto). Agora, se o app informar o ID da
+    // versão já convertida (?appwriteId=...), usamos ela como fonte — bem
+    // mais leve para o servidor processar.
+    const appwriteId = req.query.appwriteId;
+    const awEndpoint = APPWRITE_ENDPOINT || 'https://nyc.cloud.appwrite.io/v1';
+    const awProject = APPWRITE_PROJECT_ID || '69f4cb460024e484358b';
+    const sourceUrl = appwriteId
+      ? `${awEndpoint}/storage/buckets/${encodeURIComponent(APPWRITE_AUDIO_BUCKET_ID)}/files/${encodeURIComponent(appwriteId)}/view?project=${encodeURIComponent(awProject)}`
+      : googleMediaUrl(id);
+
+    const response = await fetch(sourceUrl);
     if (!response.ok) return res.status(response.status).send(await response.text());
 
     res.setHeader('Content-Type', 'audio/mpeg');
@@ -1846,9 +1861,19 @@ app.get('/api/transpose/:id', async (req, res) => {
     response.body.pipe(proc.stdin);
     proc.stdout.pipe(res);
 
+    // V131.68 — Log detalhado: se o áudio cortar de novo, isso mostra
+    // exatamente por quê (processo morto por sinal = provável falta de
+    // memória; código de saída != 0 = erro do próprio ffmpeg; fonte
+    // interrompida = problema ao baixar do Drive/Appwrite).
+    let origemFechada = false;
+    response.body.on('close', () => { origemFechada = true; });
+    response.body.on('error', err => console.error(`[transpose] Fonte (${appwriteId ? 'Appwrite' : 'Drive'}) do áudio "${id}" falhou:`, err.message));
+    proc.stdin.on('error', err => console.error(`[transpose] Erro ao alimentar o ffmpeg para "${id}":`, err.message));
     proc.stderr.on('data', data => console.error(String(data)));
-    proc.on('close', code => {
-      if (code !== 0) console.error(`FFmpeg finalizou com código ${code}`);
+    proc.on('close', (code, signal) => {
+      if (code !== 0 || signal) {
+        console.error(`[transpose] "${id}" (semitons=${semitones}) FFmpeg encerrou de forma anormal — código=${code}, sinal=${signal || 'nenhum'}, fonte já tinha fechado antes? ${origemFechada}. ${signal === 'SIGKILL' ? '⚠ Provável falta de memória no servidor.' : ''}`);
+      }
     });
   } catch (error) {
     console.error(error);

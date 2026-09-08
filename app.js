@@ -3300,7 +3300,17 @@ function useBackend(){ return cfg.USE_BACKEND && location.protocol !== 'file:'; 
 function directDriveMedia(id){ return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`; }
 function thumbnailUrl(id){ return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800`; }
 function driveUrl(id){ return useBackend() ? `/api/audio/${encodeURIComponent(id)}` : directDriveMedia(id); }
-function transposeUrl(id, semitones){ return !semitones ? driveUrl(id) : `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}`; }
+// V131.68 — Agora recebe a faixa inteira (não só o ID do Drive) para poder
+// informar ao servidor o ID já convertido no Appwrite Storage, quando
+// existir — evita transpor a partir do arquivo original do Drive (que pode
+// ser um WAV grande e pesado de processar) sempre que possível.
+function transposeUrl(track, semitones){
+  const id = typeof track === 'string' ? track : track?.id;
+  if (!semitones) return driveUrl(id);
+  const awId = typeof track === 'object' ? appwriteFileIdFor(track) : '';
+  const awParam = awId ? `&appwriteId=${encodeURIComponent(awId)}` : '';
+  return `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}${awParam}`;
+}
 
 // V131.19 — Áudio migrado para o Appwrite Storage.
 // Se a música (pelo nome do arquivo) está no mapa de migração, geramos a URL
@@ -3317,9 +3327,14 @@ function appwriteFileIdFor(track){
   const fname = track.fileName || '';
   return window.VS_AUDIO_MAP[fname] || '';
 }
-function downloadUrl(id, name, semitones = 0){
+function downloadUrl(track, name, semitones = 0){
+  const id = typeof track === 'string' ? track : track?.id;
   const filename = encodeURIComponent(`${safeFileName(name)}${semitones ? `_tom_${semitones > 0 ? '+' : ''}${semitones}` : ''}.mp3`);
-  if (semitones) return `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}&download=1&filename=${filename}`;
+  if (semitones) {
+    const awId = typeof track === 'object' ? appwriteFileIdFor(track) : '';
+    const awParam = awId ? `&appwriteId=${encodeURIComponent(awId)}` : '';
+    return `/api/transpose/${encodeURIComponent(id)}?semitones=${encodeURIComponent(semitones)}&download=1&filename=${filename}${awParam}`;
+  }
   return useBackend() ? `/api/audio/${encodeURIComponent(id)}?download=1&filename=${filename}` : directDriveMedia(id);
 }
 function driveViewUrl(id){ return `https://drive.google.com/file/d/${id}/view`; }
@@ -4260,7 +4275,7 @@ function findTrack(id){ return allTracks.find(t => t.id === id); }
 function prewarmTrackAudio(track, semitones = null){
   if (!track || current?.id === track.id) return;
   const sourceSemitones = semitones !== null && semitones !== undefined ? semitones : Number(track.repertoireSemitones || 0);
-  const source = sourceSemitones ? transposeUrl(track.id, Number(sourceSemitones || 0)) : driveUrl(track.id);
+  const source = sourceSemitones ? transposeUrl(track, Number(sourceSemitones || 0)) : driveUrl(track.id);
   // Não troca o player principal; apenas pede ao navegador para começar a resolver/conectar ao arquivo.
   try {
     const link = document.createElement('link');
@@ -4303,7 +4318,7 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   let candidates;
   if (semitones) {
     // Transposição só o servidor faz (processa o áudio do Drive)
-    candidates = [transposeUrl(track.id, semitones)];
+    candidates = [transposeUrl(track, semitones)];
   } else if (appwriteId) {
     // V131.25 — Música migrada: usa o PROXY do servidor (/api/aw-audio), que
     // encaminha Range e propaga Content-Length — o navegador calcula a duração
@@ -4476,14 +4491,14 @@ function openToneModal(track){
     btn.classList.add('active');
 
     if (el.toneSelected) el.toneSelected.textContent = selectedToneLabel;
-    el.downloadToneBtn.href = downloadUrl(track.id, track.name, selectedSemitone);
+    el.downloadToneBtn.href = downloadUrl(track, track.name, selectedSemitone);
     // V97 — textos curtos: o tom escolhido já fica nos info-strips acima
     el.playToneBtn.textContent = '▶ Ouvir Música';
     el.downloadToneBtn.textContent = '⤓ Baixar Música';
     if (el.addToneToSetlistBtn) el.addToneToSetlistBtn.textContent = '+ Adicionar ao repertório';
   }));
 
-  el.downloadToneBtn.href = downloadUrl(track.id, track.name, 0);
+  el.downloadToneBtn.href = downloadUrl(track, track.name, 0);
   el.playToneBtn.textContent = '▶ Ouvir Música';
   el.downloadToneBtn.textContent = '⤓ Baixar Música';
   if (el.addToneToSetlistBtn) el.addToneToSetlistBtn.textContent = '+ Adicionar ao repertório';
@@ -5206,7 +5221,7 @@ function openSongModal(track){
   el.songModalFavorite.textContent = favorites.includes(track.id) ? '♥ Favorita' : '♡ Favoritar';
   // V95 — botão de download direto no modal de detalhes
   if (el.songModalDownload) {
-    el.songModalDownload.href = downloadUrl(track.id, track.name, 0);
+    el.songModalDownload.href = downloadUrl(track, track.name, 0);
   }
   el.songModal.classList.remove('hidden');
 }
