@@ -3999,8 +3999,8 @@ async function precacheSetlistAudios(){
 function afterLibraryLoaded(){
   libraryLoaded = true;
   populateFilters();
-  // V131.5 — Remove IDs órfãos dos repertórios agora que a biblioteca
-  // está carregada e sabemos quais músicas realmente existem.
+  // V131.5/V131.73 — Verifica (sem apagar nada) se algum trackId dos
+  // repertórios não aparece na biblioteca atual, só pra log/diagnóstico.
   cleanOrphanSetlistTracks();
   updateStats();
   renderSetlists();
@@ -5002,39 +5002,39 @@ function countValidSetlistTracks(setlist){
   }).length;
 }
 
-// V131.5 — Remove IDs órfãos (músicas que não existem mais na biblioteca)
-// de todos os repertórios. Roda após a biblioteca carregar. Corrige o caso
-// onde uma música foi re-adicionada e a antiga ficou duplicada na contagem.
+// V131.5 — Detecta IDs "órfãos" (músicas que não aparecem na biblioteca
+// atualmente carregada) em todos os repertórios.
+// V131.73 — CORREÇÃO CRÍTICA: essa função ERA destrutiva (removia a música
+// do repertório de verdade e salvava no servidor). O problema: "não aparece
+// na biblioteca atual" não significa "foi excluída do Drive" — pode ser só
+// uma pasta que falhou temporariamente na varredura, uma reconstrução
+// parcial, ou (como no caso real que investigamos) uma deduplicação por
+// nome que escondeu o arquivo. Em qualquer um desses casos a música volta a
+// existir na próxima vez, mas se já tiver sido APAGADA do repertório do
+// usuário, a perda é permanente e silenciosa — exatamente o que aconteceu
+// com a Daniele. A contagem (countValidSetlistTracks) e a reprodução
+// (mapSetlistTracks) já ignoram graciosamente um ID não encontrado sem
+// precisar apagar nada do armazenamento; por isso agora só REGISTRAMOS o
+// que parece órfão (pra diagnóstico), sem nunca mais apagar automaticamente.
 function cleanOrphanSetlistTracks(){
-  // V131.50 — Reforço de segurança: além de "biblioteca vazia" (já existia),
-  // agora também exige um TAMANHO MÍNIMO plausível. Essa limpeza é
-  // destrutiva (remove música do repertório de verdade); se por algum
-  // motivo futuro a biblioteca fosse marcada como "carregada" com só uma
-  // fração das músicas (ex.: uma falha de rede no meio do carregamento),
-  // essa proteção evita apagar músicas válidas em massa por engano.
   const TAMANHO_MINIMO_PLAUSIVEL = 50;
   if (allTracks.length < TAMANHO_MINIMO_PLAUSIVEL) {
-    if (allTracks.length) console.warn(`[setlist] Limpeza de órfãos pulada: biblioteca com só ${allTracks.length} música(s), abaixo do mínimo plausível (provável carregamento parcial).`);
+    if (allTracks.length) console.warn(`[setlist] Verificação de órfãos pulada: biblioteca com só ${allTracks.length} música(s), abaixo do mínimo plausível (provável carregamento parcial).`);
     return;
   }
-  const alterados = []; // V131.29 — salva apenas os repertórios que mudaram
   for (const setlist of setlists) {
     const original = setlist.trackIds || [];
-    const cleaned = original.filter(entry => {
+    const orfaos = original.filter(entry => {
       const id = getSetlistEntryTrackId(entry);
-      return !!findTrack(id);
+      return !findTrack(id);
     });
-    if (cleaned.length !== original.length) {
-      setlist.trackIds = cleaned;
-      setlist.updatedAt = new Date().toISOString();
-      alterados.push(setlist);
-      console.info(`[setlist] ${original.length - cleaned.length} música(s) órfã(s) removida(s) de "${setlist.name}"`);
+    if (orfaos.length) {
+      // Só log — NUNCA remove automaticamente. Se for um sumiço passageiro
+      // (pasta com erro, biblioteca parcial), a música volta sozinha na
+      // próxima sincronização. Remoção real só deve acontecer pela ação
+      // explícita do usuário (excluir a música do repertório manualmente).
+      console.warn(`[setlist] ${orfaos.length} música(s) não encontrada(s) na biblioteca atual em "${setlist.name}" (mantidas no repertório — pode ser temporário):`, orfaos.map(e => getSetlistEntryTrackId(e)));
     }
-  }
-  if (alterados.length) {
-    saveSetlistsState(alterados);
-    renderSetlists();
-    updateStats();
   }
 }
 

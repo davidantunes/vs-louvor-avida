@@ -880,6 +880,17 @@ const LIBRARY_TTL_MS = 6 * 60 * 60 * 1000;
 let libraryCache = null;       // { tracks, builtAt, rootId }
 let libraryBuildPromise = null; // dedupe de chamadas concorrentes
 
+// V131.73 — Fallback pra quando uma pasta falha na varredura (rede, bloqueio
+// temporário do Google, etc.). Antes, uma pasta falha significava "as músicas
+// dela somem da biblioteca até a próxima reconstrução dar certo nela" — o que
+// podia levar até 6h (LIBRARY_TTL_MS) e, nesse meio tempo, qualquer repertório
+// com uma música daquela pasta ficava sem conseguir tocá-la (mesmo o arquivo
+// existindo normalmente no Drive). Agora guardamos o último resultado BOM de
+// cada pasta e, se uma varredura falhar, usamos esse resultado antigo em vez
+// de simplesmente descartar a pasta inteira — a lista pode ficar levemente
+// desatualizada por um tempo, mas nunca some.
+const folderScanFallbackCache = new Map(); // folderId -> files[]
+
 async function listFolder(folderId) {
   const out = [];
   let pageToken = '';
@@ -1050,10 +1061,21 @@ async function buildLibrary(rootFolderId) {
     let files;
     try {
       files = await listFolder(folderId);
+      folderScanFallbackCache.set(folderId, files); // V131.73 — guarda pra usar se falhar no futuro
     } catch (err) {
-      console.warn(`[library] Pasta "${folderPath || folderId}" falhou na varredura, pulando:`, err.message);
-      pastasComErro.push({ folderPath: folderPath || '', folderId, erro: err.message });
-      return;
+      // V131.73 — antes de desistir da pasta inteira, tenta o último
+      // resultado bom conhecido dela. Evita que uma falha de rede transitória
+      // faça músicas reais sumirem da biblioteca (e serem confundidas com
+      // "órfãs" e removidas de repertórios) até a próxima reconstrução.
+      const fallback = folderScanFallbackCache.get(folderId);
+      if (fallback) {
+        console.warn(`[library] Pasta "${folderPath || folderId}" falhou na varredura, usando último resultado bom conhecido (${fallback.length} arquivo(s)):`, err.message);
+        files = fallback;
+      } else {
+        console.warn(`[library] Pasta "${folderPath || folderId}" falhou na varredura, pulando (sem fallback disponível):`, err.message);
+        pastasComErro.push({ folderPath: folderPath || '', folderId, erro: err.message });
+        return;
+      }
     }
     const audioFiles = files.filter(f =>
       f.mimeType !== 'application/vnd.google-apps.folder' &&
