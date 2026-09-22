@@ -494,6 +494,7 @@ function bindEvents(){
   // V131 — Quando a fonte de áudio falha em carregar (erro de rede/500 do proxy),
   // tenta automaticamente a próxima fonte na lista de candidatas.
   el.audio.addEventListener('error', () => {
+    clearAudioStallWatchdog();
     const candidates = el.audio._candidates || [];
     const nextIndex = (el.audio._candidateIndex || 0) + 1;
     if (nextIndex < candidates.length) {
@@ -501,9 +502,17 @@ function bindEvents(){
       loadAudioCandidate(nextIndex);
     } else {
       console.error('[audio] todas as fontes falharam');
-      setPlayButtonState(false);
+      retryAllCandidatesOrGiveUp();
     }
   });
+  // V131.71 — Algumas vezes o Google Drive bloqueia o servidor por "tráfego
+  // automatizado" (403) ou uma das fontes simplesmente não responde nada —
+  // sem status de erro e sem dados. Nesses casos o elemento de áudio nem
+  // sempre dispara 'error': ele fica "carregando" para sempre, e a música
+  // trava logo no início sem nenhum aviso. Esses eventos encerram o
+  // watchdog assim que dados de verdade chegam.
+  el.audio.addEventListener('canplay', clearAudioStallWatchdog);
+  el.audio.addEventListener('playing', clearAudioStallWatchdog);
 
   el.closeTone.addEventListener('click', closeToneModal);
   el.toneModal.addEventListener('click', e => { if (e.target === el.toneModal) closeToneModal(); });
@@ -4342,6 +4351,7 @@ function playTrack(track, semitones = null, queue = currentQueue, options = {}){
   el.audio._candidates = candidates;
   el.audio._candidateIndex = 0;
   el.audio._trackId = track.id;
+  el.audio._retriedAllCandidates = false;
 
   loadAudioCandidate(0);
 
@@ -4354,8 +4364,7 @@ function loadAudioCandidate(index){
   const candidates = el.audio._candidates || [];
   if (index >= candidates.length) {
     console.error('[audio] todas as fontes falharam para', el.audio._trackId);
-    setPlayButtonState(false);
-    toast('Não foi possível reproduzir esta música. Verifique sua conexão.');
+    retryAllCandidatesOrGiveUp();
     return;
   }
   el.audio._candidateIndex = index;
@@ -4364,15 +4373,66 @@ function loadAudioCandidate(index){
   el.audio.src = src;
   try { el.audio.load(); } catch(_) {}
 
+  // V131.71 — Watchdog de travamento: algumas fontes (principalmente o
+  // Google Drive, quando bloqueia o servidor por "tráfego automatizado")
+  // aceitam a conexão mas nunca entregam dados — nem erro, nem sucesso.
+  // Sem isso, a música fica "carregando" para sempre e o usuário só vê a
+  // tela travada. Se depois de alguns segundos ainda não há dados
+  // suficientes pra tocar, trata como falha e tenta a próxima fonte.
+  armAudioStallWatchdog(index);
+
   const p = el.audio.play();
   if (p && typeof p.catch === 'function') {
     p.catch(err => {
       if (err.name === 'AbortError') return; // troca de faixa, ignorar
       console.warn(`[audio] fonte ${index} falhou (${err.name}), tentando próxima...`);
+      clearAudioStallWatchdog();
       // Tenta a próxima fonte
       loadAudioCandidate(index + 1);
     });
   }
+}
+
+const AUDIO_STALL_TIMEOUT_MS = 8000;
+
+function armAudioStallWatchdog(index){
+  clearAudioStallWatchdog();
+  const myTrackId = el.audio._trackId;
+  el.audio._stallTimer = setTimeout(() => {
+    el.audio._stallTimer = null;
+    // Só age se ainda estivermos tentando carregar essa mesma fonte —
+    // evita agir sobre uma faixa/tentativa já trocada.
+    if (el.audio._trackId !== myTrackId || el.audio._candidateIndex !== index) return;
+    if (el.audio.readyState < 2 /* HAVE_CURRENT_DATA */ && el.audio.currentTime === 0) {
+      console.warn(`[audio] fonte ${index} travou sem responder (sem erro, sem dados), tentando próxima...`);
+      loadAudioCandidate(index + 1);
+    }
+  }, AUDIO_STALL_TIMEOUT_MS);
+}
+
+function clearAudioStallWatchdog(){
+  if (el.audio._stallTimer) { clearTimeout(el.audio._stallTimer); el.audio._stallTimer = null; }
+}
+
+// V131.71 — Quando TODAS as fontes falham (erro explícito ou travamento
+// silencioso), muitas vezes é um bloqueio momentâneo do Google Drive por
+// "tráfego automatizado" — que costuma liberar sozinho em poucos segundos.
+// Antes de desistir e avisar o usuário, tenta o ciclo completo de fontes
+// mais uma vez após um pequeno intervalo (uma única vez, pra não ficar
+// tentando pra sempre).
+function retryAllCandidatesOrGiveUp(){
+  const myTrackId = el.audio._trackId;
+  if (!el.audio._retriedAllCandidates) {
+    el.audio._retriedAllCandidates = true;
+    console.warn('[audio] todas as fontes falharam, tentando novamente em 4s...');
+    setTimeout(() => {
+      if (el.audio._trackId !== myTrackId) return; // usuário já trocou de música
+      loadAudioCandidate(0);
+    }, 4000);
+    return;
+  }
+  setPlayButtonState(false);
+  toast('Não foi possível reproduzir esta música. Verifique sua conexão.');
 }
 
 // URLs diretas do Google Drive (browser acessa sem passar pelo servidor)
@@ -4386,6 +4446,7 @@ function driveDirectDownloadUrl(id){
 }
 
 function closePlayer(){
+  clearAudioStallWatchdog();
   try { el.audio.pause(); } catch(_) {}
   randomContinuousMode = false;
   shuffleMode = false;
