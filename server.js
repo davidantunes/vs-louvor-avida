@@ -1096,24 +1096,36 @@ async function buildLibrary(rootFolderId) {
     return a.f.name.localeCompare(b.f.name, 'pt-BR');
   });
 
+  // V131.73 — CORREÇÃO CRÍTICA: antes, um arquivo "perdedor" da deduplicação
+  // por nome era descartado COMPLETAMENTE da lista de músicas. Isso quebrava
+  // repertórios que referenciavam esse ID específico: a música ficava
+  // invisível pra busca por ID (findTrack), o player não conseguia resolvê-la
+  // (tocava vazio, sem erro) e a limpeza automática de "órfãos" no navegador
+  // (cleanOrphanSetlistTracks) chegava a APAGAR a música do repertório do
+  // usuário — mesmo o arquivo existindo normalmente no Drive. Isso explica
+  // por que um usuário conseguia tocar músicas de OUTROS repertórios mas não
+  // as do próprio repertório: se a música dele era a "perdedora" de alguma
+  // dupla com nome parecido, ela literalmente não existia na lista.
+  // Agora: TODO arquivo continua na lista (resolvível por ID), só marcamos os
+  // "perdedores" com duplicateHidden=true para o app escondê-los da busca e
+  // da contagem, sem deixar de conseguir tocá-los se algum repertório apontar
+  // pra eles.
   const tracks = [];
   const seen = new Set();
   const seenNames = new Set();
   let dupedByName = 0;
   for (const { f, singerName, cover } of candidatos) {
     if (seen.has(f.id)) continue;
+    seen.add(f.id);
     const normalizedName = String(f.name)
       .toLowerCase()
       .replace(/\.[a-z0-9]+$/, '')
       .replace(/[\s_\-]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    if (normalizedName && seenNames.has(normalizedName)) {
-      dupedByName++;
-      continue;
-    }
-    seen.add(f.id);
-    if (normalizedName) seenNames.add(normalizedName);
+    const isDuplicateName = Boolean(normalizedName && seenNames.has(normalizedName));
+    if (isDuplicateName) dupedByName++;
+    else if (normalizedName) seenNames.add(normalizedName);
     tracks.push({
       id: f.id,
       fileName: f.name,
@@ -1122,10 +1134,11 @@ async function buildLibrary(rootFolderId) {
       ext: getExt(f.name),
       key: detectKey(f.name),
       tags: tagsForFileName(f.name),
-      coverUrl: cover
+      coverUrl: cover,
+      ...(isDuplicateName ? { duplicateHidden: true } : {})
     });
   }
-  if (dupedByName > 0) console.log(`[library] ${dupedByName} duplicata(s) por nome removida(s) (escolha agora estável).`);
+  if (dupedByName > 0) console.log(`[library] ${dupedByName} duplicata(s) por nome marcada(s) como oculta(s) (continuam tocáveis por ID).`);
   if (pastasComErro.length > 0) {
     console.warn(`[library] ⚠ ${pastasComErro.length} pasta(s) falharam na varredura e foram PULADAS (músicas dessas pastas não aparecem até a próxima reconstrução dar certo nelas):`);
     pastasComErro.forEach(p => console.warn(`  - "${p.folderPath}": ${p.erro}`));

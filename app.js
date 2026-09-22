@@ -2139,6 +2139,7 @@ function renderQuickAddResults(){
   }
 
   const matches = allTracks.filter(t => {
+    if (t.duplicateHidden) return false;
     const blob = normalize(`${t.name} ${t.singer} ${t.fileName || ''} ${t.key || ''}`);
     return blob.includes(q);
   }).slice(0, 40);
@@ -3909,6 +3910,12 @@ function dedupeTracksById(tracks){
   //   1) Por id do Drive (mesmo arquivo aparecendo 2x na indexação).
   //   2) Por nome normalizado de arquivo: se a MESMA música foi colocada em
   //      duas pastas diferentes (ids diferentes), preferimos a primeira.
+  // V131.73 — CORREÇÃO CRÍTICA: o "perdedor" por nome NÃO é mais descartado
+  // da lista. Um trackId que sumia daqui ficava impossível de tocar (findTrack
+  // não achava) e podia até ser APAGADO automaticamente do repertório do
+  // usuário pela limpeza de órfãos — mesmo o arquivo existindo no Drive.
+  // Agora só marcamos duplicateHidden=true (escondido da busca/contagem),
+  // mantendo o item sempre resolvível por ID.
   const seenIds = new Set();
   const seenNames = new Set();
   const out = [];
@@ -3916,22 +3923,24 @@ function dedupeTracksById(tracks){
   for (const t of tracks) {
     if (!t || !t.id) continue;
     if (seenIds.has(t.id)) continue;
+    seenIds.add(t.id);
     const normalizedFileName = String(t.fileName || t.name || '')
       .toLowerCase()
       .replace(/\.[a-z0-9]+$/, '')   // tira extensão
       .replace(/[\s_\-]+/g, ' ')       // normaliza separadores
       .replace(/\s+/g, ' ')
       .trim();
-    if (normalizedFileName && seenNames.has(normalizedFileName)) {
+    const isDuplicateName = Boolean(normalizedFileName && seenNames.has(normalizedFileName));
+    if (isDuplicateName) {
       dupedByName++;
+      out.push({ ...t, duplicateHidden: true });
       continue;
     }
-    seenIds.add(t.id);
     if (normalizedFileName) seenNames.add(normalizedFileName);
     out.push(t);
   }
   if (dupedByName > 0 && typeof console !== 'undefined') {
-    console.info(`[dedupe] ${dupedByName} duplicata(s) por nome de arquivo removida(s).`);
+    console.info(`[dedupe] ${dupedByName} duplicata(s) por nome de arquivo marcada(s) como oculta(s) (continuam tocáveis por ID).`);
   }
   return out;
 }
@@ -3999,8 +4008,9 @@ function afterLibraryLoaded(){
 }
 
 function populateFilters(){
-  const musicNames = unique(allTracks.map(t => t.name)).sort(localeSort);
-  const tags = unique(allTracks.flatMap(t => t.tags || [])).sort(localeSort);
+  const visibleTracks = allTracks.filter(t => !t.duplicateHidden);
+  const musicNames = unique(visibleTracks.map(t => t.name)).sort(localeSort);
+  const tags = unique(visibleTracks.flatMap(t => t.tags || [])).sort(localeSort);
 
   fillSelect(el.musicFilter, 'Todas as músicas', musicNames);
   fillSelect(el.tagFilter, 'Todas as tags', tags);
@@ -4014,7 +4024,10 @@ function unique(arr){ return [...new Set(arr.filter(Boolean))]; }
 function localeSort(a,b){ return String(a).localeCompare(String(b), 'pt-BR', { sensitivity: 'base' }); }
 
 function updateStats(){
-  const folders = unique(allTracks.map(t => t.singer));
+  // V131.73 — duplicateHidden não entra nas contagens visíveis (some da
+  // busca/listagem), só fica em allTracks pra permanecer tocável por ID.
+  const visibleTracks = allTracks.filter(t => !t.duplicateHidden);
+  const folders = unique(visibleTracks.map(t => t.singer));
 
   // V121 — Conta apenas repertórios NÃO arquivados (ativos/próximos)
   const activeSetlists = setlists.filter(s => !isSetlistAutoArchived(s));
@@ -4029,13 +4042,13 @@ function updateStats(){
     : (activeSetlists.length ? activeSetlists[activeSetlists.length - 1] : null);
 
   // Stats da biblioteca
-  el.totalTracks.textContent = allTracks.length;
+  el.totalTracks.textContent = visibleTracks.length;
   el.totalSingers.textContent = folders.length;
   el.totalSingersInline.textContent = folders.length;
 
   // Stats do hero
-  el.heroTotal.textContent = allTracks.length;
-  el.heroTotalPanel.textContent = allTracks.length;
+  el.heroTotal.textContent = visibleTracks.length;
+  el.heroTotalPanel.textContent = visibleTracks.length;
   if (el.heroSingers) el.heroSingers.textContent = folders.length;
   if (el.heroSetlists) el.heroSetlists.textContent = activeSetlists.length;
 
@@ -4084,6 +4097,9 @@ function clearFilters(){
 function getFiltered(){
   const q = normalize(el.search.value);
   const result = allTracks.filter(t => {
+    // V131.73 — duplicateHidden continua em allTracks (pra ser tocável por
+    // ID se algum repertório referenciar), mas nunca aparece na busca/listagem.
+    if (t.duplicateHidden) return false;
     if (isFavoritesFilter && !favorites.includes(t.id)) return false;
     if (el.musicFilter.value && t.name !== el.musicFilter.value) return false;
     if (el.tagFilter.value && !(t.tags || []).includes(el.tagFilter.value)) return false;
