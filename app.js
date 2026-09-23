@@ -4972,22 +4972,44 @@ function renderSetlists(){
 function playSetlistById(id){
   const setlist = setlists.find(s => s.id === id);
   if (!setlist) return;
-  const tracks = mapSetlistTracks(setlist);
+  // V131.75 — Ignora músicas "unavailable" na fila de reprodução (senão
+  // avançar/voltar podia cair numa faixa sem áudio nenhum pra tocar).
+  const tracks = mapSetlistTracks(setlist).filter(t => !t.unavailable);
   if (tracks.length) playTrack(tracks[0], null, tracks);
+  else toast('Nenhuma música deste repertório está disponível no momento.');
 }
 function mapSetlistTracks(setlist){
+  // V131.75 — CORREÇÃO CRÍTICA: antes, uma música não resolvida (órfã
+  // temporária) era removida da lista com .filter(Boolean) — o que
+  // DESALINHAVA os índices entre esse array e setlist.trackIds. Como
+  // "remover"/"reordenar" na tela de detalhe usam o índice pra mexer
+  // diretamente em setlist.trackIds, uma música indisponível NO MEIO da
+  // lista fazia o botão "remover" da música seguinte apagar a música ERRADA.
+  // Agora o array sempre tem o MESMO tamanho/ordem de trackIds — uma música
+  // não resolvida vira um item "unavailable" (com nome de apoio, se tiver),
+  // em vez de sumir e desalinhar tudo depois dela.
   return (setlist.trackIds || []).map(entry => {
     const id = getSetlistEntryTrackId(entry);
     const base = findTrack(id);
-    if (!base) return null;
     const semitones = getSetlistEntrySemitones(entry);
+    if (!base) {
+      return {
+        id,
+        name: getSetlistEntryName(entry) || 'Música indisponível no momento',
+        singer: getSetlistEntrySinger(entry) || '',
+        key: '',
+        unavailable: true,
+        repertoireSemitones: semitones,
+        repertoireTone: getSetlistEntryTone(entry) || ''
+      };
+    }
     const tone = getSetlistEntryTone(entry) || calculateToneLabel(base.key, semitones);
     return {
       ...base,
       repertoireSemitones: semitones,
       repertoireTone: tone
     };
-  }).filter(Boolean);
+  });
 }
 
 // V131.5 — Conta apenas músicas que existem na biblioteca.
@@ -5041,12 +5063,19 @@ function cleanOrphanSetlistTracks(){
 function makeSetlistEntry(track, toneInfo = { semitones: 0, tone: '' }){
   const semitones = Number(toneInfo?.semitones || 0);
   const tone = toneInfo?.tone || '';
-  if (!semitones && !tone) return track.id;
-  return { trackId: track.id, semitones, tone };
+  // V131.75 — Antes, sem alteração de tom, o repertório guardava só o ID da
+  // música (string crua) — sem NENHUM dado de apoio. Se esse ID um dia não
+  // resolvesse na biblioteca atual (pasta com erro, deduplicação, etc.), não
+  // havia como mostrar nem o nome da música pro usuário: ela simplesmente
+  // desaparecia sem explicação. Agora sempre guardamos nome/cantor junto,
+  // como uma cópia de segurança só pra exibição — nunca usada pra tocar.
+  return { trackId: track.id, semitones, tone, name: track.name || '', singer: track.singer || '' };
 }
 function getSetlistEntryTrackId(entry){ return typeof entry === 'string' ? entry : entry?.trackId; }
 function getSetlistEntrySemitones(entry){ return typeof entry === 'string' ? 0 : Number(entry?.semitones || 0); }
 function getSetlistEntryTone(entry){ return typeof entry === 'string' ? '' : (entry?.tone || ''); }
+function getSetlistEntryName(entry){ return typeof entry === 'string' ? '' : (entry?.name || ''); }
+function getSetlistEntrySinger(entry){ return typeof entry === 'string' ? '' : (entry?.singer || ''); }
 function setlistHasEntry(setlist, newEntry){
   const newId = getSetlistEntryTrackId(newEntry);
   const newSemitone = getSetlistEntrySemitones(newEntry);
@@ -5190,7 +5219,26 @@ function renderSetlistDetailTracks(){
     return;
   }
   const owner = canEditSetlist(setlist);
+  // V131.75 — Fila de reprodução real (sem as "unavailable"), pra avançar/
+  // voltar entre músicas nunca cair numa faixa sem áudio.
+  const playableTracks = tracks.filter(t => !t.unavailable);
   el.setlistDetailTracks.innerHTML = tracks.map((track, index) => {
+    if (track.unavailable) {
+      return `
+        <div class="reorder-item setlist-song-card is-unavailable ${owner ? '' : 'is-readonly'}" draggable="${owner ? 'true' : 'false'}" data-id="${esc(track.id || '')}" data-index="${index}">
+          <div class="setlist-song-main">
+            ${owner ? '<span class="drag-handle">⋮⋮</span>' : ''}
+            <div class="setlist-song-info">
+              <strong>${index + 1}. ${esc(track.name)}</strong>
+              <span class="setlist-song-tone setlist-song-unavailable-tag" title="A biblioteca ainda não conseguiu localizar esta música — deve voltar sozinha em instantes. Se persistir, avise o administrador.">⚠ Indisponível no momento</span>
+            </div>
+          </div>
+          <div class="row-actions">
+            ${owner ? `<button class="mini-btn remove-one" data-id="${esc(track.id || '')}">Remover</button>` : ''}
+          </div>
+        </div>
+      `;
+    }
     const chosenTone = formatKeyLabel(track.repertoireTone || track.key || '—');
     const toneLabel = track.repertoireTone ? 'Tom escolhido' : 'Tom';
     const toneClass = track.repertoireTone ? 'is-altered' : 'is-original';
@@ -5221,9 +5269,9 @@ function renderSetlistDetailTracks(){
     btn.addEventListener('mouseenter', () => prewarmTrackAudio(getTrack()));
     btn.addEventListener('click', () => {
       const track = getTrack();
-      if (track) {
+      if (track && !track.unavailable) {
         btn.classList.add('is-loading');
-        playTrack(track, null, tracks);
+        playTrack(track, null, playableTracks);
         setTimeout(() => { btn.classList.remove('is-loading'); }, 900);
       }
     });

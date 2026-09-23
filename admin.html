@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Painel de Saúde — VS Louvor Ávida</title>
+<link rel="icon" href="assets/logo-avida.jpg" />
+<style>
+  :root{
+    --bg:#0a1014; --card:#111a20; --border:rgba(255,255,255,.08);
+    --text:#eef6f6; --muted:#8fa3a8; --teal:#29d9d0;
+    --ok:#3ddc84; --warn:#ffb020; --err:#ff5a5a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:24px 16px 60px; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  h1{font-size:20px; margin:0 0 4px;}
+  .subtitle{color:var(--muted); font-size:13px; margin:0 0 24px;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; max-width:1000px; margin:0 auto;}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px;
+  }
+  .card h2{font-size:14px; margin:0 0 10px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.04em;}
+  .stat{font-size:30px; font-weight:900; line-height:1;}
+  .stat.ok{color:var(--ok);}
+  .stat.warn{color:var(--warn);}
+  .stat.err{color:var(--err);}
+  .stat-label{color:var(--muted); font-size:12px; margin-top:6px;}
+  .wide{grid-column:1/-1;}
+  ul{margin:8px 0 0; padding-left:18px; font-size:13px; color:var(--muted);}
+  li{margin-bottom:4px;}
+  .refresh{
+    display:inline-flex; align-items:center; gap:8px; background:var(--teal); color:#04211f;
+    border:none; border-radius:999px; padding:10px 18px; font-weight:800; font-size:13px;
+    cursor:pointer; margin-bottom:20px;
+  }
+  .refresh:disabled{opacity:.5; cursor:default;}
+  .updated{color:var(--muted); font-size:12px; margin-left:10px;}
+  .loading{color:var(--muted); font-size:13px;}
+  a{color:var(--teal);}
+  code{background:rgba(255,255,255,.06); padding:2px 6px; border-radius:6px; font-size:12px;}
+</style>
+</head>
+<body>
+  <h1>🩺 Painel de Saúde — VS Louvor Ávida</h1>
+  <p class="subtitle">Visão rápida do estado do sistema, sem precisar abrir JSON cru. Só pra administração — não compartilhe este link.</p>
+  <button class="refresh" id="refreshBtn">↻ Atualizar</button>
+  <span class="updated" id="updatedAt"></span>
+
+  <div class="grid" id="grid">
+    <div class="card"><p class="loading">Carregando…</p></div>
+  </div>
+
+  <script>
+    const grid = document.getElementById('grid');
+    const btn = document.getElementById('refreshBtn');
+    const updatedEl = document.getElementById('updatedAt');
+
+    function statClass(value, warnAt, errAt){
+      if (errAt !== null && value >= errAt) return 'err';
+      if (warnAt !== null && value >= warnAt) return 'warn';
+      return 'ok';
+    }
+
+    async function fetchJSON(url){
+      try {
+        const r = await fetch(url, { credentials: 'omit' });
+        if (!r.ok) return { error: `HTTP ${r.status}` };
+        return await r.json();
+      } catch (e) {
+        return { error: e.message };
+      }
+    }
+
+    function card(title, html){
+      return `<div class="card"><h2>${title}</h2>${html}</div>`;
+    }
+
+    async function load(){
+      btn.disabled = true;
+      grid.innerHTML = `<div class="card"><p class="loading">Carregando…</p></div>`;
+
+      const [libScan, setlistsIndex, missingKeys] = await Promise.all([
+        fetchJSON('/api/diagnostics/library-scan'),
+        fetchJSON('/api/diagnostics/setlists-index'),
+        fetchJSON('/api/diagnostics/missing-keys')
+      ]);
+
+      const cards = [];
+
+      // --- Biblioteca ---
+      if (libScan.error) {
+        cards.push(card('Biblioteca (Drive)', `<p class="stat err">Erro</p><p class="stat-label">${esc(libScan.error)}</p>`));
+      } else {
+        const errClass = statClass(libScan.pastasComErro?.length || 0, 1, 3);
+        cards.push(card('Músicas no Drive (total bruto)', `
+          <div class="stat ok">${libScan.totalBrutoEncontradoNoDrive ?? '—'}</div>
+          <div class="stat-label">${libScan.totalFinal ?? '—'} depois de esconder duplicatas de nome</div>
+        `));
+        cards.push(card('Pastas com erro na última varredura', `
+          <div class="stat ${errClass}">${libScan.pastasComErro?.length ?? 0}</div>
+          <div class="stat-label">${libScan.pastasVisitadas ?? '—'} pastas visitadas no total</div>
+          ${libScan.pastasComErro?.length ? `<ul>${libScan.pastasComErro.slice(0,8).map(p => `<li>${esc(p.folderPath || '(raiz)')}: ${esc(p.erro)}</li>`).join('')}</ul>` : ''}
+        `));
+        cards.push(card('Duplicatas por nome (ocultas, não apagadas)', `
+          <div class="stat ${statClass(libScan.totalDescartadoPorNomeDuplicado || 0, 5, 15)}">${libScan.totalDescartadoPorNomeDuplicado ?? 0}</div>
+          <div class="stat-label">continuam tocáveis se algum repertório referenciar</div>
+        `));
+      }
+
+      // --- Repertórios (índice self-maintained) ---
+      if (setlistsIndex.error) {
+        cards.push(card('Índice de repertórios', `<p class="stat err">Erro</p><p class="stat-label">${esc(setlistsIndex.error)}</p>`));
+      } else {
+        const ids = setlistsIndex.ids || setlistsIndex.setlistIds || [];
+        cards.push(card('Repertórios no índice', `
+          <div class="stat ok">${Array.isArray(ids) ? ids.length : (setlistsIndex.count ?? '—')}</div>
+          <div class="stat-label">usados pra listar repertórios mesmo se a listagem do Appwrite ficar instável</div>
+        `));
+      }
+
+      // --- Tons faltando ---
+      if (missingKeys.error || missingKeys.ready === false) {
+        cards.push(card('Músicas sem tom detectado', `<p class="stat-label">${esc(missingKeys.message || missingKeys.error || 'indisponível')}</p>`));
+      } else {
+        cards.push(card('Músicas sem tom detectado', `
+          <div class="stat ${statClass(missingKeys.missingCount || 0, 10, 30)}">${missingKeys.missingCount ?? 0}</div>
+          <div class="stat-label">de ${missingKeys.total ?? '—'} no total</div>
+        `));
+      }
+
+      cards.push(card('Diagnósticos avançados (JSON cru)', `
+        <ul>
+          <li><a href="/api/diagnostics/library-scan" target="_blank">library-scan</a> — detalhe da varredura do Drive</li>
+          <li><a href="/api/diagnostics/setlists-index" target="_blank">setlists-index</a> — índice de repertórios</li>
+          <li><a href="/api/diagnostics/missing-keys" target="_blank">missing-keys</a> — músicas sem tom</li>
+          <li><code>/api/diagnostics/find-duplicates?q=nome</code> — buscar duplicatas por nome</li>
+        </ul>
+      `, true));
+
+      grid.innerHTML = cards.join('');
+      updatedEl.textContent = `Atualizado às ${new Date().toLocaleTimeString('pt-BR')}`;
+      btn.disabled = false;
+    }
+
+    function esc(s){
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    btn.addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>
