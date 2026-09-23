@@ -23,7 +23,6 @@ window.VS_AUDIO_MAP = {
   "Bom Perfume - G.mp3": "6a4515dfc58a6940b109",
   "Bondade de Deus - D.mp3": "6a4515e34236ab37f481",
   "Bondade de Deus - G.mp3": "6a4515e1714b7181e859",
-  "Bondade de Deus (FHOP) - G.mp3": "6ab26ea20301310c8572",
   "Bondade de Deus (Isaias Saad) - D.mp3": "6ab26ea595c7819a0d8e",
   "Cadeias Quebrar (Soraya Moraes) - A.mp3": "6a4515e4ca06fca11b0c",
   "Cadeias Quebrar (Soraya Moraes) - C.mp3": "6a4515e68f938c3c73d3",
