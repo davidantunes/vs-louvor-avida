@@ -496,9 +496,18 @@ function bindEvents(){
   el.audio.addEventListener('error', () => {
     clearAudioStallWatchdog();
     const candidates = el.audio._candidates || [];
-    const nextIndex = (el.audio._candidateIndex || 0) + 1;
+    const idx = el.audio._candidateIndex || 0;
+    const nextIndex = idx + 1;
+    // V131.76 — Loga o MOTIVO real do erro (código/mensagem do MediaError,
+    // a URL exata e quanto tempo tocou antes de falhar). Sem isso, "erro ao
+    // carregar fonte X" não diz se foi rede caindo no meio do stream, o
+    // arquivo em si com problema, ou algo cortando a conexão — informação
+    // essencial pra diferenciar rede instável do usuário de um bug real.
+    const mediaErr = el.audio.error;
+    const codeNames = { 1: 'ABORTED', 2: 'NETWORK', 3: 'DECODE', 4: 'SRC_NOT_SUPPORTED' };
+    console.warn(`[audio] erro na fonte ${idx} (${candidates[idx] || '?'}): código ${mediaErr?.code} (${codeNames[mediaErr?.code] || '?'}) "${mediaErr?.message || ''}" — tocou ${el.audio.currentTime?.toFixed(2)}s antes de falhar.`);
     if (nextIndex < candidates.length) {
-      console.warn(`[audio] erro ao carregar fonte ${el.audio._candidateIndex}, tentando fonte ${nextIndex}`);
+      console.warn(`[audio] tentando fonte ${nextIndex}`);
       loadAudioCandidate(nextIndex);
     } else {
       console.error('[audio] todas as fontes falharam');
