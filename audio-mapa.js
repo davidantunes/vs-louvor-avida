@@ -170,7 +170,6 @@ window.VS_AUDIO_MAP = {
   "Não Há Amor Igual - B.mp3": "6a4516b95feb5a9239df",
   "NÃO PARE MIDIAN - C  - 130 BPM.mp3": "6a4516bb011e46a1e0b0",
   "NÃO PARE MIDIAN - E  - 130 BPM.wav": "6a451a13af80762256fd",
-  "Não Seremos Abalados - D.mp3": "6a4516c1676e7e8a5a1e",
   "Nenhum Deus Como Tu - D.mp3": "6a4516b7bde804387452",
   "O Encontro (Valesca Mayssa e Jefferson & Suellen) - A# 157Bpm.mp3": "6a4516c30ee9d1d01d31",
   "O Encontro (Valesca Mayssa e Jefferson & Suellen) - B 157Bpm.mp3": "6a4516c4b56ade5a396f",
